@@ -1,0 +1,93 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // User profiles
+    match /users/{userId} {
+      allow read: if true;
+      allow write: if isAuthenticated();
+    }
+
+    // Deleted & Suspended Accounts for 7-day retention
+    match /deleted_accounts/{deletedId} {
+      allow read: if true;
+      allow create, update, delete: if isAuthenticated();
+    }
+
+    // Posts
+    match /posts/{postId} {
+      allow read: if true;
+      allow create: if isAuthenticated();
+      allow update, delete: if isAuthenticated() && (
+        resource.data.userId == request.auth.uid ||
+        request.auth.token.role == 'ADMIN'
+      );
+    }
+
+    // Stories
+    match /stories/{storyId} {
+      allow read: if true;
+      allow create: if isAuthenticated();
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+
+    // Chats & Messages
+    match /chats/{chatId} {
+      allow read, write: if isAuthenticated();
+      
+      match /messages/{messageId} {
+        allow read, write: if isAuthenticated();
+      }
+    }
+
+    // Reports & Support tickets
+    match /reports/{reportId} {
+      allow create: if isAuthenticated();
+      allow read, update: if isAuthenticated();
+    }
+    
+    match /tickets/{ticketId} {
+      allow create: if isAuthenticated();
+      allow read, update: if isAuthenticated();
+    }
+
+    match /support_tickets/{ticketId} {
+      allow read: if true;
+      allow create: if isAuthenticated();
+      allow update, delete: if isAuthenticated();
+    }
+
+    // Banners
+    match /banners/{bannerId} {
+      allow read: if true;
+      allow write: if isAuthenticated();
+    }
+
+    // Staff members
+    match /staff_members/{staffId} {
+      allow read: if true;
+      allow write: if isAuthenticated();
+    }
+
+    // Verification requests
+    match /verification_requests/{requestId} {
+      allow read: if true;
+      allow create: if isAuthenticated();
+      allow update, delete: if isAuthenticated();
+    }
+
+    // Config (e.g. startup ad config)
+    match /config/{configId} {
+      allow read: if true;
+      allow write: if isAuthenticated();
+    }
+  }
+}

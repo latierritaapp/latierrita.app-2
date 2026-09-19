@@ -1,0 +1,78 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "FirebaseBlueprint",
+  "description": "Schema definition for La Tierrita Firebase integration",
+  "entities": {
+    "UserProfile": {
+      "collection": "users",
+      "description": "User profile records",
+      "fields": {
+        "id": { "type": "string", "description": "Auth UID" },
+        "email": { "type": "string", "description": "User email" },
+        "username": { "type": "string", "description": "Unique username" },
+        "name": { "type": "string", "description": "Full name" },
+        "firstName": { "type": "string", "description": "User first name" },
+        "lastName": { "type": "string", "description": "User last name" },
+        "birthDate": { "type": "string", "description": "Birth date (DD/MM/YYYY)" },
+        "age": { "type": "number", "description": "User age (minimum 18)" },
+        "avatar": { "type": "string", "description": "Avatar URL" },
+        "bio": { "type": "string", "description": "Short bio" },
+        "website": { "type": "string", "description": "Website or social link" },
+        "city": { "type": "string", "description": "City in Spain" },
+        "originCity": { "type": "string", "description": "City of origin in Colombia" },
+        "followersCount": { "type": "number", "description": "Follower count" },
+        "followingCount": { "type": "number", "description": "Following count" },
+        "postsCount": { "type": "number", "description": "Posts count" },
+        "isVerified": { "type": "boolean", "description": "Verified badge" },
+        "staffRole": { "type": "string", "description": "Role: Usuario, MOD, Soporte, ADMIN" },
+        "createdAt": { "type": "string", "description": "Creation timestamp" }
+      }
+    },
+    "Post": {
+      "collection": "posts",
+      "description": "User shared posts and community pictures",
+      "fields": {
+        "id": { "type": "string", "description": "Post ID" },
+        "userId": { "type": "string", "description": "Author UID" },
+        "username": { "type": "string", "description": "Author username" },
+        "userAvatar": { "type": "string", "description": "Author avatar URL" },
+        "userCity": { "type": "string", "description": "Author city" },
+        "mediaUrl": { "type": "string", "description": "Media URL" },
+        "caption": { "type": "string", "description": "Post description" },
+        "location": { "type": "string", "description": "Location tag" },
+        "likesCount": { "type": "number", "description": "Number of likes" },
+        "timestamp": { "type": "string", "description": "ISO timestamp" }
+      }
+    },
+    "Story": {
+      "collection": "stories",
+      "description": "Ephemeral 24h stories",
+      "fields": {
+        "id": { "type": "string", "description": "Story ID" },
+        "userId": { "type": "string", "description": "Author UID" },
+        "username": { "type": "string", "description": "Author username" },
+        "userAvatar": { "type": "string", "description": "Author avatar" },
+        "userCity": { "type": "string", "description": "City" },
+        "mediaUrl": { "type": "string", "description": "Media URL" },
+        "caption": { "type": "string", "description": "Caption" },
+        "timestamp": { "type": "string", "description": "ISO timestamp" }
+      }
+    },
+    "DeletedAccount": {
+      "collection": "deleted_accounts",
+      "description": "Deleted and suspended accounts retained for 7 days",
+      "fields": {
+        "id": { "type": "string", "description": "Record ID" },
+        "userId": { "type": "string", "description": "User ID" },
+        "username": { "type": "string", "description": "Username reserved" },
+        "name": { "type": "string", "description": "Full name" },
+        "email": { "type": "string", "description": "User email" },
+        "avatar": { "type": "string", "description": "Avatar URL" },
+        "deletedAt": { "type": "string", "description": "Timestamp of deletion" },
+        "retentionExpiresAt": { "type": "string", "description": "Expiration timestamp (+7 days)" },
+        "reason": { "type": "string", "description": "Reason for deletion/suspension" },
+        "canRestore": { "type": "boolean", "description": "Whether account is restorable" }
+      }
+    }
+  }
+}

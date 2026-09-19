@@ -1,0 +1,6 @@
+{
+  "name": "La Tierrita - Colombianos en España",
+  "description": "Red social estilo Instagram para la comunidad de colombianos en España con historias, 4 tipos de chats, perfiles con grid de 3 columnas y feed publicitario gestionado por STAFF.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,153 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 540 230" fill="none">
+  <defs>
+    <filter id="navy-glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="6" stdDeviation="6" floodColor="#010e2b" floodOpacity="0.75" />
+      <feDropShadow dx="0" dy="2" stdDeviation="2" floodColor="#021438" floodOpacity="0.9" />
+    </filter>
+    <filter id="puffy-3d-white" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="5" stdDeviation="3.5" floodColor="#021236" floodOpacity="0.65" />
+      <feDropShadow dx="0" dy="1.5" stdDeviation="1" floodColor="#94a3b8" floodOpacity="0.5" />
+    </filter>
+    <filter id="yellow-pop" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="3.5" stdDeviation="2" floodColor="#010e2b" floodOpacity="0.7" />
+    </filter>
+    <filter id="heart-pop" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="4" stdDeviation="3" floodColor="#010e2b" floodOpacity="0.65" />
+    </filter>
+
+    <linearGradient id="navy-base" x1="270" y1="10" x2="270" y2="220" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stopColor="#0a2c7a" />
+      <stop offset="45%" stopColor="#041a52" />
+      <stop offset="100%" stopColor="#020f30" />
+    </linearGradient>
+    <linearGradient id="navy-border" x1="270" y1="5" x2="270" y2="225" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stopColor="#1e449c" />
+      <stop offset="60%" stopColor="#072366" />
+      <stop offset="100%" stopColor="#010b24" />
+    </linearGradient>
+
+    <linearGradient id="yellow-3d" x1="130" y1="20" x2="130" y2="85" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stopColor="#FFF275" />
+      <stop offset="18%" stopColor="#FFD200" />
+      <stop offset="70%" stopColor="#F5A600" />
+      <stop offset="100%" stopColor="#D97706" />
+    </linearGradient>
+
+    <linearGradient id="white-3d" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stopColor="#FFFFFF" />
+      <stop offset="65%" stopColor="#F8FAFC" />
+      <stop offset="85%" stopColor="#E2E8F0" />
+      <stop offset="100%" stopColor="#CBD5E1" />
+    </linearGradient>
+
+    <linearGradient id="col-yellow" x1="100" y1="145" x2="430" y2="175" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stopColor="#FFF066" />
+      <stop offset="40%" stopColor="#FFD100" />
+      <stop offset="100%" stopColor="#F59E0B" />
+    </linearGradient>
+    <linearGradient id="col-blue" x1="140" y1="165" x2="430" y2="190" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stopColor="#1E6BFF" />
+      <stop offset="50%" stopColor="#0038A8" />
+      <stop offset="100%" stopColor="#002266" />
+    </linearGradient>
+    <linearGradient id="col-red" x1="140" y1="180" x2="420" y2="205" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stopColor="#FF334B" />
+      <stop offset="50%" stopColor="#CE1126" />
+      <stop offset="100%" stopColor="#990012" />
+    </linearGradient>
+  </defs>
+
+  <!-- Contorno Badge Azul Marino 3D -->
+  <g filter="url(#navy-glow)">
+    <path
+      d="M 115 28 C 145 15, 175 25, 195 45 C 215 30, 240 25, 275 25 C 310 25, 335 32, 355 45 C 375 28, 400 20, 435 25 C 475 25, 515 48, 518 90 C 520 120, 505 145, 475 160 C 460 178, 430 198, 395 208 C 345 220, 240 225, 160 215 C 115 210, 85 190, 75 160 C 45 150, 18 125, 15 90 C 12 52, 50 25, 95 28 Z"
+      fill="url(#navy-base)"
+      stroke="url(#navy-border)"
+      stroke-width="6"
+      stroke-linejoin="round"
+    />
+    <path
+      d="M 95 34 C 135 24, 165 30, 188 50 M 245 32 C 285 30, 330 35, 360 52 M 420 30 C 455 30, 495 48, 505 82"
+      stroke="#4070d6"
+      stroke-width="3.5"
+      stroke-linecap="round"
+      opacity="0.65"
+    />
+  </g>
+
+  <!-- Gotitas cerca de "La" -->
+  <path d="M 106 20 C 104 22, 102 30, 108 35 C 114 39, 120 36, 120 30 C 120 22, 110 18, 106 20 Z" fill="#0055B8" stroke="#021B4D" stroke-width="2" />
+  <path d="M 98 12 C 95 15, 92 23, 97 28 C 102 31, 108 28, 107 23 C 106 17, 101 10, 98 12 Z" fill="#FFD200" stroke="#021B4D" stroke-width="2" />
+  <path d="M 198 28 C 195 30, 192 38, 198 44 C 203 48, 210 44, 210 38 C 210 30, 203 26, 198 28 Z" fill="#FFD200" stroke="#021B4D" stroke-width="2" />
+  <path d="M 205 46 C 201 48, 199 55, 204 60 C 209 64, 215 61, 215 56 C 215 50, 209 44, 205 46 Z" fill="#CE1126" stroke="#021B4D" stroke-width="2" />
+
+  <!-- Texto "La" -->
+  <g filter="url(#yellow-pop)">
+    <path d="M 125 58 C 120 45, 120 32, 132 25 C 142 19, 153 25, 150 38 C 148 48, 138 60, 128 72 C 124 76, 128 84, 138 84 C 152 84, 168 76, 175 66 C 172 63, 170 56, 176 52 C 183 48, 192 52, 193 60 C 194 72, 182 85, 168 90 C 152 95, 130 95, 120 86 C 112 79, 112 68, 118 60 Z" fill="#8A4500" />
+    <path d="M 125 55 C 120 42, 120 29, 132 22 C 142 16, 153 22, 150 35 C 148 45, 138 57, 128 69 C 124 73, 128 81, 138 81 C 152 81, 168 73, 175 63 C 172 60, 170 53, 176 49 C 183 45, 192 49, 193 57 C 194 69, 182 82, 168 87 C 152 92, 130 92, 120 83 C 112 76, 112 65, 118 57 Z" fill="url(#yellow-3d)" stroke="#B45309" stroke-width="2.5" stroke-linejoin="round" />
+    <path d="M 160 62 C 152 64, 147 70, 148 76 C 149 82, 156 86, 163 85 C 172 84, 178 77, 180 69 C 179 64, 170 60, 160 62 Z" fill="url(#yellow-3d)" stroke="#B45309" stroke-width="2" />
+    <path d="M 130 26 C 126 34, 126 42, 128 50 M 140 24 C 144 26, 145 32, 143 38" stroke="#FFFFFF" stroke-width="3.5" stroke-linecap="round" opacity="0.8" />
+  </g>
+
+  <!-- Letras Blancas 3D "Tierrita" -->
+  <g filter="url(#puffy-3d-white)">
+    <!-- T -->
+    <path d="M 35 70 C 35 55, 52 44, 78 45 C 98 46, 110 55, 108 70 L 106 78 C 106 82, 98 86, 92 86 L 86 86 L 76 160 C 74 172, 60 176, 50 172 C 42 168, 42 156, 44 146 L 54 86 L 44 86 C 38 84, 35 78, 35 70 Z" fill="#02143D" />
+    <path d="M 35 66 C 35 51, 52 40, 78 41 C 98 42, 110 51, 108 66 L 106 74 C 106 78, 98 82, 92 82 L 86 82 L 76 156 C 74 168, 60 172, 50 168 C 42 164, 42 152, 44 142 L 54 82 L 44 82 C 38 80, 35 74, 35 66 Z" fill="url(#white-3d)" stroke="#CBD5E1" stroke-width="3" stroke-linejoin="round" />
+    <path d="M 48 52 C 65 46, 88 47, 100 56" stroke="#FFFFFF" stroke-width="4" stroke-linecap="round" />
+
+    <!-- i1 -->
+    <circle cx="120" cy="52" r="14" fill="url(#white-3d)" stroke="#CBD5E1" stroke-width="2.5" />
+    <ellipse cx="117" cy="48" rx="5" ry="3" fill="#FFFFFF" opacity="0.9" />
+    <rect x="108" y="80" width="23" height="68" rx="11" fill="url(#white-3d)" stroke="#CBD5E1" stroke-width="2.5" />
+    <path d="M 114 86 L 114 136" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round" />
+
+    <!-- e -->
+    <path d="M 175 105 C 175 90, 165 76, 148 76 C 132 76, 120 90, 120 114 C 120 138, 134 152, 155 152 C 168 152, 178 144, 182 135 C 183 132, 180 128, 175 127 C 170 126, 166 128, 163 132 C 158 138, 150 140, 142 138 C 132 135, 128 126, 130 116 L 173 116 C 175 116, 175 110, 175 105 Z M 132 104 C 134 94, 140 88, 148 88 C 156 88, 162 94, 163 104 L 132 104 Z" fill="url(#white-3d)" stroke="#CBD5E1" stroke-width="3" stroke-linejoin="round" />
+    <path d="M 138 84 C 146 82, 156 84, 162 90" stroke="#FFFFFF" stroke-width="3.5" stroke-linecap="round" />
+
+    <!-- r1 -->
+    <path d="M 182 82 L 182 146 C 182 151, 188 154, 194 154 C 200 154, 206 151, 206 146 L 206 112 C 208 98, 218 90, 230 92 C 236 93, 240 88, 239 82 C 238 76, 232 74, 224 74 C 212 74, 204 82, 200 90 L 200 82 C 200 76, 194 74, 188 74 C 183 74, 182 77, 182 82 Z" fill="url(#white-3d)" stroke="#CBD5E1" stroke-width="3" stroke-linejoin="round" />
+    <path d="M 190 84 L 190 140" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round" />
+
+    <!-- r2 -->
+    <path d="M 234 82 L 234 146 C 234 151, 240 154, 246 154 C 252 154, 258 151, 258 146 L 258 112 C 260 98, 270 90, 282 92 C 288 93, 292 88, 291 82 C 290 76, 284 74, 276 74 C 264 74, 256 82, 252 90 L 252 82 C 252 76, 246 74, 240 74 C 235 74, 234 77, 234 82 Z" fill="url(#white-3d)" stroke="#CBD5E1" stroke-width="3" stroke-linejoin="round" />
+    <path d="M 242 84 L 242 140" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round" />
+
+    <!-- i2 -->
+    <circle cx="304" cy="52" r="14" fill="url(#white-3d)" stroke="#CBD5E1" stroke-width="2.5" />
+    <ellipse cx="301" cy="48" rx="5" ry="3" fill="#FFFFFF" opacity="0.9" />
+    <rect x="292" y="80" width="23" height="68" rx="11" fill="url(#white-3d)" stroke="#CBD5E1" stroke-width="2.5" />
+    <path d="M 298 86 L 298 136" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round" />
+
+    <!-- t2 -->
+    <path d="M 335 55 L 335 75 L 322 75 C 318 75, 314 78, 314 82 C 314 86, 318 89, 322 89 L 335 89 L 335 132 C 335 144, 342 152, 356 150 C 362 149, 366 145, 365 139 C 364 134, 359 132, 354 133 C 349 133, 347 130, 347 125 L 347 89 L 360 89 C 364 89, 368 86, 368 82 C 368 78, 364 75, 360 75 L 347 75 L 347 55 C 347 50, 341 46, 335 55 Z" fill="url(#white-3d)" stroke="#CBD5E1" stroke-width="3" stroke-linejoin="round" />
+    <path d="M 338 90 L 338 128" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round" />
+
+    <!-- a -->
+    <path d="M 408 80 C 404 77, 396 74, 386 74 C 366 74, 355 88, 355 110 C 355 134, 369 152, 392 152 C 402 152, 410 146, 415 138 L 415 146 C 415 151, 420 154, 426 154 C 432 154, 437 151, 437 146 L 437 94 C 437 84, 425 76, 408 80 Z M 395 138 C 382 138, 373 126, 373 112 C 373 98, 382 88, 395 88 C 408 88, 417 98, 417 112 C 417 126, 408 138, 395 138 Z" fill="url(#white-3d)" stroke="#CBD5E1" stroke-width="3" stroke-linejoin="round" />
+    <path d="M 382 82 C 392 80, 404 82, 412 88" stroke="#FFFFFF" stroke-width="3.5" stroke-linecap="round" />
+  </g>
+
+  <!-- Cinta Tricolor Colombiana Ondulada -->
+  <g id="colombian-wave-ribbon">
+    <path d="M 100 178 C 140 155, 200 145, 270 148 C 340 151, 395 168, 442 178 C 448 179, 446 189, 438 189 C 390 178, 335 163, 268 160 C 198 157, 138 168, 96 190 C 88 194, 88 183, 100 178 Z" fill="url(#col-yellow)" stroke="#021B4D" stroke-width="2.5" />
+    <path d="M 115 174 C 160 157, 230 150, 290 152 C 350 154, 400 168, 430 176" stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="round" opacity="0.8" />
+    <path d="M 140 190 C 180 178, 230 172, 290 174 C 350 176, 395 186, 428 194 C 434 195, 432 202, 425 202 C 390 194, 345 185, 288 183 C 228 181, 180 187, 136 200 C 130 202, 132 193, 140 190 Z" fill="url(#col-blue)" stroke="#021B4D" stroke-width="2" />
+    <path d="M 155 202 C 195 192, 240 187, 295 188 C 345 189, 385 198, 412 205 C 418 206, 416 213, 408 213 C 380 206, 340 198, 292 197 C 238 196, 192 201, 150 212 C 144 214, 146 205, 155 202 Z" fill="url(#col-red)" stroke="#021B4D" stroke-width="2" />
+  </g>
+
+  <!-- Corazón Tricolor Colombiano 3D -->
+  <g filter="url(#heart-pop)" transform="translate(425, 24) rotate(12)">
+    <path d="M 30 12 C 30 4, 22 0, 15 0 C 6 0, 0 8, 0 16 C 0 30, 20 46, 30 55 C 40 46, 60 30, 60 16 C 60 8, 54 0, 45 0 C 38 0, 30 4, 30 12 Z" fill="#021236" />
+    <path d="M 30 10 C 30 3, 23 0, 16 0 C 7 0, 2 8, 2 16 C 2 21, 6 27, 12 32 L 48 32 C 54 27, 58 21, 58 16 C 58 8, 53 0, 44 0 C 37 0, 30 3, 30 10 Z" fill="#FFD200" stroke="#B45309" stroke-width="1.5" />
+    <path d="M 12 32 C 16 36, 22 41, 28 45 L 32 45 C 38 41, 44 36, 48 32 Z" fill="#0038A8" />
+    <path d="M 26 43 C 28 45, 30 48, 30 51 C 30 48, 32 45, 34 43 Z" fill="#CE1126" />
+    <path d="M 12 8 C 8 12, 6 18, 8 23" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round" opacity="0.85" />
+  </g>
+
+  <!-- Gotitas junto al corazón -->
+  <path d="M 495 50 C 493 52, 492 58, 496 63 C 500 66, 506 63, 506 58 C 506 52, 500 48, 495 50 Z" fill="#FFD200" stroke="#021B4D" stroke-width="2" />
+  <path d="M 488 64 C 485 66, 484 72, 488 77 C 492 80, 498 77, 498 72 C 498 66, 492 62, 488 64 Z" fill="#FFD200" stroke="#021B4D" stroke-width="2" />
+  <path d="M 484 78 C 481 80, 480 86, 484 90 C 488 93, 493 90, 493 86 C 493 81, 488 76, 484 78 Z" fill="#CE1126" stroke="#021B4D" stroke-width="2" />
+</svg>
