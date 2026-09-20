@@ -18,9 +18,12 @@ import {
   ShieldCheck,
   Check,
   X,
-  FileText
+  FileText,
+  MapPin,
+  Building2
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { COLOMBIAN_CITIES, SPANISH_CITIES } from '../data/citiesData';
 
 interface RegisterViewProps {
   onGoToLogin: () => void;
@@ -69,6 +72,8 @@ export const RegisterView: React.FC<RegisterViewProps> = ({ onGoToLogin }) => {
   const [birthYear, setBirthYear] = useState('');
   const [calculatedAge, setCalculatedAge] = useState<number | null>(null);
   const [isAgeValid, setIsAgeValid] = useState<boolean | null>(null);
+  const [originCity, setOriginCity] = useState('');
+  const [currentCity, setCurrentCity] = useState('Madrid');
 
   // 4. Cuarta Parte (Foto de perfil opcional, subir desde galería)
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
@@ -156,20 +161,26 @@ export const RegisterView: React.FC<RegisterViewProps> = ({ onGoToLogin }) => {
 
   const parseFirebaseError = (err: unknown): string => {
     const errorStr = (err as { code?: string; message?: string })?.code || '';
-    switch (errorStr) {
-      case 'auth/email-already-in-use':
-        return 'Ya existe una cuenta con este correo.';
-      case 'auth/invalid-email':
-        return 'Correo electrónico no válido.';
-      case 'auth/weak-password':
-        return 'La contraseña debe tener al menos 6 caracteres.';
-      case 'auth/operation-not-allowed':
-        return 'El registro por correo no está habilitado en Firebase.';
-      case 'auth/popup-closed-by-user':
-        return 'Se canceló la ventana de autenticación.';
-      default:
-        return (err as { message?: string })?.message || 'Ocurrió un error. Inténtalo de nuevo.';
+    const message = (err as { message?: string })?.message || '';
+
+    if (
+      errorStr === 'auth/email-already-in-use' ||
+      errorStr === 'email_exists' ||
+      message.toLowerCase().includes('already registered') ||
+      message.toLowerCase().includes('already exists')
+    ) {
+      return 'Ya existe una cuenta registrada con este correo. Inicia sesión.';
     }
+    if (errorStr === 'auth/invalid-email' || message.toLowerCase().includes('invalid email')) {
+      return 'Correo electrónico no válido.';
+    }
+    if (errorStr === 'auth/weak-password' || message.toLowerCase().includes('password should be')) {
+      return 'La contraseña debe tener al menos 6 caracteres.';
+    }
+    if (message.toLowerCase().includes('rate limit')) {
+      return 'Has realizado demasiados intentos. Por favor espera unos minutos.';
+    }
+    return message || 'Ocurrió un error. Inténtalo de nuevo.';
   };
 
   // Step 1: Submit email & password
@@ -267,6 +278,14 @@ export const RegisterView: React.FC<RegisterViewProps> = ({ onGoToLogin }) => {
       setErrorMessage('Debes tener al menos 18 años cumplidos para registrarte.');
       return;
     }
+    if (!originCity) {
+      setErrorMessage('Por favor selecciona tu ciudad de origen en Colombia.');
+      return;
+    }
+    if (!currentCity) {
+      setErrorMessage('Por favor selecciona tu ciudad actual en España.');
+      return;
+    }
 
     setStep(4);
   };
@@ -314,8 +333,8 @@ export const RegisterView: React.FC<RegisterViewProps> = ({ onGoToLogin }) => {
         birthDate: formattedBirthDate,
         age: calculatedAge || 18,
         avatar: avatarPreview || defaultAvatar,
-        city: 'Madrid',
-        originCity: 'Colombia'
+        city: currentCity || 'Madrid',
+        originCity: originCity || 'Colombia'
       });
     } catch (err) {
       setErrorMessage(parseFirebaseError(err));
@@ -380,7 +399,7 @@ export const RegisterView: React.FC<RegisterViewProps> = ({ onGoToLogin }) => {
         </div>
 
         {/* Main Step Card */}
-        <div className="w-full bg-[#001c38] border border-white/15 rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 shadow-2xl backdrop-blur-md flex flex-col justify-center min-h-0">
+        <div className="w-full bg-[#001c38] border border-white/15 rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 shadow-2xl backdrop-blur-md flex flex-col justify-start max-h-[calc(100dvh-130px)] overflow-y-auto">
           
           {/* Error Message Box (compact) */}
           {errorMessage && (
@@ -504,14 +523,14 @@ export const RegisterView: React.FC<RegisterViewProps> = ({ onGoToLogin }) => {
                   </p>
                 </div>
 
-                {/* Botón Crear cuenta */}
+                {/* Botón Continuar */}
                 <button
                   id="btn-register-step1-submit"
                   type="submit"
                   disabled={isSubmitting}
                   className="w-full py-2 sm:py-2.5 px-3 bg-amber-400 hover:bg-amber-300 active:scale-[0.99] text-neutral-950 font-black text-xs sm:text-sm rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-60"
                 >
-                  <span>Crear cuenta</span>
+                  <span>Continuar</span>
                   <ArrowRight className="w-3.5 h-3.5" />
                 </button>
               </form>
@@ -774,11 +793,73 @@ export const RegisterView: React.FC<RegisterViewProps> = ({ onGoToLogin }) => {
                   )}
                 </div>
 
+                {/* Ciudad Origen (Todas las ciudades de Colombia) */}
+                <div className="space-y-1 pt-0.5">
+                  <div className="flex items-center justify-between">
+                    <label htmlFor="select-reg-origin-city" className="text-[11px] font-bold text-white/80 flex items-center gap-1">
+                      <MapPin className="w-3 h-3 text-amber-400" />
+                      <span>Ciudad Origen</span>
+                    </label>
+                    <span className="text-[9px] font-bold text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded-full">
+                      🇨🇴 Colombia
+                    </span>
+                  </div>
+                  <div>
+                    <select
+                      id="select-reg-origin-city"
+                      value={originCity}
+                      onChange={(e) => setOriginCity(e.target.value)}
+                      required
+                      className="w-full px-2 py-1.5 sm:py-2 bg-[#001428] border border-white/15 focus:border-amber-400 rounded-xl text-xs text-white outline-none cursor-pointer"
+                    >
+                      <option value="" disabled className="bg-[#001428] text-white/40">
+                        Selecciona tu ciudad de origen en Colombia
+                      </option>
+                      {COLOMBIAN_CITIES.map((c) => (
+                        <option key={c} value={c} className="bg-[#001428] text-white">
+                          {c}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Ciudad Actual (Todas las ciudades de España) */}
+                <div className="space-y-1 pt-0.5">
+                  <div className="flex items-center justify-between">
+                    <label htmlFor="select-reg-current-city" className="text-[11px] font-bold text-white/80 flex items-center gap-1">
+                      <Building2 className="w-3 h-3 text-amber-400" />
+                      <span>Ciudad Actual</span>
+                    </label>
+                    <span className="text-[9px] font-bold text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded-full">
+                      🇪🇸 España
+                    </span>
+                  </div>
+                  <div>
+                    <select
+                      id="select-reg-current-city"
+                      value={currentCity}
+                      onChange={(e) => setCurrentCity(e.target.value)}
+                      required
+                      className="w-full px-2 py-1.5 sm:py-2 bg-[#001428] border border-white/15 focus:border-amber-400 rounded-xl text-xs text-white outline-none cursor-pointer"
+                    >
+                      <option value="" disabled className="bg-[#001428] text-white/40">
+                        Selecciona tu ciudad actual en España
+                      </option>
+                      {SPANISH_CITIES.map((c) => (
+                        <option key={c} value={c} className="bg-[#001428] text-white">
+                          {c}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
                 {/* Botón Siguiente */}
                 <button
                   id="btn-register-step3-submit"
                   type="submit"
-                  disabled={!firstName.trim() || !lastName.trim() || !isAgeValid}
+                  disabled={!firstName.trim() || !lastName.trim() || !isAgeValid || !originCity || !currentCity}
                   className="w-full py-2.5 px-3 bg-amber-400 hover:bg-amber-300 active:scale-[0.99] text-neutral-950 font-black text-xs sm:text-sm rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 mt-2"
                 >
                   <span>Siguiente</span>

@@ -47,6 +47,94 @@ function convertKeysToCamel(obj: any): any {
   return result;
 }
 
+function formatRowData(tableName: string, data: any): any {
+  if (!data || typeof data !== 'object') return data;
+  const item = convertKeysToCamel(data);
+
+  if (tableName === 'posts') {
+    item.mediaUrl = item.mediaUrl || item.imageUrl || '';
+    item.userAvatar = item.userAvatar || item.avatarUrl || '';
+    item.timestamp = item.timestamp || item.createdAt || 'Reciente';
+    item.likesCount = Array.isArray(item.likes) ? item.likes.length : (typeof item.likesCount === 'number' ? item.likesCount : 0);
+    item.comments = Array.isArray(item.comments) ? item.comments : [];
+  } else if (tableName === 'stories') {
+    item.userAvatar = item.userAvatar || item.avatarUrl || '';
+    item.timestamp = item.timestamp || item.createdAt || 'Reciente';
+    item.reactions = Array.isArray(item.reactions) ? item.reactions : [];
+  }
+
+  return item;
+}
+
+function sanitizePayloadForTable(tableName: string, payload: any): any {
+  if (!payload || typeof payload !== 'object') return payload;
+  const clean = { ...payload };
+
+  if (tableName === 'posts') {
+    // Strip frontend-only properties that do not exist as DB columns in Postgres
+    delete clean.has_liked;
+    delete clean.ad_cta_url;
+    delete clean.likes_count;
+    delete clean.disable_comments;
+    delete clean.hide_likes;
+    delete clean.tagged_usernames;
+
+    if (clean.media_url && !clean.image_url) {
+      clean.image_url = clean.media_url;
+    }
+    delete clean.media_url;
+
+    if (clean.user_avatar && !clean.avatar_url) {
+      clean.avatar_url = clean.user_avatar;
+    }
+    delete clean.user_avatar;
+
+    if (clean.timestamp && !clean.created_at) {
+      clean.created_at = new Date().toISOString();
+    }
+    delete clean.timestamp;
+
+    if (!clean.name) {
+      clean.name = clean.username || 'Usuario';
+    }
+
+    if (!Array.isArray(clean.likes)) {
+      clean.likes = [];
+    }
+
+    if (clean.comments_count === undefined) {
+      clean.comments_count = Array.isArray(clean.comments) ? clean.comments.length : 0;
+    }
+  } else if (tableName === 'stories') {
+    delete clean.viewed;
+
+    if (clean.timestamp && !clean.created_at) {
+      clean.created_at = new Date().toISOString();
+    }
+    delete clean.timestamp;
+
+    if (clean.user_avatar && !clean.avatar_url) {
+      clean.avatar_url = clean.user_avatar;
+    }
+    delete clean.user_avatar;
+
+    if (!clean.expires_at) {
+      clean.expires_at = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    }
+    if (!clean.media_type) {
+      clean.media_type = 'image';
+    }
+    if (!Array.isArray(clean.viewed_by)) {
+      clean.viewed_by = [];
+    }
+    if (!Array.isArray(clean.reactions)) {
+      clean.reactions = [];
+    }
+  }
+
+  return clean;
+}
+
 // 1. EMULACIÓN DE COLLECTION REF
 export function collection(database: any, name: string) {
   // Translate firestore 'users' collection to our postgres 'profiles' table
@@ -89,7 +177,7 @@ export async function getDoc(docRef: any) {
   if (error) throw error;
   return {
     exists: () => !!data,
-    data: () => data ? convertKeysToCamel(data) : null,
+    data: () => data ? formatRowData(collection, data) : null,
     id
   };
 }
@@ -97,7 +185,8 @@ export async function getDoc(docRef: any) {
 // 4. EMULACIÓN DE SET DOC
 export async function setDoc(docRef: any, data: any, options?: { merge?: boolean }) {
   const { collection, id } = docRef;
-  const snakePayload = convertKeysToSnake(data);
+  const rawSnake = convertKeysToSnake(data);
+  const snakePayload = sanitizePayloadForTable(collection, rawSnake);
   
   // Ensure the document ID is preserved in the table row
   snakePayload.id = id;
@@ -112,7 +201,8 @@ export async function setDoc(docRef: any, data: any, options?: { merge?: boolean
 // 5. EMULACIÓN DE UPDATE DOC
 export async function updateDoc(docRef: any, data: any) {
   const { collection, id } = docRef;
-  const snakePayload = convertKeysToSnake(data);
+  const rawSnake = convertKeysToSnake(data);
+  const snakePayload = sanitizePayloadForTable(collection, rawSnake);
 
   const { error } = await supabase
     .from(collection)
@@ -153,7 +243,7 @@ export function onSnapshot(
 
         const docs = (data || []).map(row => ({
           id: row.id,
-          data: () => convertKeysToCamel(row),
+          data: () => formatRowData(ref.name, row),
           exists: () => true
         }));
 
@@ -173,7 +263,7 @@ export function onSnapshot(
 
         callback({
           exists: () => !!data,
-          data: () => data ? convertKeysToCamel(data) : null,
+          data: () => data ? formatRowData(ref.collection, data) : null,
           id: ref.id
         });
       }
@@ -250,7 +340,7 @@ export async function getDocs(queryRef: any) {
 
   const docs = (data || []).map(row => ({
     id: row.id,
-    data: () => convertKeysToCamel(row),
+    data: () => formatRowData(collectionName, row),
     exists: () => true
   }));
 
@@ -263,7 +353,8 @@ export async function getDocs(queryRef: any) {
 
 // 10. EMULACIÓN DE ADD DOC
 export async function addDoc(colRef: any, data: any) {
-  const snakePayload = convertKeysToSnake(data);
+  const rawSnake = convertKeysToSnake(data);
+  const snakePayload = sanitizePayloadForTable(colRef.name, rawSnake);
   const { data: inserted, error } = await supabase
     .from(colRef.name)
     .insert([snakePayload])
@@ -273,6 +364,6 @@ export async function addDoc(colRef: any, data: any) {
   if (error) throw error;
   return {
     id: inserted.id,
-    data: () => convertKeysToCamel(inserted)
+    data: () => formatRowData(colRef.name, inserted)
   };
 }

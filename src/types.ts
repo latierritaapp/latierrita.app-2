@@ -10,7 +10,8 @@ export type SpanishCity =
   | 'Alicante'
   | 'Zaragoza'
   | 'Murcia'
-  | 'Palma de Mallorca';
+  | 'Palma de Mallorca'
+  | (string & {});
 
 export interface SocialLinks {
   instagram?: string;
@@ -334,6 +335,7 @@ export interface ClassifiedAdItem {
 
 export interface PlaceItem {
   id: string;
+  userId?: string;
   name: string;
   category: PlaceCategory;
   city: SpanishCity;
@@ -345,6 +347,8 @@ export interface PlaceItem {
   specialty: string;
   description: string;
   phone?: string;
+  whatsapp?: string;
+  instagram?: string;
   website?: string;
   inGoogleMaps?: boolean;
   socialLinks?: {

@@ -87,16 +87,7 @@ const AppContent: React.FC = () => {
 };
 
 const AppGate: React.FC = () => {
-  const { firebaseUser, loading, logout } = useAuth();
-
-  React.useEffect(() => {
-    if (firebaseUser) {
-      const email = firebaseUser.email?.toLowerCase().trim() || '';
-      if (email === 'diegof_024@hotmail.com' || email === 'latierritaapp@gmail.com') {
-        logout();
-      }
-    }
-  }, [firebaseUser, logout]);
+  const { firebaseUser, loading } = useAuth();
 
   if (loading) {
     return (
@@ -119,11 +110,6 @@ const AppGate: React.FC = () => {
   }
 
   if (!firebaseUser) {
-    return <AuthView />;
-  }
-
-  const userEmail = firebaseUser.email?.toLowerCase().trim() || '';
-  if (userEmail === 'diegof_024@hotmail.com' || userEmail === 'latierritaapp@gmail.com') {
     return <AuthView />;
   }
 

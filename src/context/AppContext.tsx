@@ -213,8 +213,7 @@ const handleFirestoreError = (error: unknown, operationType: OperationType, path
     operationType,
     path
   };
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
-  throw new Error(JSON.stringify(errInfo));
+  console.warn('Database non-fatal warning: ', JSON.stringify(errInfo));
 };
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -328,7 +327,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     active: true
   };
 
-  const [startupAdConfig, setStartupAdConfig] = useState<StartupAdConfig | null>(null);
+  const [startupAdConfig, setStartupAdConfig] = useState<StartupAdConfig | null>(DEFAULT_STARTUP_AD);
 
   // Startup Ad (only shows on initial open or when closed completely & reopened)
   const [startupAdOpen, setStartupAdOpen] = useState<boolean>(() => {
@@ -415,18 +414,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [posts, currentUser]);
 
-  // Sync and Seed Banners
+  // Sync Banners
   useEffect(() => {
     try {
       const unsub = onSnapshot(collection(db, 'banners'), (snapshot) => {
         if (snapshot.empty) {
-          INITIAL_AD_BANNERS.forEach(async (banner) => {
-            try {
-              await setDoc(doc(db, 'banners', banner.id), banner);
-            } catch (e) {
-              console.error('Error seeding banner:', e);
-            }
-          });
+          setAdBanners(INITIAL_AD_BANNERS);
         } else {
           const list: AdBanner[] = [];
           snapshot.forEach((docSnap: any) => {
@@ -435,84 +428,89 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           setAdBanners(list);
         }
       }, (error) => {
-        handleFirestoreError(error, OperationType.GET, 'banners');
+        setAdBanners(INITIAL_AD_BANNERS);
+        console.warn('Banners listener using fallback data:', error?.message || error);
       });
       return () => unsub();
     } catch (e) {
-      console.warn('Failed to listen to banners in Firestore:', e);
+      setAdBanners(INITIAL_AD_BANNERS);
+      console.warn('Failed to listen to banners in DB:', e);
     }
   }, []);
 
-  // Sync and Seed Stories
+  // Sync Stories
   useEffect(() => {
     try {
       const unsub = onSnapshot(collection(db, 'stories'), (snapshot) => {
         if (snapshot.empty) {
-          INITIAL_STORIES.forEach(async (story) => {
-            try {
-              await setDoc(doc(db, 'stories', story.id), story);
-            } catch (e) {
-              console.error('Error seeding story:', e);
-            }
-          });
+          setStories(INITIAL_STORIES);
         } else {
           const list: StoryItem[] = [];
           snapshot.forEach((docSnap: any) => {
-            list.push({ id: docSnap.id, ...docSnap.data() } as StoryItem);
+            const data = docSnap.data() || {};
+            list.push({
+              id: docSnap.id,
+              ...data,
+              userAvatar: data.userAvatar || data.avatarUrl || '',
+              timestamp: data.timestamp || data.createdAt || 'Reciente',
+              reactions: Array.isArray(data.reactions) ? data.reactions : []
+            } as StoryItem);
           });
           list.sort((a, b) => b.id.localeCompare(a.id));
           setStories(list);
         }
       }, (error) => {
-        handleFirestoreError(error, OperationType.GET, 'stories');
+        setStories(INITIAL_STORIES);
+        console.warn('Stories listener using fallback data:', error?.message || error);
       });
       return () => unsub();
     } catch (e) {
-      console.warn('Failed to listen to stories in Firestore:', e);
+      setStories(INITIAL_STORIES);
+      console.warn('Failed to listen to stories in DB:', e);
     }
   }, []);
 
-  // Sync and Seed Posts
+  // Sync Posts
   useEffect(() => {
     try {
       const unsub = onSnapshot(collection(db, 'posts'), (snapshot) => {
         if (snapshot.empty) {
-          INITIAL_POSTS.forEach(async (post) => {
-            try {
-              await setDoc(doc(db, 'posts', post.id), post);
-            } catch (e) {
-              console.error('Error seeding post:', e);
-            }
-          });
+          setPosts(INITIAL_POSTS);
         } else {
           const list: PostItem[] = [];
           snapshot.forEach((docSnap: any) => {
-            list.push({ id: docSnap.id, ...docSnap.data() } as PostItem);
+            const data = docSnap.data() || {};
+            list.push({
+              id: docSnap.id,
+              ...data,
+              mediaUrl: data.mediaUrl || data.imageUrl || '',
+              userAvatar: data.userAvatar || data.avatarUrl || '',
+              timestamp: data.timestamp || data.createdAt || 'Reciente',
+              likesCount: Array.isArray(data.likes) ? data.likes.length : (typeof data.likesCount === 'number' ? data.likesCount : 0),
+              hasLiked: Array.isArray(data.likes) && currentUser ? data.likes.includes(currentUser.id) : (data.hasLiked ?? false),
+              comments: Array.isArray(data.comments) ? data.comments : []
+            } as PostItem);
           });
           list.sort((a, b) => b.id.localeCompare(a.id));
           setPosts(list);
         }
       }, (error) => {
-        handleFirestoreError(error, OperationType.GET, 'posts');
+        setPosts(INITIAL_POSTS);
+        console.warn('Posts listener using fallback data:', error?.message || error);
       });
       return () => unsub();
     } catch (e) {
-      console.warn('Failed to listen to posts in Firestore:', e);
+      setPosts(INITIAL_POSTS);
+      console.warn('Failed to listen to posts in DB:', e);
     }
   }, []);
 
-  // Sync and Seed Support Tickets
+  // Sync Support Tickets
   useEffect(() => {
     try {
       const unsub = onSnapshot(collection(db, 'support_tickets'), (snapshot) => {
         if (snapshot.empty) {
-          INITIAL_SUPPORT_TICKETS.forEach(async (t) => {
-            try {
-              await setDoc(doc(db, 'support_tickets', t.id), t);
-            } catch (e) {
-              console.error('Error seeding support ticket:', e);
-            }
-          });
+          setSupportTickets(INITIAL_SUPPORT_TICKETS);
         } else {
           const list: SupportTicket[] = [];
           snapshot.forEach((docSnap: any) => {
@@ -521,26 +519,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           setSupportTickets(list);
         }
       }, (error) => {
-        handleFirestoreError(error, OperationType.GET, 'support_tickets');
+        setSupportTickets(INITIAL_SUPPORT_TICKETS);
+        console.warn('Support tickets listener using fallback data:', error?.message || error);
       });
       return () => unsub();
     } catch (e) {
-      console.warn('Failed to listen to support_tickets in Firestore:', e);
+      setSupportTickets(INITIAL_SUPPORT_TICKETS);
+      console.warn('Failed to listen to support_tickets in DB:', e);
     }
   }, []);
 
-  // Sync and Seed Verification Requests
+  // Sync Verification Requests
   useEffect(() => {
     try {
       const unsub = onSnapshot(collection(db, 'verification_requests'), (snapshot) => {
         if (snapshot.empty) {
-          INITIAL_VERIFICATION_REQUESTS.forEach(async (v) => {
-            try {
-              await setDoc(doc(db, 'verification_requests', v.id), v);
-            } catch (e) {
-              console.error('Error seeding verification request:', e);
-            }
-          });
+          setVerificationRequests(INITIAL_VERIFICATION_REQUESTS);
         } else {
           const list: VerificationRequest[] = [];
           snapshot.forEach((docSnap: any) => {
@@ -549,26 +543,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           setVerificationRequests(list);
         }
       }, (error) => {
-        handleFirestoreError(error, OperationType.GET, 'verification_requests');
+        setVerificationRequests(INITIAL_VERIFICATION_REQUESTS);
+        console.warn('Verification requests listener using fallback data:', error?.message || error);
       });
       return () => unsub();
     } catch (e) {
-      console.warn('Failed to listen to verification_requests in Firestore:', e);
+      setVerificationRequests(INITIAL_VERIFICATION_REQUESTS);
+      console.warn('Failed to listen to verification_requests in DB:', e);
     }
   }, []);
 
-  // Sync and Seed Staff Members
+  // Sync Staff Members
   useEffect(() => {
     try {
       const unsub = onSnapshot(collection(db, 'staff_members'), (snapshot) => {
         if (snapshot.empty) {
-          INITIAL_STAFF_MEMBERS.forEach(async (s) => {
-            try {
-              await setDoc(doc(db, 'staff_members', s.id), s);
-            } catch (e) {
-              console.error('Error seeding staff member:', e);
-            }
-          });
+          setStaffMembers(INITIAL_STAFF_MEMBERS);
         } else {
           const list: StaffMember[] = [];
           snapshot.forEach((docSnap: any) => {
@@ -577,33 +567,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           setStaffMembers(list);
         }
       }, (error) => {
-        handleFirestoreError(error, OperationType.GET, 'staff_members');
+        setStaffMembers(INITIAL_STAFF_MEMBERS);
+        console.warn('Staff members listener using fallback data:', error?.message || error);
       });
       return () => unsub();
     } catch (e) {
-      console.warn('Failed to listen to staff_members in Firestore:', e);
+      setStaffMembers(INITIAL_STAFF_MEMBERS);
+      console.warn('Failed to listen to staff_members in DB:', e);
     }
   }, []);
 
-  // Sync and Seed Startup Ad Configuration
+  // Sync Startup Ad Configuration
   useEffect(() => {
     try {
       const unsub = onSnapshot(doc(db, 'config', 'startup_ad'), async (docSnap) => {
-        if (!docSnap.exists()) {
-          try {
-            await setDoc(doc(db, 'config', 'startup_ad'), DEFAULT_STARTUP_AD);
-          } catch (e) {
-            console.error('Error seeding startup ad:', e);
-          }
-        } else {
+        if (docSnap.exists() && docSnap.data()) {
           setStartupAdConfig({ id: docSnap.id, ...docSnap.data() } as StartupAdConfig);
+        } else {
+          setStartupAdConfig(DEFAULT_STARTUP_AD);
         }
       }, (error) => {
-        handleFirestoreError(error, OperationType.GET, 'config/startup_ad');
+        setStartupAdConfig(DEFAULT_STARTUP_AD);
+        console.warn('Startup ad config listener using fallback data:', error?.message || error);
       });
       return () => unsub();
     } catch (e) {
-      console.warn('Failed to listen to startup_ad config in Firestore:', e);
+      setStartupAdConfig(DEFAULT_STARTUP_AD);
+      console.warn('Failed to listen to startup_ad config in DB:', e);
     }
   }, []);
 
@@ -1084,6 +1074,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       viewed: false,
       reactions: []
     };
+    setStories(prev => [newStory, ...prev]);
     try {
       await setDoc(doc(db, 'stories', newStoryId), newStory);
       setIsCreateStoryOpen(false);
@@ -1094,6 +1085,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         avatar: currentUser.avatar
       });
     } catch (error) {
+      setIsCreateStoryOpen(false);
       handleFirestoreError(error, OperationType.CREATE, 'stories');
     }
   };
@@ -1112,6 +1104,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } else {
       reactions.push({ emoji, count: 1, users: [currentUser.id] });
     }
+
+    setStories(prev => prev.map(s => s.id === storyId ? { ...s, reactions } : s));
 
     try {
       await updateDoc(doc(db, 'stories', storyId), { reactions });
@@ -1133,16 +1127,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const targetPost = posts.find(p => p.id === postId);
     if (!targetPost) return;
 
-    const newHasLiked = !targetPost.hasLiked;
-    const newLikesCount = newHasLiked ? targetPost.likesCount + 1 : Math.max(0, targetPost.likesCount - 1);
+    const currentLikes: string[] = Array.isArray((targetPost as any).likes)
+      ? [...(targetPost as any).likes]
+      : [];
+    const alreadyLiked = targetPost.hasLiked || currentLikes.includes(currentUser.id);
+    const updatedLikes = alreadyLiked
+      ? currentLikes.filter(uid => uid !== currentUser.id)
+      : [...currentLikes, currentUser.id];
+
+    const newHasLiked = !alreadyLiked;
+    const newLikesCount = updatedLikes.length;
+
+    setPosts(prev => prev.map(p => p.id === postId ? {
+      ...p,
+      hasLiked: newHasLiked,
+      likesCount: newLikesCount,
+      likes: updatedLikes
+    } as any : p));
 
     try {
       await updateDoc(doc(db, 'posts', postId), {
-        hasLiked: newHasLiked,
-        likesCount: newLikesCount
+        likes: updatedLikes
       });
     } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, `posts/${postId}`);
+      console.warn('Could not sync like to DB, state updated locally:', error);
     }
   };
 
@@ -1157,13 +1165,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       text,
       timestamp: 'Justo ahora'
     };
+    const updatedComments = [...(targetPost.comments || []), newComment];
+
+    setPosts(prev => prev.map(p => p.id === postId ? {
+      ...p,
+      comments: updatedComments
+    } : p));
 
     try {
       await updateDoc(doc(db, 'posts', postId), {
-        comments: [...targetPost.comments, newComment]
+        comments: updatedComments
       });
     } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, `posts/${postId}`);
+      console.warn('Could not sync comment to DB, state updated locally:', error);
     }
   };
 
@@ -1216,6 +1230,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       hideLikes: data.hideLikes,
       taggedUsernames: data.taggedUsernames
     };
+    setPosts(prev => [newPost, ...prev]);
     try {
       await setDoc(doc(db, 'posts', newPostId), newPost);
       setCurrentUser(prev => ({ ...prev, postsCount: prev.postsCount + 1 }));

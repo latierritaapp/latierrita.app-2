@@ -205,7 +205,7 @@ export const Navbar: React.FC = () => {
               {isProfileView ? (
                 <div className="flex items-center justify-center gap-1">
                   <span className="text-base sm:text-lg font-black tracking-tight text-white select-none">
-                    @{displayedUser.username}
+                    @{displayedUser.username ? displayedUser.username.replace(/^@+/, '').split('@')[0] : 'usuario'}
                   </span>
                   {displayedUser.isVerified && (
                     <span title="Usuario Verificado" className="inline-flex shrink-0">

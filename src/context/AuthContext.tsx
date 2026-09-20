@@ -40,23 +40,54 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const sanitizeHandle = (username: string | undefined | null, email: string | undefined | null, idFallback?: string): string => {
+  if (username) {
+    const withoutAt = username.replace(/^@+/, '').trim();
+    if (withoutAt.includes('@')) {
+      return withoutAt.split('@')[0].replace(/[^a-zA-Z0-9_]/g, '_').toLowerCase();
+    }
+    const cleaned = withoutAt.replace(/[^a-zA-Z0-9_]/g, '_').toLowerCase();
+    if (cleaned) return cleaned;
+  }
+  if (email) {
+    return email.split('@')[0].replace(/[^a-zA-Z0-9_]/g, '_').toLowerCase();
+  }
+  return `parcero_${(idFallback || 'user').slice(0, 5)}`;
+};
+
+const sanitizeDisplayName = (name: string | undefined | null, username: string, email?: string): string => {
+  if (name && !name.includes('@') && name.trim().length > 0) {
+    return name.trim();
+  }
+  if (username && !username.includes('@')) {
+    return username;
+  }
+  if (email) {
+    return email.split('@')[0];
+  }
+  return 'Colombiano en España';
+};
+
 // Mapeador de base de datos Postgres (snake_case) a React State (camelCase)
 const mapDBProfileToUserProfile = (db: any): UserProfile => {
+  const cleanUsername = sanitizeHandle(db.username, db.email, db.id);
+  const displayName = sanitizeDisplayName(db.name, cleanUsername, db.email);
+
   return {
     id: db.id,
     email: db.email,
-    username: db.username,
-    name: db.name,
+    username: cleanUsername,
+    name: displayName,
     firstName: db.first_name || '',
     lastName: db.last_name || '',
     birthDate: db.birth_date || '',
     age: db.age || undefined,
     avatar: db.avatar_url || DEFAULT_SILHOUETTE_AVATAR,
-    bio: db.bio || '',
+    bio: db.bio || '🇨🇴 ¡Orgullo colombiano en España! 🇪🇸',
     city: db.city || 'Madrid',
     originCity: db.origin_city || 'Colombia',
-    followersCount: db.followers ? db.followers.length : 0,
-    followingCount: db.following ? db.following.length : 0,
+    followersCount: Array.isArray(db.followers) ? db.followers.length : 0,
+    followingCount: Array.isArray(db.following) ? db.following.length : 0,
     postsCount: 0,
     isVerified: db.verified || false,
     staffRole: db.staff_role || 'Usuario',
@@ -68,36 +99,47 @@ const mapDBProfileToUserProfile = (db: any): UserProfile => {
     socialLinks: {
       instagram: db.instagram || '',
       facebook: db.facebook || '',
+      tiktok: db.tiktok || '',
+      x: db.x || ''
     }
   };
 };
 
 // Mapeador de React State (camelCase) a base de datos Postgres (snake_case)
 const mapUserProfileToDBProfile = (profile: Partial<UserProfile>): any => {
-  const db: any = {};
-  if (profile.id !== undefined) db.id = profile.id;
-  if (profile.email !== undefined) db.email = profile.email;
-  if (profile.username !== undefined) db.username = profile.username;
-  if (profile.name !== undefined) db.name = profile.name;
-  if (profile.firstName !== undefined) db.first_name = profile.firstName;
-  if (profile.lastName !== undefined) db.last_name = profile.lastName;
-  if (profile.birthDate !== undefined) db.birth_date = profile.birthDate;
-  if (profile.age !== undefined) db.age = profile.age;
-  if (profile.avatar !== undefined) db.avatar_url = profile.avatar;
-  if (profile.bio !== undefined) db.bio = profile.bio;
-  if (profile.city !== undefined) db.city = profile.city;
-  if (profile.originCity !== undefined) db.origin_city = profile.originCity;
-  if (profile.isVerified !== undefined) db.verified = profile.isVerified;
-  if (profile.staffRole !== undefined) db.staff_role = profile.staffRole;
-  if (profile.isDeleted !== undefined) db.is_deleted = profile.isDeleted;
-  if (profile.deletedAt !== undefined) db.deleted_at = profile.deletedAt;
-  if (profile.retentionExpiresAt !== undefined) db.retention_expires_at = profile.retentionExpiresAt;
-  if (profile.deletedReason !== undefined) db.deleted_reason = profile.deletedReason;
-  if (profile.createdAt !== undefined) db.created_at = profile.createdAt;
-  
+  const cleanUsername = sanitizeHandle(profile.username, profile.email, profile.id);
+  const displayName = sanitizeDisplayName(profile.name, cleanUsername, profile.email);
+
+  const db: any = {
+    id: profile.id,
+    email: profile.email || '',
+    username: cleanUsername,
+    name: displayName,
+    first_name: profile.firstName || null,
+    last_name: profile.lastName || null,
+    birth_date: profile.birthDate || null,
+    age: profile.age || null,
+    avatar_url: profile.avatar || DEFAULT_SILHOUETTE_AVATAR,
+    bio: profile.bio || '🇨🇴 ¡Orgullo colombiano en España! 🇪🇸',
+    city: profile.city || 'Madrid',
+    origin_city: profile.originCity || 'Colombia',
+    verified: profile.isVerified || false,
+    is_staff: profile.staffRole && profile.staffRole !== 'Usuario' ? true : false,
+    staff_role: profile.staffRole || 'Usuario',
+    followers: [],
+    following: [],
+    is_deleted: profile.isDeleted || false,
+    deleted_at: profile.deletedAt || null,
+    retention_expires_at: profile.retentionExpiresAt || null,
+    deleted_reason: profile.deletedReason || null,
+    created_at: profile.createdAt || new Date().toISOString()
+  };
+
   if (profile.socialLinks) {
     if (profile.socialLinks.instagram !== undefined) db.instagram = profile.socialLinks.instagram;
     if (profile.socialLinks.facebook !== undefined) db.facebook = profile.socialLinks.facebook;
+    if (profile.socialLinks.tiktok !== undefined) db.tiktok = profile.socialLinks.tiktok;
+    if (profile.socialLinks.x !== undefined) db.x = profile.socialLinks.x;
   }
   return db;
 };
@@ -119,47 +161,53 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const user = session?.user || null;
       
       if (user) {
-        const email = user.email?.toLowerCase().trim() || '';
-        if (email === 'diegof_024@hotmail.com' || email === 'latierritaapp@gmail.com') {
-          console.warn('⚠️ Cuenta bloqueada:', email);
-          await supabase.auth.signOut();
-          setFirebaseUser(null);
-          setUserProfile(null);
-          localStorage.removeItem('latierrita_user');
-          setLoading(false);
-          return;
-        }
-        
         setFirebaseUser(user);
         setIsGuest(false);
         sessionStorage.removeItem('latierrita_guest');
         try {
-          const { data: profile, error } = await supabase
+          let { data: profile } = await supabase
             .from('profiles')
             .select('*')
             .eq('id', user.id)
             .maybeSingle();
+
+          if (!profile && user.email) {
+            const { data: byEmail } = await supabase
+              .from('profiles')
+              .select('*')
+              .eq('email', user.email.trim().toLowerCase())
+              .maybeSingle();
+            if (byEmail) profile = byEmail;
+          }
 
           if (profile) {
             const mapped = mapDBProfileToUserProfile(profile);
             setUserProfile(mapped);
             localStorage.setItem('latierrita_user', JSON.stringify(mapped));
           } else {
-            // New user from OAuth or first login - create a profile
-            const fallbackUsername = user.email 
-              ? user.email.split('@')[0].replace(/[^a-zA-Z0-9_]/g, '_') 
-              : `parcero_${user.id.slice(0, 5)}`;
+            // New user from OAuth or first login - synthesize profile
+            const meta = user.user_metadata || {};
+            const cleanUsername = sanitizeHandle(meta.username || meta.user_name, user.email, user.id);
+            const fullName = sanitizeDisplayName(
+              meta.full_name || meta.name || `${meta.first_name || ''} ${meta.last_name || ''}`.trim(),
+              cleanUsername,
+              user.email
+            );
             
             const newProfile: UserProfile = {
               id: user.id,
               email: user.email || '',
-              username: fallbackUsername,
-              name: user.user_metadata?.full_name || 'Colombiano en España',
-              avatar: user.user_metadata?.avatar_url || DEFAULT_SILHOUETTE_AVATAR,
+              username: cleanUsername,
+              name: fullName,
+              firstName: meta.first_name || '',
+              lastName: meta.last_name || '',
+              birthDate: meta.birth_date || '',
+              age: meta.age || undefined,
+              avatar: meta.avatar_url || DEFAULT_SILHOUETTE_AVATAR,
               bio: '🇨🇴 Orgullo colombiano viviendo en España 🇪🇸',
               website: '',
-              city: 'Madrid',
-              originCity: 'Colombia',
+              city: (meta.city as any) || 'Madrid',
+              originCity: meta.origin_city || 'Colombia',
               followersCount: 0,
               followingCount: 0,
               postsCount: 0,
@@ -169,7 +217,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             };
 
             const dbPayload = mapUserProfileToDBProfile(newProfile);
-            await supabase.from('profiles').insert([dbPayload]);
+            try {
+              await supabase.from('profiles').upsert([dbPayload]);
+            } catch (upsertErr) {
+              console.warn('Upsert note in onAuthStateChange:', upsertErr);
+            }
             setUserProfile(newProfile);
             localStorage.setItem('latierrita_user', JSON.stringify(newProfile));
           }
@@ -178,7 +230,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           // Fallback to local profile if available
           const saved = localStorage.getItem('latierrita_user');
           if (saved) {
-            setUserProfile(JSON.parse(saved));
+            try {
+              setUserProfile(JSON.parse(saved));
+            } catch (e) {
+              console.warn('Local profile parse note:', e);
+            }
           }
         }
       } else {
@@ -194,14 +250,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const loginWithEmailOrUsername = async (identifier: string, pass: string) => {
     const trimmed = identifier.trim();
-    const normalized = trimmed.toLowerCase();
-    
-    // Lista negra estricta
-    if (normalized === 'diegof_024@hotmail.com' || normalized === 'latierritaapp@gmail.com' || normalized === 'diegof_024' || normalized === 'latierritaapp') {
-      const err = new Error('Esta cuenta ha sido inhabilitada permanentemente por la administración.');
-      (err as any).code = 'auth/user-disabled';
-      throw err;
-    }
     
     let emailToUse = trimmed;
 
@@ -233,16 +281,65 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const user = data.user;
     if (user) {
-      const { data: profile } = await supabase
+      let { data: profile } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', user.id)
         .maybeSingle();
 
+      if (!profile && user.email) {
+        const { data: byEmail } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('email', user.email.trim().toLowerCase())
+          .maybeSingle();
+        if (byEmail) profile = byEmail;
+      }
+
       if (profile) {
         const mapped = mapDBProfileToUserProfile(profile);
         setUserProfile(mapped);
         localStorage.setItem('latierrita_user', JSON.stringify(mapped));
+      } else {
+        // Synthesize profile from metadata if profiles row was missing
+        const meta = user.user_metadata || {};
+        const cleanUsername = sanitizeHandle(meta.username || meta.user_name, user.email, user.id);
+        const fullName = sanitizeDisplayName(
+          meta.full_name || meta.name || `${meta.first_name || ''} ${meta.last_name || ''}`.trim(),
+          cleanUsername,
+          user.email
+        );
+
+        const newProfile: UserProfile = {
+          id: user.id,
+          email: user.email || '',
+          username: cleanUsername,
+          name: fullName,
+          firstName: meta.first_name || '',
+          lastName: meta.last_name || '',
+          birthDate: meta.birth_date || '',
+          age: meta.age || undefined,
+          avatar: meta.avatar_url || DEFAULT_SILHOUETTE_AVATAR,
+          bio: '🇨🇴 Orgullo colombiano viviendo en España 🇪🇸',
+          website: '',
+          city: (meta.city as any) || 'Madrid',
+          originCity: meta.origin_city || 'Colombia',
+          followersCount: 0,
+          followingCount: 0,
+          postsCount: 0,
+          isVerified: false,
+          staffRole: 'Usuario',
+          socialLinks: {}
+        };
+
+        const dbPayload = mapUserProfileToDBProfile(newProfile);
+        try {
+          await supabase.from('profiles').upsert([dbPayload]);
+        } catch (e) {
+          console.warn('Upsert note during login:', e);
+        }
+        setUserProfile(newProfile);
+        localStorage.setItem('latierrita_user', JSON.stringify(newProfile));
       }
     }
   };
@@ -282,21 +379,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const registerWithEmail = async (data: RegisterData) => {
     const email = data.email.trim().toLowerCase();
-    
-    // Lista negra estricta
-    if (email === 'diegof_024@hotmail.com' || email === 'latierritaapp@gmail.com') {
-      const err = new Error('No es posible registrar esta cuenta de correo electrónico.');
-      (err as any).code = 'auth/invalid-email';
-      throw err;
-    }
+
+    const cleanUsername = sanitizeHandle(data.username, email);
+    const fullName = sanitizeDisplayName(
+      data.name?.trim() || `${data.firstName || ''} ${data.lastName || ''}`.trim(),
+      cleanUsername,
+      email
+    );
 
     const { data: authData, error } = await supabase.auth.signUp({
       email: data.email.trim(),
       password: data.password || '',
       options: {
         data: {
-          full_name: data.name?.trim() || `${data.firstName || ''} ${data.lastName || ''}`.trim() || 'Colombiano en España',
-          avatar_url: data.avatar || undefined
+          full_name: fullName,
+          name: fullName,
+          username: cleanUsername,
+          user_name: cleanUsername,
+          first_name: data.firstName?.trim() || '',
+          last_name: data.lastName?.trim() || '',
+          birth_date: data.birthDate || '',
+          age: data.age || null,
+          city: data.city || 'Madrid',
+          origin_city: data.originCity?.trim() || 'Colombia',
+          avatar_url: data.avatar || DEFAULT_SILHOUETTE_AVATAR
         }
       }
     });
@@ -310,8 +416,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     
     const user = authData.user;
-    const fullName = data.name?.trim() || `${data.firstName || ''} ${data.lastName || ''}`.trim() || 'Colombiano en España';
-    const cleanUsername = data.username.replace('@', '').trim().toLowerCase();
 
     const newProfile: UserProfile = {
       id: user.id,
@@ -336,11 +440,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       socialLinks: {}
     };
 
+    // If session is null on signup, attempt automatic login
+    if (!authData.session && data.password) {
+      try {
+        await supabase.auth.signInWithPassword({
+          email: email,
+          password: data.password
+        });
+      } catch (signInErr) {
+        console.warn('Auto sign-in attempt note:', signInErr);
+      }
+    }
+
     const dbPayload = mapUserProfileToDBProfile(newProfile);
-    const { error: insertErr } = await supabase.from('profiles').insert([dbPayload]);
-    
-    if (insertErr) {
-      throw insertErr;
+    try {
+      const { error: insertErr } = await supabase.from('profiles').upsert([dbPayload]);
+      if (insertErr) {
+        console.warn('Profile upsert note:', insertErr);
+      }
+    } catch (insertEx) {
+      console.warn('Profile upsert exception:', insertEx);
     }
 
     setUserProfile(newProfile);

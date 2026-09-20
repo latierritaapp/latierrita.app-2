@@ -304,7 +304,9 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userToDisplay }) => {
           {/* 1. Debajo de la foto: Nombre */}
           <div className="flex items-center gap-1.5 flex-wrap">
             <h1 className="text-sm sm:text-base font-bold text-white">
-              {user.name}
+              {user.name && !user.name.includes('@') && user.name.trim().length > 0
+                ? user.name.trim()
+                : (user.username ? user.username.replace(/^@+/, '').split('@')[0] : 'Usuario')}
             </h1>
             {user.isVerified && (
               <BadgeCheck className="w-4 h-4 text-sky-400 fill-sky-400/20 shrink-0 inline-block" />

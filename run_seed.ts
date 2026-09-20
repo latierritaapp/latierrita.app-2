@@ -16,9 +16,10 @@ import {
   INITIAL_PLACES
 } from './src/data/mockData';
 
-const jwtSecret = '83MoTh7uamYte56x58VfcUgwMZH8oacP';
+const jwtSecret = process.env.JWT_SECRET || '83MoTh7uamYte56x58VfcUgwMZH8oacP';
 const supabaseUrl = process.env.VITE_SUPABASE_URL || 'https://api.latierrita.tech';
 const anonApiKey = process.env.VITE_SUPABASE_ANON_KEY || '';
+const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SERVICE_ROLE_KEY || '';
 
 function base64UrlEncode(str: string): string {
   return Buffer.from(str)
@@ -52,7 +53,8 @@ function generateJWT(payload: any, secret: string): string {
 const iat = Math.floor(Date.now() / 1000);
 const exp = iat + (50 * 365 * 24 * 60 * 60);
 
-const serviceRoleJWT = generateJWT({ role: 'service_role', iss: 'supabase', aud: 'anon', iat, exp }, jwtSecret);
+// Si se provee la clave service_role_key directa, la usamos ya que es el JWT oficial firmado y listo.
+const serviceRoleJWT = serviceRoleKey || generateJWT({ role: 'service_role', iss: 'supabase', aud: 'anon', iat, exp }, jwtSecret);
 
 async function upsertTable(tableName: string, records: any[]) {
   console.log(`\nSembrando tabla "${tableName}" (${records.length} registros)...`);
@@ -140,6 +142,7 @@ async function runSeeder() {
       media_type: 'image',
       caption: s.caption || null,
       user_city: s.userCity,
+      reactions: s.reactions || [],
       viewed_by: [],
       expires_at: expiresAt,
       created_at: timestampISO
@@ -183,8 +186,10 @@ async function runSeeder() {
     location: p.location || null,
     user_city: p.userCity,
     likes: [], // Solución para likes de tipo JSON Array en vez de número entero
-    comments_count: 0,
-    is_staff_ad: false,
+    comments: p.comments || [],
+    comments_count: (p.comments || []).length,
+    is_staff_ad: p.isStaffAd || false,
+    ad_cta_text: p.adCtaText || null,
     created_at: parseDateString(p.timestamp)
   }));
   await upsertTable('posts', mappedPosts);
@@ -198,8 +203,8 @@ async function runSeeder() {
     description: p.description,
     address: p.address,
     phone: p.phone || null,
-    whatsapp: p.whatsapp || null,
-    instagram: p.instagram || null,
+    whatsapp: p.whatsapp || p.socialLinks?.whatsapp || null,
+    instagram: p.instagram || p.socialLinks?.instagram || null,
     image_url: p.imageUrl,
     category: p.category,
     city: p.city,

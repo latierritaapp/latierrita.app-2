@@ -13,9 +13,10 @@ import {
   Twitter,
   User,
   AtSign,
-  FileText
+  FileText,
+  Lock
 } from 'lucide-react';
-import { SPANISH_CITIES } from '../data/mockData';
+import { SPANISH_CITIES } from '../data/citiesData';
 import { SpanishCity } from '../types';
 
 const AVATAR_PRESETS = [
@@ -49,6 +50,23 @@ export const EditProfileModal: React.FC = () => {
   const [showAvatarPicker, setShowAvatarPicker] = useState(false);
   const [customAvatarUrl, setCustomAvatarUrl] = useState('');
   const [validationError, setValidationError] = useState<string | null>(null);
+
+  // Sincronizar el estado del formulario con el usuario actual al abrir el modal
+  React.useEffect(() => {
+    if (isEditProfileOpen && currentUser) {
+      setName(currentUser.name);
+      setUsername(currentUser.username);
+      setBio(currentUser.bio || '');
+      setWebsite(currentUser.website || '');
+      setAge(currentUser.age || 28);
+      setCity(currentUser.city);
+      setAvatar(currentUser.avatar);
+      setInstagram(currentUser.socialLinks?.instagram || '');
+      setFacebook(currentUser.socialLinks?.facebook || '');
+      setTiktok(currentUser.socialLinks?.tiktok || '');
+      setXAccount(currentUser.socialLinks?.x || '');
+    }
+  }, [isEditProfileOpen, currentUser]);
 
   if (!isEditProfileOpen) return null;
 
@@ -87,6 +105,7 @@ export const EditProfileModal: React.FC = () => {
       website: website.trim(),
       age: parsedAge,
       city,
+      originCity: currentUser.originCity || 'Colombia',
       avatar,
       socialLinks: {
         instagram: instagram.trim(),
@@ -354,11 +373,35 @@ export const EditProfileModal: React.FC = () => {
               </p>
             </div>
 
-            {/* 7. Ciudad Actual */}
+            {/* 7. Ciudad Origen (Colombia - Fija, no modificable) */}
             <div className="pt-3 flex flex-col gap-1">
-              <label className="text-[11px] font-bold text-neutral-500 dark:text-neutral-400 flex items-center gap-1">
-                <MapPin className="w-3 h-3 text-rose-500" />
-                <span>Ciudad Actual</span>
+              <div className="flex items-center justify-between">
+                <label className="text-[11px] font-bold text-neutral-500 dark:text-neutral-400 flex items-center gap-1">
+                  <MapPin className="w-3 h-3 text-amber-500" />
+                  <span>Ciudad Origen (Colombia)</span>
+                </label>
+                <span className="text-[9px] font-bold text-neutral-500 dark:text-neutral-400 bg-neutral-200 dark:bg-neutral-800 px-1.5 py-0.5 rounded flex items-center gap-1">
+                  <Lock className="w-2.5 h-2.5 text-neutral-400" />
+                  <span>No modificable</span>
+                </span>
+              </div>
+              <div className="w-full bg-neutral-200/60 dark:bg-neutral-800/60 text-neutral-700 dark:text-neutral-300 px-3.5 py-2 text-xs rounded-xl border border-neutral-200 dark:border-neutral-700/60 font-semibold flex items-center justify-between cursor-not-allowed select-none">
+                <span>{currentUser.originCity || 'Colombia'}</span>
+                <span className="text-xs">🇨🇴</span>
+              </div>
+              <p className="text-[10px] text-neutral-400 dark:text-neutral-500">
+                La ciudad de origen se establece en el registro y no se puede modificar.
+              </p>
+            </div>
+
+            {/* 8. Ciudad Actual (España) */}
+            <div className="pt-3 flex flex-col gap-1">
+              <label className="text-[11px] font-bold text-neutral-500 dark:text-neutral-400 flex items-center justify-between">
+                <span className="flex items-center gap-1">
+                  <MapPin className="w-3 h-3 text-rose-500" />
+                  <span>Ciudad Actual (España)</span>
+                </span>
+                <span className="text-[9px] font-semibold text-rose-500 bg-rose-500/10 px-1.5 py-0.5 rounded">🇪🇸 España</span>
               </label>
               <select
                 id="edit-field-city"
