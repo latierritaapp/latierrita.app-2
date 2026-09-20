@@ -93,11 +93,11 @@ export const PlacesView: React.FC = () => {
   const filteredPlaces = useMemo(() => {
     return places.filter(place => {
       const matchesSearch =
-        place.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        place.specialty.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        place.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        place.address.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        place.tags.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()));
+        (place.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (place.specialty || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (place.description || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (place.address || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (place.tags || []).some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()));
 
       const matchesCity = selectedCity === 'Todas' || place.city === selectedCity;
       const matchesCategory = selectedCategory === 'Todos' || place.category === selectedCategory;

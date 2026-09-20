@@ -81,7 +81,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userToDisplay }) => {
   ).filter(p => !p.isStaffAd);
 
   const taggedPosts: PostItem[] = posts.filter(
-    p => p.caption.toLowerCase().includes(`@${user.username}`) || p.userId !== user.id
+    p => (p.caption || '').toLowerCase().includes(`@${user.username}`) && p.userId !== user.id
   ).slice(0, 6);
 
   // Active stories for user

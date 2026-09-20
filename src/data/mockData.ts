@@ -34,8 +34,8 @@ export const INITIAL_CURRENT_USER: UserProfile = {
   followersCount: 842,
   followingCount: 395,
   postsCount: 9,
-  isVerified: true,
-  staffRole: 'ADMIN',
+  isVerified: false,
+  staffRole: 'Usuario',
   featuredStoryHighlight: [
     { id: 'hl-1', title: 'Madrid 🇪🇸', cover: 'https://images.unsplash.com/photo-1539037116277-4db20889f2d4?w=300&auto=format&fit=crop&q=80' },
     { id: 'hl-2', title: 'Comidita 🫓', cover: 'https://images.unsplash.com/photo-1544025162-d76694265947?w=300&auto=format&fit=crop&q=80' },

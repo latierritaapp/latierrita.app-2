@@ -20,9 +20,7 @@ import {
   X,
   FileText
 } from 'lucide-react';
-import { auth, googleProvider, db } from '../lib/firebase';
-import { signInWithPopup } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import { supabase } from '../lib/supabase';
 
 interface RegisterViewProps {
   onGoToLogin: () => void;
@@ -198,33 +196,15 @@ export const RegisterView: React.FC<RegisterViewProps> = ({ onGoToLogin }) => {
     setErrorMessage(null);
     setIsSubmitting(true);
     try {
-      const res = await signInWithPopup(auth, googleProvider);
-      const user = res.user;
-
-      const userDocRef = doc(db, 'users', user.uid);
-      const snap = await getDoc(userDocRef);
-      if (snap.exists()) {
-        return;
-      }
-
-      setIsSocialAuth(true);
-      setEmail(user.email || '');
-      if (user.displayName) {
-        const parts = user.displayName.trim().split(' ');
-        setFirstName(parts[0] || '');
-        setLastName(parts.slice(1).join(' ') || '');
-      }
-      if (user.photoURL) {
-        setAvatarPreview(user.photoURL);
-      }
-      if (user.email) {
-        const suggested = user.email.split('@')[0].toLowerCase().replace(/[^a-z0-9_]/g, '');
-        setUsername(suggested);
-      }
-
-      setStep(2);
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: window.location.origin
+        }
+      });
+      if (error) throw error;
     } catch (err) {
-      setErrorMessage(parseFirebaseError(err));
+      setErrorMessage((err as Error)?.message || 'Ocurrió un error al iniciar sesión con Google.');
     } finally {
       setIsSubmitting(false);
     }

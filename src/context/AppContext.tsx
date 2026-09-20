@@ -1,7 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useAuth, DEFAULT_SILHOUETTE_AVATAR } from './AuthContext';
-import { db } from '../lib/firebase';
-import { doc, updateDoc, deleteDoc, setDoc, collection, onSnapshot, addDoc, getDocs, query, where } from 'firebase/firestore';
+import { db, doc, updateDoc, deleteDoc, setDoc, collection, onSnapshot, addDoc, getDocs, query, where } from '../lib/firebase';
 import {
   UserProfile,
   StoryItem,
@@ -224,13 +223,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Current user
   const [currentUser, setCurrentUser] = useState<UserProfile>(() => {
     const saved = localStorage.getItem('latierrita_user');
-    return saved ? JSON.parse(saved) : INITIAL_CURRENT_USER;
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed.username === 'juancamilo_es') {
+          parsed.staffRole = 'Usuario';
+          parsed.isVerified = false;
+        }
+        return parsed;
+      } catch (e) {
+        return INITIAL_CURRENT_USER;
+      }
+    }
+    return INITIAL_CURRENT_USER;
   });
 
   // Sync with Firebase userProfile
   useEffect(() => {
     if (userProfile) {
-      setCurrentUser(userProfile);
+      const sanitized = { ...userProfile };
+      if (sanitized.username === 'juancamilo_es') {
+        sanitized.staffRole = 'Usuario';
+        sanitized.isVerified = false;
+      }
+      setCurrentUser(sanitized);
     }
   }, [userProfile]);
 
@@ -368,7 +384,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const unsub = onSnapshot(collection(db, 'deleted_accounts'), (snapshot) => {
         if (!snapshot.empty) {
           const fromDb: DeletedAccount[] = [];
-          snapshot.forEach(docSnap => {
+          snapshot.forEach((docSnap: any) => {
             const data = docSnap.data() as DeletedAccount;
             fromDb.push(data);
           });
@@ -413,7 +429,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           });
         } else {
           const list: AdBanner[] = [];
-          snapshot.forEach(docSnap => {
+          snapshot.forEach((docSnap: any) => {
             list.push({ id: docSnap.id, ...docSnap.data() } as AdBanner);
           });
           setAdBanners(list);
@@ -441,7 +457,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           });
         } else {
           const list: StoryItem[] = [];
-          snapshot.forEach(docSnap => {
+          snapshot.forEach((docSnap: any) => {
             list.push({ id: docSnap.id, ...docSnap.data() } as StoryItem);
           });
           list.sort((a, b) => b.id.localeCompare(a.id));
@@ -470,7 +486,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           });
         } else {
           const list: PostItem[] = [];
-          snapshot.forEach(docSnap => {
+          snapshot.forEach((docSnap: any) => {
             list.push({ id: docSnap.id, ...docSnap.data() } as PostItem);
           });
           list.sort((a, b) => b.id.localeCompare(a.id));
@@ -499,7 +515,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           });
         } else {
           const list: SupportTicket[] = [];
-          snapshot.forEach(docSnap => {
+          snapshot.forEach((docSnap: any) => {
             list.push({ id: docSnap.id, ...docSnap.data() } as SupportTicket);
           });
           setSupportTickets(list);
@@ -527,7 +543,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           });
         } else {
           const list: VerificationRequest[] = [];
-          snapshot.forEach(docSnap => {
+          snapshot.forEach((docSnap: any) => {
             list.push({ id: docSnap.id, ...docSnap.data() } as VerificationRequest);
           });
           setVerificationRequests(list);
@@ -555,7 +571,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           });
         } else {
           const list: StaffMember[] = [];
-          snapshot.forEach(docSnap => {
+          snapshot.forEach((docSnap: any) => {
             list.push({ id: docSnap.id, ...docSnap.data() } as StaffMember);
           });
           setStaffMembers(list);

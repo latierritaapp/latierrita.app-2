@@ -139,11 +139,11 @@ export const ClassifiedAdsSection: React.FC = () => {
   const filteredAds = useMemo(() => {
     return ads.filter(ad => {
       const matchesSearch =
-        ad.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        ad.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        ad.contactName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (ad.title || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (ad.description || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (ad.contactName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
         (ad.contactUsername && ad.contactUsername.toLowerCase().includes(searchQuery.toLowerCase())) ||
-        ad.tags.some(t => t.toLowerCase().includes(searchQuery.toLowerCase()));
+        (ad.tags || []).some(t => t.toLowerCase().includes(searchQuery.toLowerCase()));
 
       const matchesCity =
         selectedCity === 'Todas' || ad.city === 'Toda España' || ad.city === selectedCity;

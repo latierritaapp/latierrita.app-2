@@ -239,22 +239,24 @@ export const Navbar: React.FC = () => {
               ) : (
                 <>
                   {/* Staff Mode Pill */}
-                  <button
-                    id="btn-toggle-staff-mode"
-                    onClick={() => {
-                      setIsStaffMode(prev => !prev);
-                      if (!isStaffMode) setIsStaffAdminOpen(true);
-                    }}
-                    className={`hidden sm:flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full font-bold transition-all ${
-                      isStaffMode
-                        ? 'bg-amber-400 text-neutral-950 shadow-sm font-black'
-                        : 'bg-white/15 text-white/90 hover:bg-white/25 hover:text-white'
-                    }`}
-                    title="Panel de administración de publicidad STAFF"
-                  >
-                    <Shield className="w-3.5 h-3.5" />
-                    <span>STAFF</span>
-                  </button>
+                  {currentUser && currentUser.staffRole && currentUser.staffRole !== 'Usuario' && (
+                    <button
+                      id="btn-toggle-staff-mode"
+                      onClick={() => {
+                        setIsStaffMode(prev => !prev);
+                        if (!isStaffMode) setIsStaffAdminOpen(true);
+                      }}
+                      className={`hidden sm:flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full font-bold transition-all ${
+                        isStaffMode
+                          ? 'bg-amber-400 text-neutral-950 shadow-sm font-black'
+                          : 'bg-white/15 text-white/90 hover:bg-white/25 hover:text-white'
+                      }`}
+                      title="Panel de administración de publicidad STAFF"
+                    >
+                      <Shield className="w-3.5 h-3.5" />
+                      <span>STAFF</span>
+                    </button>
+                  )}
 
                   {/* Botón de Notificaciones */}
                   <button

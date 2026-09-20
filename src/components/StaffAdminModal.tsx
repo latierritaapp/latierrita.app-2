@@ -92,7 +92,24 @@ export const StaffAdminModal: React.FC = () => {
   } = useApp();
 
   // Role perspective selector inside panel
-  const [activeRole, setActiveRole] = useState<StaffRole>('ADMIN');
+  const [activeRole, setActiveRole] = useState<StaffRole>(() => {
+    const role = currentUser?.staffRole;
+    if (role === 'Soporte' || role === 'MOD' || role === 'ADMIN') {
+      return role;
+    }
+    return 'MOD';
+  });
+
+  // Keep activeRole in sync with maximum allowed role
+  useEffect(() => {
+    const role = currentUser?.staffRole;
+    if (role === 'Soporte' || role === 'MOD' || role === 'ADMIN') {
+      setActiveRole(role);
+      if (role === 'Soporte') {
+        setAdminMainTab('soporte');
+      }
+    }
+  }, [currentUser?.staffRole]);
 
   // Main navigation tab for ADMIN perspective
   const [adminMainTab, setAdminMainTab] = useState<'feed_post' | 'carrusel_01' | 'carrusel_02' | 'administracion' | 'soporte'>('feed_post');
@@ -181,6 +198,28 @@ export const StaffAdminModal: React.FC = () => {
   const [userSearchQuery, setUserSearchQuery] = useState('');
 
   if (!isStaffAdminOpen) return null;
+
+  // Protect against unauthorized access
+  const userRole = currentUser?.staffRole || 'Usuario';
+  if (userRole === 'Usuario') {
+    return (
+      <div className="fixed inset-0 z-50 bg-[#001845] text-white flex flex-col items-center justify-center p-4">
+        <div className="text-center space-y-4 max-w-sm bg-[#002466] border border-white/20 rounded-2xl p-6 shadow-2xl">
+          <Shield className="w-12 h-12 text-rose-500 mx-auto animate-bounce" />
+          <h2 className="text-lg font-black text-white">Acceso Denegado</h2>
+          <p className="text-xs text-white/70">
+            No tienes un rango administrativo (MOD, Soporte o ADMIN) asignado a tu perfil para ingresar a este panel.
+          </p>
+          <button
+            onClick={() => setIsStaffAdminOpen(false)}
+            className="w-full py-2.5 bg-amber-400 hover:bg-amber-300 text-neutral-950 font-black text-xs rounded-xl shadow-md transition-all active:scale-95"
+          >
+            Volver a la aplicación
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   // Filtered lists
   const bannersC1 = adBanners.filter(b => b.carouselType === 'inicio' || b.carouselType === 'ambos' || !b.carouselType);
@@ -430,39 +469,45 @@ export const StaffAdminModal: React.FC = () => {
             <span className="text-[10px] text-white/60 font-bold px-1.5 hidden sm:inline">
               Rol:
             </span>
-            <button
-              onClick={() => setActiveRole('ADMIN')}
-              className={`px-2.5 py-1 rounded-lg text-[10px] font-black transition-all ${
-                activeRole === 'ADMIN'
-                  ? 'bg-amber-400 text-neutral-950 shadow'
-                  : 'text-white/70 hover:text-white hover:bg-white/10'
-              }`}
-            >
-              ADMIN
-            </button>
-            <button
-              onClick={() => {
-                setActiveRole('Soporte');
-                setAdminMainTab('soporte');
-              }}
-              className={`px-2.5 py-1 rounded-lg text-[10px] font-black transition-all ${
-                activeRole === 'Soporte'
-                  ? 'bg-cyan-400 text-neutral-950 shadow'
-                  : 'text-white/70 hover:text-white hover:bg-white/10'
-              }`}
-            >
-              Soporte
-            </button>
-            <button
-              onClick={() => setActiveRole('MOD')}
-              className={`px-2.5 py-1 rounded-lg text-[10px] font-black transition-all ${
-                activeRole === 'MOD'
-                  ? 'bg-purple-400 text-neutral-950 shadow'
-                  : 'text-white/70 hover:text-white hover:bg-white/10'
-              }`}
-            >
-              MOD
-            </button>
+            {currentUser?.staffRole === 'ADMIN' && (
+              <button
+                onClick={() => setActiveRole('ADMIN')}
+                className={`px-2.5 py-1 rounded-lg text-[10px] font-black transition-all ${
+                  activeRole === 'ADMIN'
+                    ? 'bg-amber-400 text-neutral-950 shadow'
+                    : 'text-white/70 hover:text-white hover:bg-white/10'
+                }`}
+              >
+                ADMIN
+              </button>
+            )}
+            {(currentUser?.staffRole === 'ADMIN' || currentUser?.staffRole === 'Soporte') && (
+              <button
+                onClick={() => {
+                  setActiveRole('Soporte');
+                  setAdminMainTab('soporte');
+                }}
+                className={`px-2.5 py-1 rounded-lg text-[10px] font-black transition-all ${
+                  activeRole === 'Soporte'
+                    ? 'bg-cyan-400 text-neutral-950 shadow'
+                    : 'text-white/70 hover:text-white hover:bg-white/10'
+                }`}
+              >
+                Soporte
+              </button>
+            )}
+            {(currentUser?.staffRole === 'ADMIN' || currentUser?.staffRole === 'Soporte' || currentUser?.staffRole === 'MOD') && (
+              <button
+                onClick={() => setActiveRole('MOD')}
+                className={`px-2.5 py-1 rounded-lg text-[10px] font-black transition-all ${
+                  activeRole === 'MOD'
+                    ? 'bg-purple-400 text-neutral-950 shadow'
+                    : 'text-white/70 hover:text-white hover:bg-white/10'
+                }`}
+              >
+                MOD
+              </button>
+            )}
 
             <button
               onClick={() => setIsStaffAdminOpen(false)}

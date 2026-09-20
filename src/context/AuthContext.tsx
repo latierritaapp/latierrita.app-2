@@ -1,17 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import {
-  User,
-  onAuthStateChanged,
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
-  signInWithPopup,
-  signOut,
-  sendPasswordResetEmail,
-  updateProfile as updateFirebaseProfile,
-  deleteUser
-} from 'firebase/auth';
-import { doc, getDoc, setDoc, updateDoc, deleteDoc, collection, query, where, getDocs, limit } from 'firebase/firestore';
-import { auth, googleProvider, appleProvider, db } from '../lib/firebase';
+import { User } from '@supabase/supabase-js';
+import { supabase } from '../lib/supabase';
 import { UserProfile, SpanishCity } from '../types';
 import { INITIAL_CURRENT_USER } from '../data/mockData';
 
@@ -32,7 +21,7 @@ export interface RegisterData {
 }
 
 interface AuthContextType {
-  firebaseUser: User | null;
+  firebaseUser: User | null; // Mantenemos el nombre de la variable para evitar refactorizar toda la app
   userProfile: UserProfile | null;
   loading: boolean;
   isGuest: boolean;
@@ -51,38 +40,122 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// Mapeador de base de datos Postgres (snake_case) a React State (camelCase)
+const mapDBProfileToUserProfile = (db: any): UserProfile => {
+  return {
+    id: db.id,
+    email: db.email,
+    username: db.username,
+    name: db.name,
+    firstName: db.first_name || '',
+    lastName: db.last_name || '',
+    birthDate: db.birth_date || '',
+    age: db.age || undefined,
+    avatar: db.avatar_url || DEFAULT_SILHOUETTE_AVATAR,
+    bio: db.bio || '',
+    city: db.city || 'Madrid',
+    originCity: db.origin_city || 'Colombia',
+    followersCount: db.followers ? db.followers.length : 0,
+    followingCount: db.following ? db.following.length : 0,
+    postsCount: 0,
+    isVerified: db.verified || false,
+    staffRole: db.staff_role || 'Usuario',
+    isDeleted: db.is_deleted || false,
+    deletedAt: db.deleted_at || undefined,
+    retentionExpiresAt: db.retention_expires_at || undefined,
+    deletedReason: db.deleted_reason || '',
+    createdAt: db.created_at || new Date().toISOString(),
+    socialLinks: {
+      instagram: db.instagram || '',
+      facebook: db.facebook || '',
+    }
+  };
+};
+
+// Mapeador de React State (camelCase) a base de datos Postgres (snake_case)
+const mapUserProfileToDBProfile = (profile: Partial<UserProfile>): any => {
+  const db: any = {};
+  if (profile.id !== undefined) db.id = profile.id;
+  if (profile.email !== undefined) db.email = profile.email;
+  if (profile.username !== undefined) db.username = profile.username;
+  if (profile.name !== undefined) db.name = profile.name;
+  if (profile.firstName !== undefined) db.first_name = profile.firstName;
+  if (profile.lastName !== undefined) db.last_name = profile.lastName;
+  if (profile.birthDate !== undefined) db.birth_date = profile.birthDate;
+  if (profile.age !== undefined) db.age = profile.age;
+  if (profile.avatar !== undefined) db.avatar_url = profile.avatar;
+  if (profile.bio !== undefined) db.bio = profile.bio;
+  if (profile.city !== undefined) db.city = profile.city;
+  if (profile.originCity !== undefined) db.origin_city = profile.originCity;
+  if (profile.isVerified !== undefined) db.verified = profile.isVerified;
+  if (profile.staffRole !== undefined) db.staff_role = profile.staffRole;
+  if (profile.isDeleted !== undefined) db.is_deleted = profile.isDeleted;
+  if (profile.deletedAt !== undefined) db.deleted_at = profile.deletedAt;
+  if (profile.retentionExpiresAt !== undefined) db.retention_expires_at = profile.retentionExpiresAt;
+  if (profile.deletedReason !== undefined) db.deleted_reason = profile.deletedReason;
+  if (profile.createdAt !== undefined) db.created_at = profile.createdAt;
+  
+  if (profile.socialLinks) {
+    if (profile.socialLinks.instagram !== undefined) db.instagram = profile.socialLinks.instagram;
+    if (profile.socialLinks.facebook !== undefined) db.facebook = profile.socialLinks.facebook;
+  }
+  return db;
+};
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
-  const [isGuest, setIsGuest] = useState<boolean>(() => {
-    return sessionStorage.getItem('latierrita_guest') === 'true';
-  });
+  const [isGuest, setIsGuest] = useState<boolean>(false);
 
-  // Listen to Firebase auth state changes
+  // Clear any existing stale guest session
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      setFirebaseUser(user);
+    sessionStorage.removeItem('latierrita_guest');
+  }, []);
+
+  // Listen to Supabase auth state changes
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      const user = session?.user || null;
+      
       if (user) {
+        const email = user.email?.toLowerCase().trim() || '';
+        if (email === 'diegof_024@hotmail.com' || email === 'latierritaapp@gmail.com') {
+          console.warn('⚠️ Cuenta bloqueada:', email);
+          await supabase.auth.signOut();
+          setFirebaseUser(null);
+          setUserProfile(null);
+          localStorage.removeItem('latierrita_user');
+          setLoading(false);
+          return;
+        }
+        
+        setFirebaseUser(user);
         setIsGuest(false);
         sessionStorage.removeItem('latierrita_guest');
         try {
-          const userDocRef = doc(db, 'users', user.uid);
-          const userDocSnap = await getDoc(userDocRef);
+          const { data: profile, error } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', user.id)
+            .maybeSingle();
 
-          if (userDocSnap.exists()) {
-            const data = userDocSnap.data() as UserProfile;
-            setUserProfile(data);
-            localStorage.setItem('latierrita_user', JSON.stringify(data));
+          if (profile) {
+            const mapped = mapDBProfileToUserProfile(profile);
+            setUserProfile(mapped);
+            localStorage.setItem('latierrita_user', JSON.stringify(mapped));
           } else {
-            // New user from OAuth or first login
-            const fallbackUsername = user.email ? user.email.split('@')[0].replace(/[^a-zA-Z0-9_]/g, '_') : `parcero_${user.uid.slice(0, 5)}`;
+            // New user from OAuth or first login - create a profile
+            const fallbackUsername = user.email 
+              ? user.email.split('@')[0].replace(/[^a-zA-Z0-9_]/g, '_') 
+              : `parcero_${user.id.slice(0, 5)}`;
+            
             const newProfile: UserProfile = {
-              id: user.uid,
+              id: user.id,
               email: user.email || '',
               username: fallbackUsername,
-              name: user.displayName || 'Colombiano en España',
-              avatar: user.photoURL || DEFAULT_SILHOUETTE_AVATAR,
+              name: user.user_metadata?.full_name || 'Colombiano en España',
+              avatar: user.user_metadata?.avatar_url || DEFAULT_SILHOUETTE_AVATAR,
               bio: '🇨🇴 Orgullo colombiano viviendo en España 🇪🇸',
               website: '',
               city: 'Madrid',
@@ -94,12 +167,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               staffRole: 'Usuario',
               socialLinks: {}
             };
-            await setDoc(userDocRef, newProfile);
+
+            const dbPayload = mapUserProfileToDBProfile(newProfile);
+            await supabase.from('profiles').insert([dbPayload]);
             setUserProfile(newProfile);
             localStorage.setItem('latierrita_user', JSON.stringify(newProfile));
           }
         } catch (error) {
-          console.error('Error fetching user profile from Firestore:', error);
+          console.error('Error fetching user profile from Supabase:', error);
           // Fallback to local profile if available
           const saved = localStorage.getItem('latierrita_user');
           if (saved) {
@@ -112,49 +187,63 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setLoading(false);
     });
 
-    return () => unsubscribe();
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
   const loginWithEmailOrUsername = async (identifier: string, pass: string) => {
     const trimmed = identifier.trim();
+    const normalized = trimmed.toLowerCase();
+    
+    // Lista negra estricta
+    if (normalized === 'diegof_024@hotmail.com' || normalized === 'latierritaapp@gmail.com' || normalized === 'diegof_024' || normalized === 'latierritaapp') {
+      const err = new Error('Esta cuenta ha sido inhabilitada permanentemente por la administración.');
+      (err as any).code = 'auth/user-disabled';
+      throw err;
+    }
+    
     let emailToUse = trimmed;
 
-    // If identifier is not an email, lookup by username in Firestore
+    // If identifier is not an email, lookup by username in Supabase profiles table
     if (!trimmed.includes('@')) {
       const cleanUsername = trimmed.toLowerCase().replace('@', '');
-      try {
-        const usersRef = collection(db, 'users');
-        const q = query(usersRef, where('username', '==', cleanUsername), limit(1));
-        const querySnapshot = await getDocs(q);
-        if (querySnapshot.empty) {
-          const err = new Error('No se encontró ninguna cuenta con ese usuario.');
-          (err as unknown as { code: string }).code = 'auth/username-not-found';
-          throw err;
-        }
-        const userDoc = querySnapshot.docs[0];
-        const userData = userDoc.data();
-        if (!userData.email) {
-          const err = new Error('No se encontró un correo asociado a este usuario.');
-          (err as unknown as { code: string }).code = 'auth/user-not-found';
-          throw err;
-        }
-        emailToUse = userData.email;
-      } catch (err: unknown) {
-        if ((err as { code?: string })?.code === 'auth/username-not-found' || (err as { code?: string })?.code === 'auth/user-not-found') {
-          throw err;
-        }
-        // If Firestore query fails, fallback or rethrow
+      const { data: profile, error } = await supabase
+        .from('profiles')
+        .select('email')
+        .eq('username', cleanUsername)
+        .maybeSingle();
+
+      if (error || !profile) {
+        const err = new Error('No se encontró ninguna cuenta con ese usuario.');
+        (err as any).code = 'auth/username-not-found';
         throw err;
       }
+      emailToUse = profile.email;
     }
 
-    const cred = await signInWithEmailAndPassword(auth, emailToUse, pass);
-    const userDocRef = doc(db, 'users', cred.user.uid);
-    const snap = await getDoc(userDocRef);
-    if (snap.exists()) {
-      const data = snap.data() as UserProfile;
-      setUserProfile(data);
-      localStorage.setItem('latierrita_user', JSON.stringify(data));
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: emailToUse,
+      password: pass
+    });
+
+    if (error) {
+      throw error;
+    }
+
+    const user = data.user;
+    if (user) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      if (profile) {
+        const mapped = mapDBProfileToUserProfile(profile);
+        setUserProfile(mapped);
+        localStorage.setItem('latierrita_user', JSON.stringify(mapped));
+      }
     }
   };
 
@@ -164,65 +253,76 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const clean = rawUsername.replace('@', '').trim().toLowerCase();
     if (!clean) return false;
     try {
-      const usersRef = collection(db, 'users');
-      const q = query(usersRef, where('username', '==', clean), limit(1));
-      const querySnapshot = await getDocs(q);
-      if (querySnapshot.empty) {
+      const { data: profile, error } = await supabase
+        .from('profiles')
+        .select('id, is_deleted, retention_expires_at')
+        .eq('username', clean)
+        .maybeSingle();
+
+      if (error || !profile) {
         return false;
       }
-      const userDoc = querySnapshot.docs[0];
-      const userData = userDoc.data() as UserProfile;
-      // If account is marked as deleted, check if 7-day retention period is active
-      if (userData.isDeleted) {
-        if (userData.retentionExpiresAt) {
-          const expiresTime = new Date(userData.retentionExpiresAt).getTime();
+
+      if (profile.is_deleted) {
+        if (profile.retention_expires_at) {
+          const expiresTime = new Date(profile.retention_expires_at).getTime();
           if (Date.now() > expiresTime) {
-            // Retention has expired (+7 days), username is freed
+            // Retention expired (+7 days), username is free
             return false;
           }
         }
-        // Within 7 days retention: username is still reserved for recovery
         return true;
       }
       return true;
     } catch (err) {
-      console.error('Error checking username existence in Firestore:', err);
+      console.error('Error checking username existence in Supabase:', err);
       return false;
     }
   };
 
   const registerWithEmail = async (data: RegisterData) => {
-    let currentUser = auth.currentUser;
-
-    if (!currentUser && data.password) {
-      const cred = await createUserWithEmailAndPassword(auth, data.email.trim(), data.password);
-      currentUser = cred.user;
+    const email = data.email.trim().toLowerCase();
+    
+    // Lista negra estricta
+    if (email === 'diegof_024@hotmail.com' || email === 'latierritaapp@gmail.com') {
+      const err = new Error('No es posible registrar esta cuenta de correo electrónico.');
+      (err as any).code = 'auth/invalid-email';
+      throw err;
     }
 
-    if (!currentUser) {
+    const { data: authData, error } = await supabase.auth.signUp({
+      email: data.email.trim(),
+      password: data.password || '',
+      options: {
+        data: {
+          full_name: data.name?.trim() || `${data.firstName || ''} ${data.lastName || ''}`.trim() || 'Colombiano en España',
+          avatar_url: data.avatar || undefined
+        }
+      }
+    });
+
+    if (error) {
+      throw error;
+    }
+
+    if (!authData.user) {
       throw new Error('No se pudo completar la autenticación.');
     }
     
+    const user = authData.user;
     const fullName = data.name?.trim() || `${data.firstName || ''} ${data.lastName || ''}`.trim() || 'Colombiano en España';
-
-    // Update Firebase Auth displayName and photoURL
-    await updateFirebaseProfile(currentUser, {
-      displayName: fullName,
-      photoURL: data.avatar || undefined
-    });
-
     const cleanUsername = data.username.replace('@', '').trim().toLowerCase();
 
     const newProfile: UserProfile = {
-      id: currentUser.uid,
-      email: data.email?.trim() || currentUser.email || '',
+      id: user.id,
+      email: data.email?.trim() || user.email || '',
       username: cleanUsername,
       name: fullName,
       firstName: data.firstName?.trim() || '',
       lastName: data.lastName?.trim() || '',
       birthDate: data.birthDate || '',
       age: data.age,
-      avatar: data.avatar || currentUser.photoURL || DEFAULT_SILHOUETTE_AVATAR,
+      avatar: data.avatar || DEFAULT_SILHOUETTE_AVATAR,
       bio: `🇨🇴 ¡Orgullo colombiano en España! 🇪🇸`,
       website: '',
       city: data.city || 'Madrid',
@@ -236,37 +336,55 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       socialLinks: {}
     };
 
-    // Save profile to Firestore
-    await setDoc(doc(db, 'users', currentUser.uid), newProfile);
+    const dbPayload = mapUserProfileToDBProfile(newProfile);
+    const { error: insertErr } = await supabase.from('profiles').insert([dbPayload]);
+    
+    if (insertErr) {
+      throw insertErr;
+    }
+
     setUserProfile(newProfile);
     localStorage.setItem('latierrita_user', JSON.stringify(newProfile));
   };
 
   const loginWithGoogle = async () => {
-    await signInWithPopup(auth, googleProvider);
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: window.location.origin
+      }
+    });
+    if (error) throw error;
   };
 
   const loginWithApple = async () => {
-    await signInWithPopup(auth, appleProvider);
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'apple',
+      options: {
+        redirectTo: window.location.origin
+      }
+    });
+    if (error) throw error;
   };
 
   const logout = async () => {
-    await signOut(auth);
+    await supabase.auth.signOut();
     setUserProfile(null);
+    setFirebaseUser(null);
     setIsGuest(false);
     sessionStorage.removeItem('latierrita_guest');
     localStorage.removeItem('latierrita_user');
   };
 
   const resetPassword = async (email: string) => {
-    await sendPasswordResetEmail(auth, email.trim());
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+      redirectTo: `${window.location.origin}/reset-password`,
+    });
+    if (error) throw error;
   };
 
   const continueAsGuest = () => {
-    setIsGuest(true);
-    sessionStorage.setItem('latierrita_guest', 'true');
-    // Assign demo user profile
-    setUserProfile(INITIAL_CURRENT_USER);
+    // Modo invitado eliminado para obligar registro obligatorio
   };
 
   const updateUserProfile = async (data: Partial<UserProfile>) => {
@@ -275,12 +393,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUserProfile(updated);
     localStorage.setItem('latierrita_user', JSON.stringify(updated));
 
-    if (firebaseUser) {
+    const sessionData = await supabase.auth.getSession();
+    const user = sessionData.data.session?.user;
+    if (user) {
       try {
-        const ref = doc(db, 'users', firebaseUser.uid);
-        await setDoc(ref, data, { merge: true });
+        const dbPayload = mapUserProfileToDBProfile(data);
+        const { error } = await supabase
+          .from('profiles')
+          .update(dbPayload)
+          .eq('id', user.id);
+        if (error) throw error;
       } catch (err) {
-        console.error('Failed to update profile in Firestore:', err);
+        console.error('Failed to update profile in Supabase:', err);
       }
     }
   };
@@ -289,7 +413,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const now = new Date();
     const expires = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000); // 7 days retention
 
-    if (firebaseUser) {
+    const sessionData = await supabase.auth.getSession();
+    const user = sessionData.data.session?.user;
+
+    if (user) {
       const deletedData: Partial<UserProfile> = {
         isDeleted: true,
         deletedAt: now.toISOString(),
@@ -298,41 +425,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       };
 
       try {
-        // 1. Mark user profile in Firestore as deleted with 7-day retention (username remains reserved)
-        const ref = doc(db, 'users', firebaseUser.uid);
-        await setDoc(ref, deletedData, { merge: true });
+        const dbPayload = mapUserProfileToDBProfile(deletedData);
+        await supabase
+          .from('profiles')
+          .update(dbPayload)
+          .eq('id', user.id);
       } catch (err) {
-        console.error('Failed to update user profile in Firestore:', err);
-      }
-
-      // 2. Record in deleted_accounts for Staff Admin management
-      try {
-        const deletedRef = doc(db, 'deleted_accounts', firebaseUser.uid);
-        await setDoc(deletedRef, {
-          id: `del-${firebaseUser.uid}`,
-          userId: firebaseUser.uid,
-          username: userProfile?.username || 'usuario',
-          name: userProfile?.name || 'Usuario',
-          avatar: userProfile?.avatar || DEFAULT_SILHOUETTE_AVATAR,
-          email: userProfile?.email || firebaseUser.email || '',
-          deletedAt: now.toISOString(),
-          retentionExpiresAt: expires.toISOString(),
-          reason: reason,
-          canRestore: true,
-          profileData: userProfile || undefined
-        });
-      } catch (err) {
-        console.error('Failed to record deleted account in Firestore:', err);
+        console.error('Failed to update user profile in Supabase:', err);
       }
 
       try {
-        await signOut(auth);
+        await supabase.auth.signOut();
       } catch (err) {
         console.error('Failed to sign out user:', err);
       }
     }
 
-    // 3. Clear local state and cache
     setUserProfile(null);
     setFirebaseUser(null);
     setIsGuest(false);

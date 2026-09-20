@@ -281,9 +281,9 @@ export const ChatsView: React.FC = () => {
         }
         if (!searchQuery.trim()) return true;
         const query = searchQuery.toLowerCase();
-        const matchesName = r.name.toLowerCase().includes(query);
+        const matchesName = (r.name || '').toLowerCase().includes(query);
         const matchesDesc = r.description?.toLowerCase().includes(query);
-        const matchesMsg = r.messages.some(m => m.text.toLowerCase().includes(query));
+        const matchesMsg = (r.messages || []).some(m => (m.text || '').toLowerCase().includes(query));
         return matchesName || matchesDesc || matchesMsg;
       })
       .sort((a, b) => {

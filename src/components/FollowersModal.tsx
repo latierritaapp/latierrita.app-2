@@ -54,11 +54,13 @@ export const FollowersModal: React.FC<FollowersModalProps> = ({ type, user, onCl
 
   const currentList = activeTabType === 'following' ? followingList : followersList;
 
-  const filtered = currentList.filter(u =>
-    u.name.toLowerCase().includes(search.toLowerCase()) ||
-    u.username.toLowerCase().includes(search.toLowerCase()) ||
-    (u.city && u.city.toLowerCase().includes(search.toLowerCase()))
-  );
+  const filtered = currentList.filter(u => {
+    if (!u) return false;
+    const nameMatch = (u.name || '').toLowerCase().includes(search.toLowerCase());
+    const usernameMatch = (u.username || '').toLowerCase().includes(search.toLowerCase());
+    const cityMatch = u.city ? u.city.toLowerCase().includes(search.toLowerCase()) : false;
+    return nameMatch || usernameMatch || cityMatch;
+  });
 
   return (
     <div className="fixed inset-0 z-50 bg-neutral-950 text-white flex flex-col overflow-hidden animate-in fade-in duration-200">
