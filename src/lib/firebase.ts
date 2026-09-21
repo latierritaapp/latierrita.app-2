@@ -85,6 +85,7 @@ function formatRowData(tableName: string, data: any): any {
         item.createdBy = meta.createdBy;
         item.status = meta.status;
         item.unreadCount = meta.unreadCount;
+        item.messages = Array.isArray(meta.messages) ? meta.messages : (Array.isArray(item.messages) ? item.messages : []);
       } catch (e) {
         // Not JSON
       }
@@ -193,7 +194,8 @@ function sanitizePayloadForTable(tableName: string, payload: any): any {
       createdBy: clean.createdBy || clean.created_by,
       status: clean.status,
       unreadCount: clean.unreadCount || clean.unread_count,
-      description: clean.description || ''
+      description: clean.description || '',
+      messages: clean.messages || []
     };
     clean.description = JSON.stringify(meta);
     delete clean.targetUserId;
@@ -206,9 +208,9 @@ function sanitizePayloadForTable(tableName: string, payload: any): any {
     delete clean.status;
     delete clean.unreadCount;
     delete clean.unread_count;
+    delete clean.messages;
 
     if (!Array.isArray(clean.members)) clean.members = [];
-    if (!Array.isArray(clean.messages)) clean.messages = [];
     if (!clean.created_at) clean.created_at = new Date().toISOString().split('T')[0];
     if (!clean.name) clean.name = 'Chat';
   }

@@ -737,11 +737,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             };
 
             const existing = roomsMap.get(room.id);
-            // If DB has fewer messages than local INITIAL or if DB messages is empty, merge or keep
-            if (existing && existing.messages.length > 0 && room.messages.length === 0) {
-              room.messages = existing.messages;
-            } else if (room.messages.length === 0 && existing && existing.messages.length > 0) {
-              room.messages = existing.messages;
+            if (existing && Array.isArray(existing.messages) && existing.messages.length > 0) {
+              const msgMap = new Map<string, any>();
+              existing.messages.forEach(m => msgMap.set(m.id, m));
+              if (Array.isArray(room.messages)) {
+                room.messages.forEach(m => msgMap.set(m.id, m));
+              }
+              room.messages = Array.from(msgMap.values());
             }
             roomsMap.set(room.id, room);
           });
