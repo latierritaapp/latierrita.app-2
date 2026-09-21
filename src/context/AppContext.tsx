@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { useAuth, DEFAULT_SILHOUETTE_AVATAR, mapDBProfileToUserProfile } from './AuthContext';
 import { supabase } from '../lib/supabase';
 import { db, doc, updateDoc, deleteDoc, setDoc, collection, onSnapshot, addDoc, getDocs, query, where } from '../lib/firebase';
@@ -243,26 +243,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const [otherUsers, setOtherUsers] = useState<UserProfile[]>(OTHER_USERS);
+  const currentUserRef = useRef<UserProfile | null>(currentUser);
+  currentUserRef.current = currentUser;
+
   const [followingIds, setFollowingIds] = useState<string[]>(() => {
     const saved = localStorage.getItem('latierrita_following');
     const isCurrentStaff = isStaffAccount(currentUser?.id, currentUser?.username, currentUser?.email);
+    if (isCurrentStaff) return [];
+
     let list: string[] = [];
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
           const currentId = currentUser?.id;
-          list = parsed.filter(id => id !== currentId && (!isCurrentStaff || id !== 'user-staff'));
+          list = parsed.filter(id => id && id !== currentId && id !== 'user-staff' && id !== 'latierrita_oficial');
         }
       } catch (e) {
         console.warn('Error parsing latierrita_following:', e);
       }
     }
-    // Automatically follow official staff account @latierrita_app for all non-staff accounts
-    if (!isCurrentStaff && !list.includes('user-staff')) {
-      list.push('user-staff');
-    }
-    return isCurrentStaff ? list.filter(id => id !== 'user-staff') : list;
+    return list;
   });
 
   // Fetch real users from Supabase profiles table
@@ -276,45 +277,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
         if (!error && Array.isArray(profiles) && profiles.length > 0 && isMounted) {
           const mappedList: UserProfile[] = profiles.map(p => mapDBProfileToUserProfile(p));
+          const current = currentUserRef.current;
 
           setOtherUsers(prev => {
-            const realStaff = mappedList.find(p => p.email === 'latierritaapp@gmail.com');
-            
             // Only keep valid profiles from database, excluding current user and any fake user-staff
             const validProfiles = mappedList.filter(p => {
               if (p.id === 'user-staff') return false;
               if (p.username === 'latierrita_app' && p.email !== 'latierritaapp@gmail.com') return false;
-              if (currentUser && (p.id === currentUser.id || (p.email && currentUser.email && p.email === currentUser.email))) return false;
+              if (current && (p.id === current.id || (p.email && current.email && p.email === current.email))) return false;
               return true;
             });
 
             const merged = [...validProfiles];
             
-            // Retain mock parceros (mariana, carlos, valen, andres) only if they are not the official account or current user
+            // Retain mock parceros only if they are not the official account or current user
             prev.forEach(p => {
-              // Strictly discard any fake staff account or username duplicates
               if (p.id === 'user-staff' || p.username === 'latierrita_app' || p.username === 'latierrita_oficial') {
                 return;
               }
-              if (currentUser && (p.id === currentUser.id || (p.email && currentUser.email && p.email === currentUser.email))) {
+              if (current && (p.id === current.id || (p.email && current.email && p.email === current.email))) {
                 return;
               }
               if (!merged.some(m => m.id === p.id || m.username === p.username || (p.email && m.email === p.email))) {
                 merged.push(p);
               }
             });
-
-            // If real staff account is present, ensure all non-staff accounts follow its real ID
-            if (realStaff && !isStaffAccount(currentUser?.id, currentUser?.username, currentUser?.email)) {
-              setFollowingIds(fIds => {
-                const targetId = realStaff.id;
-                const cleaned = fIds.filter(id => id !== 'user-staff' && id !== 'latierrita_oficial');
-                if (!cleaned.includes(targetId)) {
-                  return [...cleaned, targetId];
-                }
-                return cleaned;
-              });
-            }
 
             return merged;
           });
@@ -338,7 +325,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       isMounted = false;
       supabase.removeChannel(channel);
     };
-  }, [currentUser]);
+  }, [currentUser?.id, currentUser?.email]);
 
   // Sync with Firebase/Supabase userProfile
   useEffect(() => {
@@ -350,41 +337,72 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
       const isStaff = isStaffAccount(sanitized.id, sanitized.username, sanitized.email);
       if (!isStaff) {
-        sanitized.followingCount = Math.max(sanitized.followingCount || 0, followingIds.length, 1);
+        const cleanFollowCount = followingIds.filter(id => id !== 'user-staff' && id !== 'latierrita_oficial').length;
+        sanitized.followingCount = Math.max(1, cleanFollowCount);
       } else {
         const communityFollowersCount = otherUsers.filter(u => !isStaffAccount(u.id, u.username, u.email)).length;
         sanitized.followersCount = Math.max(sanitized.followersCount || 0, communityFollowersCount);
+        sanitized.followingCount = 0;
       }
-      setCurrentUser(sanitized);
+      setCurrentUser(prev => {
+        if (!prev) return sanitized;
+        // Avoid state update if key properties are identical
+        if (
+          prev.id === sanitized.id &&
+          prev.username === sanitized.username &&
+          prev.avatar === sanitized.avatar &&
+          prev.name === sanitized.name &&
+          prev.bio === sanitized.bio &&
+          prev.followingCount === sanitized.followingCount &&
+          prev.followersCount === sanitized.followersCount
+        ) {
+          return prev;
+        }
+        return sanitized;
+      });
     }
-  }, [userProfile, followingIds, otherUsers]);
+  }, [userProfile?.id, userProfile?.username, userProfile?.avatar, userProfile?.name, userProfile?.bio, followingIds.length, otherUsers.length]);
 
-  // Keep following list strictly clean of self-following and ensure @latierrita_app is followed
+  // Keep following list strictly clean of self-following and ensure real staff is followed
   useEffect(() => {
     const isCurrentStaff = isStaffAccount(currentUser?.id, currentUser?.username, currentUser?.email);
-    setFollowingIds(prev => {
-      let cleaned = prev.filter(id => id !== currentUser.id && (!isCurrentStaff || id !== 'user-staff'));
-      if (!isCurrentStaff && !cleaned.includes('user-staff')) {
-        cleaned.push('user-staff');
-      }
-      if (cleaned.length !== prev.length || !cleaned.every((val, idx) => val === prev[idx])) {
-        return cleaned;
-      }
-      return prev;
-    });
-  }, [currentUser]);
+    if (isCurrentStaff) {
+      setFollowingIds(prev => prev.length === 0 ? prev : []);
+      return;
+    }
 
-  useEffect(() => {
-    localStorage.setItem('latierrita_following', JSON.stringify(followingIds));
-    setCurrentUser(prev => {
-      if (prev && prev.followingCount !== followingIds.length) {
-        const updated = { ...prev, followingCount: followingIds.length };
-        localStorage.setItem('latierrita_user', JSON.stringify(updated));
-        return updated;
+    const staffUser = otherUsers.find(u => u.email === 'latierritaapp@gmail.com' || u.username === 'latierrita_app');
+    const staffId = staffUser?.id;
+
+    setFollowingIds(prev => {
+      let cleaned = prev.filter(id => id && id !== currentUser?.id && id !== 'user-staff' && id !== 'latierrita_oficial');
+      
+      if (staffId && !cleaned.includes(staffId)) {
+        cleaned = [staffId, ...cleaned];
       }
-      return prev;
+      
+      if (cleaned.length === prev.length && cleaned.every((val, idx) => val === prev[idx])) {
+        return prev;
+      }
+      return cleaned;
     });
-  }, [followingIds]);
+  }, [currentUser?.id, currentUser?.email, currentUser?.username, otherUsers.length]);
+
+  // Save following to localStorage and update followingCount without infinite loop
+  useEffect(() => {
+    const isStaff = isStaffAccount(currentUser?.id, currentUser?.username, currentUser?.email);
+    const cleanList = isStaff ? [] : followingIds.filter(id => id !== 'user-staff' && id !== 'latierrita_oficial');
+    localStorage.setItem('latierrita_following', JSON.stringify(cleanList));
+
+    setCurrentUser(prev => {
+      if (!prev) return prev;
+      const expectedCount = isStaff ? 0 : Math.max(1, cleanList.length);
+      if (prev.followingCount === expectedCount) return prev;
+      const updated = { ...prev, followingCount: expectedCount };
+      localStorage.setItem('latierrita_user', JSON.stringify(updated));
+      return updated;
+    });
+  }, [followingIds, currentUser?.email, currentUser?.username]);
   const [blockedUserIds, setBlockedUserIds] = useState<string[]>(() => {
     const saved = localStorage.getItem('latierrita_blocked');
     return saved ? JSON.parse(saved) : [];

@@ -273,22 +273,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const mapped = mapDBProfileToUserProfile(profile);
             const isStaff = mapped.username === 'latierrita_app' || user.id === 'user-staff';
 
-            // Ensure existing accounts follow @latierrita_app
+            // Ensure existing accounts have correct followingCount
             if (!isStaff) {
               const savedFollowing = localStorage.getItem('latierrita_following');
               let fList: string[] = [];
               if (savedFollowing) {
                 try {
-                  fList = JSON.parse(savedFollowing);
+                  const parsed = JSON.parse(savedFollowing);
+                  if (Array.isArray(parsed)) {
+                    fList = parsed.filter(id => id && id !== 'user-staff' && id !== 'latierrita_oficial');
+                  }
                 } catch {
                   fList = [];
                 }
               }
-              if (!fList.includes('user-staff')) {
-                fList.push('user-staff');
-                localStorage.setItem('latierrita_following', JSON.stringify(fList));
-              }
-              mapped.followingCount = Math.max(mapped.followingCount || 0, fList.length);
+              localStorage.setItem('latierrita_following', JSON.stringify(fList));
+              mapped.followingCount = Math.max(1, fList.length);
+            } else {
+              mapped.followingCount = 0;
             }
 
             const isOfficial = (user.email || '').trim().toLowerCase() === 'latierritaapp@gmail.com';
@@ -362,7 +364,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             if (cleanUsername !== 'latierrita_app' && user.id !== 'user-staff') {
               const currentFollowing = localStorage.getItem('latierrita_following');
               if (!currentFollowing) {
-                localStorage.setItem('latierrita_following', JSON.stringify(['user-staff']));
+                localStorage.setItem('latierrita_following', JSON.stringify([]));
               }
             }
           }

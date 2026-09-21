@@ -16,18 +16,25 @@ export const FollowersModal: React.FC<FollowersModalProps> = ({ type, user, onCl
 
   const isMe = user.id === currentUser.id || (Boolean(currentUser.username) && user.username === currentUser.username);
 
+  const isTargetStaff = user.email === 'latierritaapp@gmail.com' || user.username === 'latierrita_app' || user.id === 'user-staff';
+  const isCurrentStaff = currentUser.email === 'latierritaapp@gmail.com' || currentUser.username === 'latierrita_app' || currentUser.id === 'user-staff';
+
   // Compute actual following list
   let followingList: UserProfile[] = [];
-  if (isMe) {
-    const isCurrentStaff = currentUser.email === 'latierritaapp@gmail.com' || currentUser.username === 'latierrita_app' || currentUser.id === 'user-staff';
-    const list = otherUsers.filter(u => followingIds.includes(u.id) && u.id !== user.id && u.username !== user.username);
-    if (!isCurrentStaff) {
+  if (isTargetStaff) {
+    // Official staff account follows 0 accounts
+    followingList = [];
+  } else if (isMe) {
+    if (isCurrentStaff) {
+      followingList = [];
+    } else {
       const staffUser = otherUsers.find(u => u.email === 'latierritaapp@gmail.com' || u.username === 'latierrita_app');
+      const list = otherUsers.filter(u => followingIds.includes(u.id) && u.id !== user.id && u.username !== user.username);
       if (staffUser && !list.some(u => u.id === staffUser.id || u.username === 'latierrita_app')) {
         list.unshift(staffUser);
       }
+      followingList = list;
     }
-    followingList = list;
   } else {
     // If viewing another profile
     if ((user.followingCount || 0) > 0) {
@@ -40,7 +47,6 @@ export const FollowersModal: React.FC<FollowersModalProps> = ({ type, user, onCl
 
   // Compute actual followers list
   let followersList: UserProfile[] = [];
-  const isTargetStaff = user.email === 'latierritaapp@gmail.com' || user.username === 'latierrita_app' || user.id === 'user-staff';
 
   if (isTargetStaff) {
     // Everyone follows the official account: Prioritize real registered users

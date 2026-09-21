@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import {
   X,
   Camera,
+  UploadCloud,
   Link as LinkIcon,
   MapPin,
   Calendar,
@@ -14,20 +15,12 @@ import {
   User,
   AtSign,
   FileText,
-  Lock
+  Lock,
+  Image as ImageIcon
 } from 'lucide-react';
 import { SPANISH_CITIES } from '../data/citiesData';
 import { SpanishCity } from '../types';
 import { FlagColombia, FlagSpain } from './CountryFlag';
-
-const AVATAR_PRESETS = [
-  'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80',
-  'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&auto=format&fit=crop&q=80',
-  'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400&auto=format&fit=crop&q=80',
-  'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=400&auto=format&fit=crop&q=80',
-  'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400&auto=format&fit=crop&q=80',
-  'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=400&auto=format&fit=crop&q=80'
-];
 
 export const EditProfileModal: React.FC = () => {
   const { isEditProfileOpen, setIsEditProfileOpen, currentUser, updateProfile, triggerPlushNotification } = useApp();
@@ -48,10 +41,31 @@ export const EditProfileModal: React.FC = () => {
   const [xAccount, setXAccount] = useState(currentUser.socialLinks?.x || '');
 
   // UI state
-  const [showAvatarPicker, setShowAvatarPicker] = useState(false);
-  const [customAvatarUrl, setCustomAvatarUrl] = useState('');
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+
+  const handleAvatarFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 8 * 1024 * 1024) {
+        setValidationError('La imagen no debe superar los 8MB.');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        if (event.target?.result) {
+          setAvatar(event.target.result as string);
+          setValidationError(null);
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const triggerGalleryPicker = () => {
+    fileInputRef.current?.click();
+  };
 
   // Sincronizar el estado del formulario con el usuario actual al abrir el modal
   React.useEffect(() => {
@@ -185,10 +199,22 @@ export const EditProfileModal: React.FC = () => {
             </div>
           )}
 
-          {/* 1. Foto de perfil (cambiarla) */}
+          {/* 1. Foto de perfil (Abrir galería del dispositivo) */}
           <div className="flex flex-col items-center justify-center py-2">
-            <div className="relative group cursor-pointer" onClick={() => setShowAvatarPicker(!showAvatarPicker)}>
-              <div className="w-20 h-20 rounded-full p-1 bg-gradient-to-tr from-amber-400 via-rose-500 to-blue-600 shadow-md">
+            <input
+              type="file"
+              ref={fileInputRef}
+              accept="image/*"
+              className="hidden"
+              id="avatar-gallery-file-input"
+              onChange={handleAvatarFileSelect}
+            />
+            <div
+              className="relative group cursor-pointer"
+              onClick={triggerGalleryPicker}
+              title="Toca para elegir una foto de tu galería"
+            >
+              <div className="w-24 h-24 rounded-full p-1 bg-gradient-to-tr from-amber-400 via-rose-500 to-blue-600 shadow-md">
                 <img
                   src={avatar || undefined}
                   alt={name}
@@ -196,66 +222,24 @@ export const EditProfileModal: React.FC = () => {
                   referrerPolicy="no-referrer"
                 />
               </div>
-              <div className="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity">
-                <Camera className="w-6 h-6" />
+              <div className="absolute inset-0 bg-black/40 rounded-full flex flex-col items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity">
+                <Camera className="w-6 h-6 mb-1" />
+                <span className="text-[10px] font-bold">Galería</span>
               </div>
             </div>
             <button
               type="button"
-              id="btn-toggle-avatar-picker"
-              onClick={() => setShowAvatarPicker(!showAvatarPicker)}
-              className="text-xs font-bold text-amber-600 dark:text-amber-400 hover:underline mt-2"
+              id="btn-choose-avatar-gallery"
+              onClick={triggerGalleryPicker}
+              className="inline-flex items-center gap-1.5 text-xs font-bold text-amber-600 dark:text-amber-400 hover:text-amber-500 hover:underline mt-2.5 px-3 py-1.5 rounded-full bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 active:scale-95 transition-all"
             >
-              Cambiar foto del perfil
+              <ImageIcon className="w-3.5 h-3.5 text-amber-500" />
+              <span>Elegir foto de la galería</span>
             </button>
+            <span className="text-[11px] text-neutral-400 mt-1">
+              Formatos JPG, PNG, WEBP (máx. 8MB)
+            </span>
           </div>
-
-          {/* Selector desplegable de avatares */}
-          {showAvatarPicker && (
-            <div className="p-3 bg-neutral-100 dark:bg-neutral-800/80 rounded-2xl border border-neutral-200 dark:border-neutral-700 space-y-2.5">
-              <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider block">
-                Selecciona una foto o escribe un enlace URL:
-              </span>
-              <div className="flex items-center gap-2 justify-center flex-wrap">
-                {AVATAR_PRESETS.map((url, i) => (
-                  <button
-                    key={i}
-                    type="button"
-                    onClick={() => {
-                      setAvatar(url);
-                      setShowAvatarPicker(false);
-                    }}
-                    className={`w-10 h-10 rounded-full overflow-hidden border-2 transition-all ${
-                      avatar === url ? 'border-amber-500 scale-110 ring-2 ring-amber-500/30' : 'border-transparent opacity-75 hover:opacity-100'
-                    }`}
-                  >
-                    <img src={url} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                  </button>
-                ))}
-              </div>
-              <div className="flex gap-2 pt-1">
-                <input
-                  type="url"
-                  placeholder="https://images.unsplash.com/..."
-                  value={customAvatarUrl}
-                  onChange={e => setCustomAvatarUrl(e.target.value)}
-                  className="flex-1 bg-white dark:bg-neutral-900 px-3 py-1.5 text-xs rounded-xl border border-neutral-300 dark:border-neutral-700 text-neutral-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-amber-500"
-                />
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (customAvatarUrl.trim()) {
-                      setAvatar(customAvatarUrl.trim());
-                      setShowAvatarPicker(false);
-                    }
-                  }}
-                  className="px-3 py-1 bg-amber-500 hover:bg-amber-400 text-neutral-950 font-bold text-xs rounded-xl"
-                >
-                  Usar
-                </button>
-              </div>
-            </div>
-          )}
 
           {/* Campos Principales */}
           <div className="space-y-3.5 divide-y divide-neutral-100 dark:divide-neutral-800/80">
