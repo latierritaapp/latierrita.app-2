@@ -712,44 +712,50 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const snapshot = await getDocs(query(collection(db, 'chat_rooms')));
         if (!isMounted) return;
 
-        const roomsMap = new Map<string, ChatRoom>();
-        INITIAL_CHAT_ROOMS.forEach(r => {
-          roomsMap.set(r.id, { ...r, messages: Array.isArray(r.messages) ? r.messages : [] });
-        });
+        setChatRooms(prevRooms => {
+          const roomsMap = new Map<string, ChatRoom>();
+          prevRooms.forEach(r => roomsMap.set(r.id, r));
 
-        if (!snapshot.empty) {
-          snapshot.forEach((docSnap: any) => {
-            const data = docSnap.data() || {};
-            const room: ChatRoom = {
-              id: docSnap.id,
-              type: data.type || 'general',
-              name: data.name || 'Chat',
-              avatar: data.avatar || '',
-              city: data.city,
-              targetUserId: data.targetUserId,
-              targetUser: data.targetUser,
-              description: data.description,
-              members: Array.isArray(data.members) ? data.members : [],
-              admins: Array.isArray(data.admins) ? data.admins : [],
-              createdBy: data.createdBy,
-              createdAt: data.createdAt || '2026-01-01',
-              messages: Array.isArray(data.messages) ? data.messages : []
-            };
-
-            const existing = roomsMap.get(room.id);
-            if (existing && Array.isArray(existing.messages) && existing.messages.length > 0) {
-              const msgMap = new Map<string, any>();
-              existing.messages.forEach(m => msgMap.set(m.id, m));
-              if (Array.isArray(room.messages)) {
-                room.messages.forEach(m => msgMap.set(m.id, m));
-              }
-              room.messages = Array.from(msgMap.values());
+          INITIAL_CHAT_ROOMS.forEach(r => {
+            if (!roomsMap.has(r.id)) {
+              roomsMap.set(r.id, { ...r, messages: Array.isArray(r.messages) ? r.messages : [] });
             }
-            roomsMap.set(room.id, room);
           });
-        }
 
-        setChatRooms(Array.from(roomsMap.values()));
+          if (!snapshot.empty) {
+            snapshot.forEach((docSnap: any) => {
+              const data = docSnap.data() || {};
+              const room: ChatRoom = {
+                id: docSnap.id,
+                type: data.type || 'general',
+                name: data.name || 'Chat',
+                avatar: data.avatar || '',
+                city: data.city,
+                targetUserId: data.targetUserId,
+                targetUser: data.targetUser,
+                description: data.description,
+                members: Array.isArray(data.members) ? data.members : [],
+                admins: Array.isArray(data.admins) ? data.admins : [],
+                createdBy: data.createdBy,
+                createdAt: data.createdAt || '2026-01-01',
+                messages: Array.isArray(data.messages) ? data.messages : []
+              };
+
+              const existing = roomsMap.get(room.id);
+              if (existing && Array.isArray(existing.messages)) {
+                const msgMap = new Map<string, any>();
+                existing.messages.forEach(m => msgMap.set(m.id, m));
+                if (Array.isArray(room.messages)) {
+                  room.messages.forEach(m => msgMap.set(m.id, m));
+                }
+                room.messages = Array.from(msgMap.values());
+              }
+              roomsMap.set(room.id, room);
+            });
+          }
+
+          return Array.from(roomsMap.values());
+        });
       } catch (e) {
         console.warn('Failed to sync chat_rooms:', e);
       }
