@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useAuth, DEFAULT_SILHOUETTE_AVATAR } from './AuthContext';
+import { supabase } from '../lib/supabase';
 import { db, doc, updateDoc, deleteDoc, setDoc, collection, onSnapshot, addDoc, getDocs, query, where } from '../lib/firebase';
 import {
   UserProfile,
@@ -38,7 +39,7 @@ import {
 
 interface AppContextType {
   currentUser: UserProfile;
-  updateProfile: (updated: Partial<UserProfile>) => void;
+  updateProfile: (updated: Partial<UserProfile>) => Promise<void>;
   otherUsers: UserProfile[];
   followingIds: string[];
   followUser: (userId: string) => void;
@@ -721,10 +722,34 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     try {
-      const userRef = doc(db, 'users', userId);
-      await setDoc(userRef, { ...updatedData }, { merge: true });
+      const dbUpdate: Record<string, any> = {};
+      if (updatedData.name !== undefined) dbUpdate.name = updatedData.name.trim();
+      if (updatedData.username !== undefined) dbUpdate.username = updatedData.username.trim().toLowerCase().replace(/^@+/, '');
+      if (updatedData.bio !== undefined) dbUpdate.bio = updatedData.bio.trim();
+      if (updatedData.website !== undefined) dbUpdate.website = updatedData.website.trim();
+      if (updatedData.city !== undefined) dbUpdate.city = updatedData.city;
+      if (updatedData.originCity !== undefined) dbUpdate.origin_city = updatedData.originCity.trim();
+      if (updatedData.avatar !== undefined) dbUpdate.avatar_url = updatedData.avatar;
+      if (updatedData.age !== undefined) dbUpdate.age = Number(updatedData.age) || null;
+      if (updatedData.birthDate !== undefined) dbUpdate.birth_date = updatedData.birthDate;
+      if (updatedData.firstName !== undefined) dbUpdate.first_name = updatedData.firstName;
+      if (updatedData.lastName !== undefined) dbUpdate.last_name = updatedData.lastName;
+      if (updatedData.isVerified !== undefined) dbUpdate.verified = updatedData.isVerified;
+      if (updatedData.staffRole !== undefined) {
+        dbUpdate.staff_role = updatedData.staffRole;
+        dbUpdate.is_staff = updatedData.staffRole !== 'Usuario';
+      }
+      if (updatedData.socialLinks) {
+        if (updatedData.socialLinks.instagram !== undefined) dbUpdate.instagram = updatedData.socialLinks.instagram;
+        if (updatedData.socialLinks.facebook !== undefined) dbUpdate.facebook = updatedData.socialLinks.facebook;
+        if (updatedData.socialLinks.tiktok !== undefined) dbUpdate.tiktok = updatedData.socialLinks.tiktok;
+        if (updatedData.socialLinks.x !== undefined) dbUpdate.x = updatedData.socialLinks.x;
+      }
+      if (Object.keys(dbUpdate).length > 0) {
+        await supabase.from('profiles').update(dbUpdate).eq('id', userId);
+      }
     } catch (e) {
-      console.warn('Failed to update user profile in Firestore:', e);
+      console.warn('Failed to update user profile in Supabase:', e);
     }
 
     triggerPlushNotification({
@@ -948,19 +973,51 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [blockedUserIds]);
 
   // Update profile
-  const updateProfile = (updated: Partial<UserProfile>) => {
-    setCurrentUser(prev => ({
-      ...prev,
-      ...updated,
-    }));
-    updateUserProfile(updated).catch(err => {
-      console.warn('Could not sync profile to Firestore:', err);
-    });
+  const updateProfile = async (updated: Partial<UserProfile>) => {
+    let nextUser: UserProfile = { ...currentUser, ...updated };
+    if (updated.socialLinks) {
+      nextUser.socialLinks = {
+        ...(currentUser.socialLinks || {}),
+        ...updated.socialLinks
+      };
+    }
+    setCurrentUser(nextUser);
+    localStorage.setItem('latierrita_user', JSON.stringify(nextUser));
+
+    setOtherUsers(prev => prev.map(u => (u.id === currentUser.id || u.username === currentUser.username) ? { ...u, ...updated } : u));
+    
+    // Also update any posts/stories authored by me in local state
+    if (updated.username || updated.avatar) {
+      setPosts(prev => prev.map(p => {
+        if (p.userId === currentUser.id || p.username === currentUser.username) {
+          return {
+            ...p,
+            username: updated.username || p.username,
+            userAvatar: updated.avatar || p.userAvatar
+          };
+        }
+        return p;
+      }));
+      setMyProfilePosts(prev => prev.map(p => {
+        return {
+          ...p,
+          username: updated.username || p.username,
+          userAvatar: updated.avatar || p.userAvatar
+        };
+      }));
+    }
+
+    try {
+      await updateUserProfile(updated);
+    } catch (err) {
+      console.warn('Could not sync profile to Supabase:', err);
+    }
+
     triggerPlushNotification({
       type: 'system',
       title: 'Perfil actualizado',
       message: 'Los cambios en tu perfil se han guardado con éxito.',
-      avatar: currentUser.avatar
+      avatar: nextUser.avatar
     });
   };
 

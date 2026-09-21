@@ -31,6 +31,7 @@ import {
   BadgeCheck
 } from 'lucide-react';
 import { SPANISH_CITIES } from '../data/mockData';
+import { FlagColombia, FlagSpain, CountryFlag } from './CountryFlag';
 
 // Component for rendering verified checkmark badge and staff role labels (MOD, Soporte, ADMIN)
 const UserBadges: React.FC<{
@@ -744,13 +745,17 @@ export const ChatsView: React.FC = () => {
                   </h3>
                   <div className="flex items-center gap-1.5 text-[11px] text-white/80">
                     {activeChat.type === 'general' && (
-                      <span className="text-amber-300 font-semibold truncate">
-                        Comunidad Colombiana en España.
+                      <span className="text-amber-300 font-semibold truncate flex items-center gap-1">
+                        <span>Comunidad Colombiana en España</span>
+                        <FlagColombia size="xs" />
+                        <FlagSpain size="xs" />
                       </span>
                     )}
                     {activeChat.type === 'city' && (
-                      <span className="text-rose-200 font-semibold truncate">
-                        📍 Chat de residentes en {activeChat.city}
+                      <span className="text-rose-200 font-semibold truncate flex items-center gap-1">
+                        <MapPin className="w-3 h-3 text-rose-300 shrink-0" />
+                        <span>Chat de residentes en {activeChat.city}</span>
+                        <FlagSpain size="xs" />
                       </span>
                     )}
                     {activeChat.type === 'private' && (
@@ -1102,7 +1107,13 @@ export const ChatsView: React.FC = () => {
                                       : 'bg-neutral-900/80 text-neutral-200 border-neutral-700/80'
                                   }`}
                                 >
-                                  <span>{r.emoji}</span>
+                                  {r.emoji === '🇨🇴' ? (
+                                    <FlagColombia size="xs" />
+                                  ) : r.emoji === '🇪🇸' ? (
+                                    <FlagSpain size="xs" />
+                                  ) : (
+                                    <span>{r.emoji}</span>
+                                  )}
                                   <span>{r.count}</span>
                                 </button>
                               );
@@ -1131,16 +1142,17 @@ export const ChatsView: React.FC = () => {
                 <>
                   <div className="fixed inset-0 z-30" onClick={() => setShowQuickEmojis(false)} />
                   <div className="absolute bottom-full left-3 mb-2 p-2 bg-[#001c38]/95 border border-white/15 rounded-2xl shadow-2xl backdrop-blur-md flex items-center gap-1.5 z-40 overflow-x-auto max-w-[90vw] animate-in fade-in slide-in-from-bottom-2 duration-150">
-                    {['🇨🇴', '☕', '💛', '💙', '❤️', '🔥', '👏', '😂', '😍', '🥟', '🙌', '✨', '👍', '🎉'].map(emoji => (
+                    {['🇨🇴', '🇪🇸', '☕', '💛', '💙', '❤️', '🔥', '👏', '😂', '😍', '🥟', '🙌', '✨', '👍', '🎉', '💃', '🍻', '🥑', '🥳', '😎', '🙏'].map(emoji => (
                       <button
                         key={emoji}
                         type="button"
                         onClick={() => {
                           setInputMessage(prev => prev + emoji);
                         }}
-                        className="w-8 h-8 flex items-center justify-center text-lg hover:bg-white/15 rounded-xl transition-transform active:scale-90"
+                        className="w-8 h-8 flex items-center justify-center text-lg hover:bg-white/15 rounded-xl transition-transform active:scale-90 shrink-0"
+                        title={emoji === '🇨🇴' ? 'Colombia' : emoji === '🇪🇸' ? 'España' : emoji}
                       >
-                        {emoji}
+                        {emoji === '🇨🇴' ? <FlagColombia size="sm" /> : emoji === '🇪🇸' ? <FlagSpain size="sm" /> : emoji}
                       </button>
                     ))}
                     <button
@@ -1574,8 +1586,9 @@ export const ChatsView: React.FC = () => {
                       setShowExtendedEmojis(false);
                     }}
                     className="text-lg hover:scale-125 active:scale-90 transition-transform p-1 rounded-lg hover:bg-white dark:hover:bg-neutral-700 flex items-center justify-center cursor-pointer"
+                    title={emoji === '🇨🇴' ? 'Colombia' : emoji === '🇪🇸' ? 'España' : emoji}
                   >
-                    {emoji}
+                    {emoji === '🇨🇴' ? <FlagColombia size="xs" /> : emoji === '🇪🇸' ? <FlagSpain size="xs" /> : emoji}
                   </button>
                 ))}
               </div>

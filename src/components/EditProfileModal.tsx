@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { SPANISH_CITIES } from '../data/citiesData';
 import { SpanishCity } from '../types';
+import { FlagColombia, FlagSpain } from './CountryFlag';
 
 const AVATAR_PRESETS = [
   'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80',
@@ -50,6 +51,7 @@ export const EditProfileModal: React.FC = () => {
   const [showAvatarPicker, setShowAvatarPicker] = useState(false);
   const [customAvatarUrl, setCustomAvatarUrl] = useState('');
   const [validationError, setValidationError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
   // Sincronizar el estado del formulario con el usuario actual al abrir el modal
   React.useEffect(() => {
@@ -70,8 +72,9 @@ export const EditProfileModal: React.FC = () => {
 
   if (!isEditProfileOpen) return null;
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSaving) return;
     setValidationError(null);
 
     // Validación de edad mínima 18 años
@@ -122,15 +125,22 @@ export const EditProfileModal: React.FC = () => {
       updatedData.lastUsernameChangeDate = nowIso;
     }
 
-    updateProfile(updatedData);
+    setIsSaving(true);
+    try {
+      await updateProfile(updatedData);
 
-    triggerPlushNotification({
-      type: 'system',
-      title: 'Perfil actualizado',
-      message: 'Tus datos, edad, ciudad y redes sociales se guardaron con éxito.'
-    });
+      triggerPlushNotification({
+        type: 'system',
+        title: 'Perfil actualizado',
+        message: 'Tus datos, edad, ciudad y redes sociales se guardaron con éxito.'
+      });
 
-    setIsEditProfileOpen(false);
+      setIsEditProfileOpen(false);
+    } catch (err: any) {
+      setValidationError('Error al guardar en el servidor. Inténtalo de nuevo.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -159,9 +169,10 @@ export const EditProfileModal: React.FC = () => {
             type="button"
             id="btn-save-edit-profile"
             onClick={handleSave}
-            className="text-xs font-black text-amber-600 dark:text-amber-400 hover:text-amber-500"
+            disabled={isSaving}
+            className="text-xs font-black text-amber-600 dark:text-amber-400 hover:text-amber-500 disabled:opacity-50"
           >
-            Listo
+            {isSaving ? 'Guardando...' : 'Listo'}
           </button>
         </div>
 
@@ -387,7 +398,7 @@ export const EditProfileModal: React.FC = () => {
               </div>
               <div className="w-full bg-neutral-200/60 dark:bg-neutral-800/60 text-neutral-700 dark:text-neutral-300 px-3.5 py-2 text-xs rounded-xl border border-neutral-200 dark:border-neutral-700/60 font-semibold flex items-center justify-between cursor-not-allowed select-none">
                 <span>{currentUser.originCity || 'Colombia'}</span>
-                <span className="text-xs">🇨🇴</span>
+                <FlagColombia size="sm" className="ml-1" />
               </div>
               <p className="text-[10px] text-neutral-400 dark:text-neutral-500">
                 La ciudad de origen se establece en el registro y no se puede modificar.
@@ -401,7 +412,10 @@ export const EditProfileModal: React.FC = () => {
                   <MapPin className="w-3 h-3 text-rose-500" />
                   <span>Ciudad Actual (España)</span>
                 </span>
-                <span className="text-[9px] font-semibold text-rose-500 bg-rose-500/10 px-1.5 py-0.5 rounded">🇪🇸 España</span>
+                <span className="text-[9px] font-semibold text-rose-500 bg-rose-500/10 px-1.5 py-0.5 rounded flex items-center gap-1">
+                  <FlagSpain size="xs" />
+                  <span>España</span>
+                </span>
               </label>
               <select
                 id="edit-field-city"
@@ -503,9 +517,10 @@ export const EditProfileModal: React.FC = () => {
             <button
               type="submit"
               id="btn-submit-edit-profile"
-              className="w-full py-3 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 text-neutral-950 font-black text-xs rounded-xl shadow-md transition-all active:scale-95 text-center"
+              disabled={isSaving}
+              className="w-full py-3 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 text-neutral-950 font-black text-xs rounded-xl shadow-md transition-all active:scale-95 text-center disabled:opacity-50"
             >
-              Guardar Cambios
+              {isSaving ? 'Guardando Cambios...' : 'Guardar Cambios'}
             </button>
           </div>
         </form>

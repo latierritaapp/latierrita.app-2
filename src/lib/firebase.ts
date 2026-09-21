@@ -61,6 +61,19 @@ function formatRowData(tableName: string, data: any): any {
     item.userAvatar = item.userAvatar || item.avatarUrl || '';
     item.timestamp = item.timestamp || item.createdAt || 'Reciente';
     item.reactions = Array.isArray(item.reactions) ? item.reactions : [];
+  } else if (tableName === 'profiles' || tableName === 'users') {
+    item.avatar = item.avatar || item.avatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80';
+    item.isVerified = item.isVerified !== undefined ? item.isVerified : (item.verified ?? false);
+    item.originCity = item.originCity || 'Colombia';
+    item.city = item.city || 'Madrid';
+    item.followersCount = Array.isArray(item.followers) ? item.followers.length : (item.followersCount || 0);
+    item.followingCount = Array.isArray(item.following) ? item.following.length : (item.followingCount || 0);
+    item.socialLinks = item.socialLinks || {
+      instagram: item.instagram || '',
+      facebook: item.facebook || '',
+      tiktok: item.tiktok || '',
+      x: item.x || ''
+    };
   }
 
   return item;
@@ -129,6 +142,31 @@ function sanitizePayloadForTable(tableName: string, payload: any): any {
     }
     if (!Array.isArray(clean.reactions)) {
       clean.reactions = [];
+    }
+  } else if (tableName === 'profiles' || tableName === 'users') {
+    // Strip frontend-only properties
+    delete clean.followers_count;
+    delete clean.following_count;
+    delete clean.posts_count;
+    delete clean.last_name_change_date;
+    delete clean.last_username_change_date;
+
+    if (clean.avatar && !clean.avatar_url) {
+      clean.avatar_url = clean.avatar;
+    }
+    delete clean.avatar;
+
+    if (clean.is_verified !== undefined && clean.verified === undefined) {
+      clean.verified = clean.is_verified;
+    }
+    delete clean.is_verified;
+
+    if (clean.social_links && typeof clean.social_links === 'object') {
+      if (clean.social_links.instagram !== undefined) clean.instagram = clean.social_links.instagram;
+      if (clean.social_links.facebook !== undefined) clean.facebook = clean.social_links.facebook;
+      if (clean.social_links.tiktok !== undefined) clean.tiktok = clean.social_links.tiktok;
+      if (clean.social_links.x !== undefined) clean.x = clean.social_links.x;
+      delete clean.social_links;
     }
   }
 

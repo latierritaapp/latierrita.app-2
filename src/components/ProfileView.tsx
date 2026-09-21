@@ -28,6 +28,7 @@ import {
   Trash2
 } from 'lucide-react';
 import { FollowersModal } from './FollowersModal';
+import { FlagColombia, FlagSpain, renderTextWithFlags } from './CountryFlag';
 
 interface ProfileViewProps {
   userToDisplay?: UserProfile | null;
@@ -334,7 +335,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userToDisplay }) => {
           {/* 2. Debajo del nombre: Biografía */}
           {user.bio && (
             <p className="text-xs sm:text-sm text-white/90 leading-relaxed whitespace-pre-line pt-0.5">
-              {user.bio}
+              {renderTextWithFlags(user.bio)}
             </p>
           )}
 
@@ -407,13 +408,19 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userToDisplay }) => {
           <div className="text-xs font-semibold text-white/80 flex items-center gap-1.5 flex-wrap pt-0.5">
             {user.age && <span>{user.age} años</span>}
             {user.age && <span>·</span>}
-            <span>De {user.originCity || 'Colombia'} 🇨🇴</span>
+            <span className="inline-flex items-center gap-1">
+              <span>De {user.originCity || 'Colombia'}</span>
+              <FlagColombia size="xs" />
+            </span>
           </div>
 
           {/* 6. Debajo de ciudad origen: Ciudad actual */}
           <div className="text-xs font-bold text-amber-300 flex items-center gap-1.5 pt-0.5">
             <MapPin className="w-3.5 h-3.5 shrink-0 text-amber-400" />
-            <span>{user.city}, España</span>
+            <span className="inline-flex items-center gap-1">
+              <span>{user.city}, España</span>
+              <FlagSpain size="xs" />
+            </span>
           </div>
 
           {/* 7. Debajo de ciudad actual: Editar perfil y quitar el botón de compartir */}
