@@ -48,6 +48,11 @@ service cloud.firestore {
       }
     }
 
+    // Chat Rooms fallback collection
+    match /chat_rooms/{roomId} {
+      allow read, write: if isAuthenticated();
+    }
+
     // Reports & Support tickets
     match /reports/{reportId} {
       allow create: if isAuthenticated();
