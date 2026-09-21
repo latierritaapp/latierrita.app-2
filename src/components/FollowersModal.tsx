@@ -22,9 +22,14 @@ export const FollowersModal: React.FC<FollowersModalProps> = ({ type, user, onCl
     const isCurrentStaff = currentUser.id === 'user-staff' || currentUser.username === 'latierrita_app' || currentUser.username === 'latierrita_oficial' || currentUser.email === 'latierritaapp@gmail.com';
     const list = otherUsers.filter(u => followingIds.includes(u.id) && u.id !== user.id && u.username !== user.username);
     if (!isCurrentStaff) {
-      const staffUser = otherUsers.find(u => u.id === 'user-staff' || u.username === 'latierrita_app' || u.username === 'latierrita_oficial' || u.email === 'latierritaapp@gmail.com');
-      if (staffUser && !list.some(u => u.id === staffUser.id || u.username === staffUser.username)) {
-        list.unshift(staffUser);
+      let staffUser = otherUsers.find(u => u.id === 'user-staff' || u.username === 'latierrita_app' || u.username === 'latierrita_oficial' || u.email === 'latierritaapp@gmail.com');
+      if (staffUser) {
+        if (staffUser.username === 'latierrita_oficial') {
+          staffUser = { ...staffUser, username: 'latierrita_app' };
+        }
+        if (!list.some(u => u.id === staffUser?.id || u.username === 'latierrita_app' || u.username === 'latierrita_oficial')) {
+          list.unshift(staffUser);
+        }
       }
     }
     followingList = list;
@@ -287,7 +292,7 @@ export const FollowersModal: React.FC<FollowersModalProps> = ({ type, user, onCl
                         )}
                       </div>
                       <div className="text-xs text-amber-400/90 font-semibold truncate">
-                        @{item.username}
+                        @{item.username === 'latierrita_oficial' ? 'latierrita_app' : item.username}
                       </div>
                       <div className="text-[11px] text-neutral-400 flex items-center gap-1 mt-0.5 truncate">
                         <MapPin className="w-3 h-3 text-neutral-500 shrink-0" />

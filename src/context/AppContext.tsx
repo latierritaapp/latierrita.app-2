@@ -275,7 +275,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           .select('*');
 
         if (!error && Array.isArray(profiles) && profiles.length > 0 && isMounted) {
-          const mappedList: UserProfile[] = profiles.map(p => mapDBProfileToUserProfile(p));
+          const mappedList: UserProfile[] = profiles.map(p => {
+            const mapped = mapDBProfileToUserProfile(p);
+            if (mapped.username === 'latierrita_oficial' || mapped.email === 'latierritaapp@gmail.com') {
+              mapped.username = 'latierrita_app';
+            }
+            return mapped;
+          });
 
           setOtherUsers(prev => {
             const realStaff = mappedList.find(p => p.email === 'latierritaapp@gmail.com' || p.username === 'latierrita_app' || p.username === 'latierrita_oficial');
@@ -287,18 +293,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               if (realStaff && (p.id === 'user-staff' || p.username === 'latierrita_app' || p.username === 'latierrita_oficial' || p.email === 'latierritaapp@gmail.com')) {
                 return;
               }
-              if (!merged.some(m => m.id === p.id || m.username === p.username || (m.email && m.email === p.email))) {
-                merged.push(p);
+              const cleanUser = { ...p };
+              if (cleanUser.username === 'latierrita_oficial') {
+                cleanUser.username = 'latierrita_app';
+              }
+              if (!merged.some(m => m.id === cleanUser.id || m.username === cleanUser.username || (cleanUser.email && m.email === cleanUser.email))) {
+                merged.push(cleanUser);
               }
             });
 
             // If real staff account is present, ensure all non-staff accounts follow its real ID
             if (realStaff && !isStaffAccount(currentUser?.id, currentUser?.username, currentUser?.email)) {
               setFollowingIds(fIds => {
-                if (!fIds.includes(realStaff.id)) {
-                  return [...fIds, realStaff.id];
+                const targetId = realStaff.id;
+                const cleaned = fIds.filter(id => id !== 'latierrita_oficial');
+                if (!cleaned.includes(targetId)) {
+                  return [...cleaned, targetId];
                 }
-                return fIds;
+                return cleaned;
               });
             }
 

@@ -71,12 +71,19 @@ const sanitizeDisplayName = (name: string | undefined | null, username: string, 
 // Mapeador de base de datos Postgres (snake_case) a React State (camelCase)
 export const mapDBProfileToUserProfile = (db: any): UserProfile => {
   const isOfficialEmail = db.email === 'latierritaapp@gmail.com';
-  const cleanUsername = isOfficialEmail ? 'latierrita_app' : sanitizeHandle(db.username, db.email, db.id);
+  let cleanUsername = (isOfficialEmail || db.username === 'latierrita_oficial') 
+    ? 'latierrita_app' 
+    : sanitizeHandle(db.username, db.email, db.id);
+
+  if (cleanUsername === 'latierrita_oficial') {
+    cleanUsername = 'latierrita_app';
+  }
+
   const displayName = isOfficialEmail && (!db.name || db.name.includes('@')) 
     ? 'La Tierrita 🇨🇴' 
     : sanitizeDisplayName(db.name, cleanUsername, db.email);
 
-  const isStaff = isOfficialEmail || cleanUsername === 'latierrita_app' || cleanUsername === 'latierrita_oficial';
+  const isStaff = isOfficialEmail || cleanUsername === 'latierrita_app';
 
   return {
     id: db.id,
