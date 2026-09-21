@@ -694,12 +694,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, []);
 
-  // Sync Chat Rooms from Firestore
+  // Sync Chat Rooms from Firestore with auto-seeding and polling fallback
   useEffect(() => {
-    try {
-      const unsub = onSnapshot(collection(db, 'chat_rooms'), async (snapshot) => {
+    let isMounted = true;
+
+    const fetchRooms = async () => {
+      try {
+        // Auto-seed default rooms so they always exist in DB for any user/account
+        for (const defaultRoom of INITIAL_CHAT_ROOMS) {
+          try {
+            await setDoc(doc(db, 'chat_rooms', defaultRoom.id), defaultRoom, { merge: true });
+          } catch (err) {
+            // Ignore seeding errors if offline
+          }
+        }
+
+        const snapshot = await getDocs(query(collection(db, 'chat_rooms')));
+        if (!isMounted) return;
+
         const roomsMap = new Map<string, ChatRoom>();
-        
         INITIAL_CHAT_ROOMS.forEach(r => {
           roomsMap.set(r.id, { ...r, messages: Array.isArray(r.messages) ? r.messages : [] });
         });
@@ -722,18 +735,39 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               createdAt: data.createdAt || '2026-01-01',
               messages: Array.isArray(data.messages) ? data.messages : []
             };
+
+            const existing = roomsMap.get(room.id);
+            // If DB has fewer messages than local INITIAL or if DB messages is empty, merge or keep
+            if (existing && existing.messages.length > 0 && room.messages.length === 0) {
+              room.messages = existing.messages;
+            } else if (room.messages.length === 0 && existing && existing.messages.length > 0) {
+              room.messages = existing.messages;
+            }
             roomsMap.set(room.id, room);
           });
         }
 
         setChatRooms(Array.from(roomsMap.values()));
-      }, (error) => {
-        console.warn('Chat rooms listener error:', error?.message || error);
+      } catch (e) {
+        console.warn('Failed to sync chat_rooms:', e);
+      }
+    };
+
+    fetchRooms();
+    const interval = setInterval(fetchRooms, 4000); // Poll every 4 seconds for bulletproof real-time sync across accounts
+
+    let unsub: any;
+    try {
+      unsub = onSnapshot(collection(db, 'chat_rooms'), () => {
+        fetchRooms();
       });
-      return () => unsub();
-    } catch (e) {
-      console.warn('Failed to listen to chat_rooms in DB:', e);
-    }
+    } catch (e) {}
+
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+      if (typeof unsub === 'function') unsub();
+    };
   }, []);
 
   // Sync Support Tickets
@@ -1281,13 +1315,36 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Follow / Unfollow
-  const followUser = (userId: string) => {
+  const followUser = async (userId: string) => {
     if (userId === currentUser.id) return;
     if (isStaffAccount(currentUser.id, currentUser.username) && (userId === 'user-staff' || userId === currentUser.id)) return;
     if (followingIds.includes(userId)) return;
-    setFollowingIds(prev => [...prev, userId]);
+
+    const nextFollowing = [...followingIds, userId];
+    setFollowingIds(nextFollowing);
+    localStorage.setItem('latierrita_following', JSON.stringify(nextFollowing));
+
     setCurrentUser(prev => ({ ...prev, followingCount: prev.followingCount + 1 }));
     setOtherUsers(prev => prev.map(u => u.id === userId ? { ...u, followersCount: u.followersCount + 1 } : u));
+
+    try {
+      await supabase.from('profiles').update({
+        following: nextFollowing,
+        following_count: nextFollowing.length
+      }).eq('id', currentUser.id);
+
+      const { data: targetData } = await supabase.from('profiles').select('followers').eq('id', userId).single();
+      const currentFollowers = Array.isArray(targetData?.followers) ? targetData.followers : [];
+      if (!currentFollowers.includes(currentUser.id)) {
+        const nextFollowers = [...currentFollowers, currentUser.id];
+        await supabase.from('profiles').update({
+          followers: nextFollowers,
+          followers_count: nextFollowers.length
+        }).eq('id', userId);
+      }
+    } catch (e) {
+      console.warn('Error updating follow in Supabase:', e);
+    }
     
     const target = otherUsers.find(u => u.id === userId);
     triggerPlushNotification({
@@ -1298,7 +1355,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   };
 
-  const unfollowUser = (userId: string) => {
+  const unfollowUser = async (userId: string) => {
     if (userId === currentUser.id) return;
 
     // Check if target is official staff account @latierrita_app
@@ -1315,9 +1372,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return;
     }
 
-    setFollowingIds(prev => prev.filter(id => id !== userId));
+    const nextFollowing = followingIds.filter(id => id !== userId);
+    setFollowingIds(nextFollowing);
+    localStorage.setItem('latierrita_following', JSON.stringify(nextFollowing));
+
     setCurrentUser(prev => ({ ...prev, followingCount: Math.max(0, prev.followingCount - 1) }));
     setOtherUsers(prev => prev.map(u => u.id === userId ? { ...u, followersCount: Math.max(0, u.followersCount - 1) } : u));
+
+    try {
+      await supabase.from('profiles').update({
+        following: nextFollowing,
+        following_count: nextFollowing.length
+      }).eq('id', currentUser.id);
+
+      const { data: targetData } = await supabase.from('profiles').select('followers').eq('id', userId).single();
+      const currentFollowers = Array.isArray(targetData?.followers) ? targetData.followers : [];
+      const nextFollowers = currentFollowers.filter((id: string) => id !== currentUser.id);
+      await supabase.from('profiles').update({
+        followers: nextFollowers,
+        followers_count: nextFollowers.length
+      }).eq('id', userId);
+    } catch (e) {
+      console.warn('Error updating unfollow in Supabase:', e);
+    }
   };
 
   // Block / Unblock

@@ -74,6 +74,23 @@ function formatRowData(tableName: string, data: any): any {
       tiktok: item.tiktok || '',
       x: item.x || ''
     };
+  } else if (tableName === 'chat_rooms') {
+    if (item.description && typeof item.description === 'string' && item.description.startsWith('{')) {
+      try {
+        const meta = JSON.parse(item.description);
+        item.description = meta.description || '';
+        item.targetUserId = meta.targetUserId;
+        item.targetUser = meta.targetUser;
+        item.admins = meta.admins || [];
+        item.createdBy = meta.createdBy;
+        item.status = meta.status;
+        item.unreadCount = meta.unreadCount;
+      } catch (e) {
+        // Not JSON
+      }
+    }
+    if (!Array.isArray(item.members)) item.members = [];
+    if (!Array.isArray(item.messages)) item.messages = [];
   }
 
   return item;
@@ -169,12 +186,27 @@ function sanitizePayloadForTable(tableName: string, payload: any): any {
       delete clean.social_links;
     }
   } else if (tableName === 'chat_rooms') {
-    delete clean.admins;
+    const meta = {
+      targetUserId: clean.targetUserId || clean.target_user_id,
+      targetUser: clean.targetUser || clean.target_user,
+      admins: clean.admins || [],
+      createdBy: clean.createdBy || clean.created_by,
+      status: clean.status,
+      unreadCount: clean.unreadCount || clean.unread_count,
+      description: clean.description || ''
+    };
+    clean.description = JSON.stringify(meta);
+    delete clean.targetUserId;
     delete clean.target_user_id;
+    delete clean.targetUser;
     delete clean.target_user;
+    delete clean.admins;
+    delete clean.createdBy;
     delete clean.created_by;
     delete clean.status;
+    delete clean.unreadCount;
     delete clean.unread_count;
+
     if (!Array.isArray(clean.members)) clean.members = [];
     if (!Array.isArray(clean.messages)) clean.messages = [];
     if (!clean.created_at) clean.created_at = new Date().toISOString().split('T')[0];
