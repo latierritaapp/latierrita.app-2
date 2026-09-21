@@ -2112,7 +2112,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const finalMessages = Array.from(msgMap.values());
 
         await setDoc(roomRef, { 
-          ...targetRoom, 
+          id: targetRoom.id,
+          type: targetRoom.type,
+          name: targetRoom.name,
+          description: targetRoom.description,
           messages: finalMessages,
           createdAt: targetRoom.createdAt || new Date().toISOString().split('T')[0]
         }, { merge: true });

@@ -224,17 +224,14 @@ function sanitizePayloadForTable(tableName: string, payload: any): any {
       clean.description = '';
     }
 
-    // Clean up temporary frontend-only fields
-    delete clean.targetUserId;
-    delete clean.target_user_id;
-    delete clean.targetUser;
-    delete clean.target_user;
-    delete clean.unreadCount;
-    delete clean.unread_count;
-    delete clean.avatar;
-    delete clean.city;
-    delete clean.members;
-
+    // Keep ONLY the fields that exist in the Supabase chat_rooms table
+    const allowedFields = ['id', 'type', 'name', 'description', 'created_at', 'messages'];
+    for (const key in clean) {
+      if (!allowedFields.includes(key)) {
+        delete clean[key];
+      }
+    }
+    
     if (!clean.created_at) clean.created_at = new Date().toISOString().split('T')[0];
     if (!clean.name) clean.name = 'Chat';
   }
