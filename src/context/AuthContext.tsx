@@ -261,11 +261,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const merged: UserProfile = {
               ...mapped,
               id: user.id,
-              name: (localProfile.name && localProfile.name !== 'Colombiano en España') ? localProfile.name : mapped.name,
+              name: (localProfile.name && localProfile.name !== 'Colombiano en España' && localProfile.name !== 'Usuario') ? localProfile.name : (mapped.name || localProfile.name || 'Usuario'),
               username: localProfile.username || mapped.username,
               bio: localProfile.bio !== undefined ? localProfile.bio : mapped.bio,
               website: localProfile.website !== undefined ? localProfile.website : (mapped.website || ''),
-              avatar: (localProfile.avatar && localProfile.avatar !== DEFAULT_SILHOUETTE_AVATAR) ? localProfile.avatar : mapped.avatar,
+              avatar: (localProfile.avatar && localProfile.avatar !== DEFAULT_SILHOUETTE_AVATAR) ? localProfile.avatar : (mapped.avatar || DEFAULT_SILHOUETTE_AVATAR),
               age: localProfile.age !== undefined ? localProfile.age : mapped.age,
               city: localProfile.city || mapped.city,
               originCity: localProfile.originCity || mapped.originCity,
@@ -277,7 +277,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setUserProfile(merged);
             localStorage.setItem('latierrita_user', JSON.stringify(merged));
           } else {
-            // New user from OAuth or first login - synthesize profile while respecting local edits
+            // New user from OAuth or first login - synthesize profile while preserving all local edits
             const meta = user.user_metadata || {};
             const cleanUsername = sanitizeHandle(localProfile.username || meta.username || meta.user_name, user.email, user.id);
             const fullName = sanitizeDisplayName(
@@ -671,7 +671,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             .eq('id', sessionUser.id);
 
           if (updateError) {
-            console.warn('Supabase profile update note:', updateError.message);
+            console.warn('Supabase profile update note, attempting core fields fallback:', updateError.message);
+            const coreFields = ['name', 'username', 'bio', 'city', 'origin_city', 'avatar_url', 'age', 'birth_date', 'first_name', 'last_name', 'instagram', 'facebook'];
+            const fallbackPayload: Record<string, any> = {};
+            coreFields.forEach(field => {
+              if (dbPayload[field] !== undefined) fallbackPayload[field] = dbPayload[field];
+            });
+            if (Object.keys(fallbackPayload).length > 0) {
+              await supabase
+                .from('profiles')
+                .update(fallbackPayload)
+                .eq('id', sessionUser.id);
+            }
           }
         }
       }
