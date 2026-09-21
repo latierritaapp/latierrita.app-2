@@ -13,7 +13,8 @@ import {
   INITIAL_STAFF_MEMBERS,
   INITIAL_DELETED_ACCOUNTS,
   INITIAL_POSTS,
-  INITIAL_PLACES
+  INITIAL_PLACES,
+  INITIAL_CHAT_ROOMS
 } from './src/data/mockData';
 
 const jwtSecret = process.env.JWT_SECRET || '83MoTh7uamYte56x58VfcUgwMZH8oacP';
@@ -276,6 +277,20 @@ async function runSeeder() {
     profile_data: d.profileData || {}
   }));
   await upsertTable('deleted_accounts', mappedDeleted);
+
+  // 10. CHAT ROOMS
+  const mappedChatRooms = INITIAL_CHAT_ROOMS.map(r => ({
+    id: r.id,
+    type: r.type,
+    name: r.name,
+    description: r.description || null,
+    avatar: r.avatar || null,
+    city: r.city || null,
+    members: r.members || [],
+    created_at: parseDateString(r.createdAt),
+    messages: r.messages || []
+  }));
+  await upsertTable('chat_rooms', mappedChatRooms);
 
   console.log('\n=== PROCESO DE SIEMBRA COMPLETADO ===');
 }

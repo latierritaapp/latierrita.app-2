@@ -168,6 +168,17 @@ function sanitizePayloadForTable(tableName: string, payload: any): any {
       if (clean.social_links.x !== undefined) clean.x = clean.social_links.x;
       delete clean.social_links;
     }
+  } else if (tableName === 'chat_rooms') {
+    delete clean.admins;
+    delete clean.target_user_id;
+    delete clean.target_user;
+    delete clean.created_by;
+    delete clean.status;
+    delete clean.unread_count;
+    if (!Array.isArray(clean.members)) clean.members = [];
+    if (!Array.isArray(clean.messages)) clean.messages = [];
+    if (!clean.created_at) clean.created_at = new Date().toISOString().split('T')[0];
+    if (!clean.name) clean.name = 'Chat';
   }
 
   return clean;

@@ -724,14 +724,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             };
             roomsMap.set(room.id, room);
           });
-        } else {
-          for (const defaultRoom of INITIAL_CHAT_ROOMS) {
-            try {
-              await setDoc(doc(db, 'chat_rooms', defaultRoom.id), defaultRoom);
-            } catch (err) {
-              console.warn('Failed to seed default chat room:', err);
-            }
-          }
         }
 
         setChatRooms(Array.from(roomsMap.values()));
