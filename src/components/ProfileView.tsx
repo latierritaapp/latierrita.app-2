@@ -69,10 +69,10 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userToDisplay }) => {
   const isMe = !userToDisplay || userToDisplay.id === currentUser.id || (Boolean(currentUser.username) && userToDisplay.username === currentUser.username);
   const user = isMe ? currentUser : userToDisplay;
 
-  const isOfficialStaff = user.username === 'latierrita_app' || user.username === 'latierrita_oficial' || user.id === 'user-staff';
+  const isOfficialStaff = user.username === 'latierrita_app' || user.username === 'latierrita_oficial' || user.id === 'user-staff' || user.email === 'latierritaapp@gmail.com';
   const isFollowing = !isMe && (isOfficialStaff || (followingIds.includes(user.id) && user.id !== currentUser.id));
 
-  const isCurrentStaff = currentUser.username === 'latierrita_app' || currentUser.username === 'latierrita_oficial' || currentUser.id === 'user-staff';
+  const isCurrentStaff = currentUser.username === 'latierrita_app' || currentUser.username === 'latierrita_oficial' || currentUser.id === 'user-staff' || currentUser.email === 'latierritaapp@gmail.com';
   const displayFollowersCount = user.followersCount || 0;
   const displayFollowingCount = isMe
     ? (isCurrentStaff ? (currentUser.followingCount || 0) : Math.max(1, followingIds.length))

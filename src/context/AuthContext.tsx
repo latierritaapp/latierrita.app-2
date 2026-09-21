@@ -69,9 +69,14 @@ const sanitizeDisplayName = (name: string | undefined | null, username: string, 
 };
 
 // Mapeador de base de datos Postgres (snake_case) a React State (camelCase)
-const mapDBProfileToUserProfile = (db: any): UserProfile => {
-  const cleanUsername = sanitizeHandle(db.username, db.email, db.id);
-  const displayName = sanitizeDisplayName(db.name, cleanUsername, db.email);
+export const mapDBProfileToUserProfile = (db: any): UserProfile => {
+  const isOfficialEmail = db.email === 'latierritaapp@gmail.com';
+  const cleanUsername = isOfficialEmail ? 'latierrita_app' : sanitizeHandle(db.username, db.email, db.id);
+  const displayName = isOfficialEmail && (!db.name || db.name.includes('@')) 
+    ? 'La Tierrita 🇨🇴' 
+    : sanitizeDisplayName(db.name, cleanUsername, db.email);
+
+  const isStaff = isOfficialEmail || cleanUsername === 'latierrita_app' || cleanUsername === 'latierrita_oficial';
 
   return {
     id: db.id,
@@ -82,16 +87,16 @@ const mapDBProfileToUserProfile = (db: any): UserProfile => {
     lastName: db.last_name || '',
     birthDate: db.birth_date || '',
     age: db.age || undefined,
-    avatar: db.avatar_url || DEFAULT_SILHOUETTE_AVATAR,
-    bio: db.bio || '🇨🇴 ¡Orgullo colombiano en España! 🇪🇸',
-    website: db.website || '',
+    avatar: db.avatar_url || (isStaff ? 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=400&auto=format&fit=crop&q=80' : DEFAULT_SILHOUETTE_AVATAR),
+    bio: db.bio || (isStaff ? '⭐ Cuenta oficial de Staff & Publicidad de La Tierrita España. Conectando a los colombianos.' : '🇨🇴 ¡Orgullo colombiano en España! 🇪🇸'),
+    website: db.website || (isStaff ? 'https://latierrita.es' : ''),
     city: db.city || 'Madrid',
-    originCity: db.origin_city || 'Colombia',
-    followersCount: Array.isArray(db.followers) ? db.followers.length : 0,
-    followingCount: Array.isArray(db.following) ? db.following.length : 0,
+    originCity: db.origin_city || (isStaff ? 'Toda Colombia' : 'Colombia'),
+    followersCount: Array.isArray(db.followers) ? db.followers.length : (isStaff ? 15420 : 0),
+    followingCount: Array.isArray(db.following) ? db.following.length : (isStaff ? 12 : 1),
     postsCount: 0,
-    isVerified: db.verified || false,
-    staffRole: db.staff_role || 'Usuario',
+    isVerified: isStaff ? true : (db.verified || false),
+    staffRole: isStaff ? 'ADMIN' : (db.staff_role || 'Usuario'),
     isDeleted: db.is_deleted || false,
     deletedAt: db.deleted_at || undefined,
     retentionExpiresAt: db.retention_expires_at || undefined,

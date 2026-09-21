@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { useAuth, DEFAULT_SILHOUETTE_AVATAR } from './AuthContext';
+import { useAuth, DEFAULT_SILHOUETTE_AVATAR, mapDBProfileToUserProfile } from './AuthContext';
 import { supabase } from '../lib/supabase';
 import { db, doc, updateDoc, deleteDoc, setDoc, collection, onSnapshot, addDoc, getDocs, query, where } from '../lib/firebase';
 import {
@@ -238,14 +238,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return INITIAL_CURRENT_USER;
   });
 
-  const isStaffAccount = (id?: string, username?: string) => {
-    return id === 'user-staff' || username === 'latierrita_app' || username === 'latierrita_oficial';
+  const isStaffAccount = (id?: string, username?: string, email?: string) => {
+    return id === 'user-staff' || username === 'latierrita_app' || username === 'latierrita_oficial' || email === 'latierritaapp@gmail.com';
   };
 
   const [otherUsers, setOtherUsers] = useState<UserProfile[]>(OTHER_USERS);
   const [followingIds, setFollowingIds] = useState<string[]>(() => {
     const saved = localStorage.getItem('latierrita_following');
-    const isCurrentStaff = isStaffAccount(currentUser?.id, currentUser?.username);
+    const isCurrentStaff = isStaffAccount(currentUser?.id, currentUser?.username, currentUser?.email);
     let list: string[] = [];
     if (saved) {
       try {
@@ -264,6 +264,53 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     return isCurrentStaff ? list.filter(id => id !== 'user-staff') : list;
   });
+
+  // Fetch real users from Supabase profiles table
+  useEffect(() => {
+    const fetchRealProfiles = async () => {
+      try {
+        const { data: profiles, error } = await supabase
+          .from('profiles')
+          .select('*');
+
+        if (!error && Array.isArray(profiles) && profiles.length > 0) {
+          const mappedList: UserProfile[] = profiles.map(p => mapDBProfileToUserProfile(p));
+
+          setOtherUsers(prev => {
+            const realStaff = mappedList.find(p => p.email === 'latierritaapp@gmail.com' || p.username === 'latierrita_app' || p.username === 'latierrita_oficial');
+            const merged = [...mappedList];
+            
+            // Retain mock users only if they don't conflict with real database users
+            prev.forEach(p => {
+              // If real staff exists in DB, replace placeholder 'user-staff'
+              if (realStaff && (p.id === 'user-staff' || p.username === 'latierrita_app' || p.username === 'latierrita_oficial')) {
+                return;
+              }
+              if (!merged.some(m => m.id === p.id || m.username === p.username)) {
+                merged.push(p);
+              }
+            });
+
+            // If real staff account is present, ensure all non-staff accounts follow its real ID
+            if (realStaff && !isStaffAccount(currentUser?.id, currentUser?.username, currentUser?.email)) {
+              setFollowingIds(fIds => {
+                if (!fIds.includes(realStaff.id)) {
+                  return [...fIds, realStaff.id];
+                }
+                return fIds;
+              });
+            }
+
+            return merged;
+          });
+        }
+      } catch (e) {
+        console.warn('Error fetching Supabase profiles for otherUsers:', e);
+      }
+    };
+
+    fetchRealProfiles();
+  }, [currentUser]);
 
   // Sync with Firebase/Supabase userProfile
   useEffect(() => {

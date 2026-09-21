@@ -19,10 +19,10 @@ export const FollowersModal: React.FC<FollowersModalProps> = ({ type, user, onCl
   // Compute actual following list
   let followingList: UserProfile[] = [];
   if (isMe) {
-    const isCurrentStaff = currentUser.id === 'user-staff' || currentUser.username === 'latierrita_app' || currentUser.username === 'latierrita_oficial';
+    const isCurrentStaff = currentUser.id === 'user-staff' || currentUser.username === 'latierrita_app' || currentUser.username === 'latierrita_oficial' || currentUser.email === 'latierritaapp@gmail.com';
     const list = otherUsers.filter(u => followingIds.includes(u.id) && u.id !== user.id && u.username !== user.username);
     if (!isCurrentStaff) {
-      const staffUser = otherUsers.find(u => u.id === 'user-staff' || u.username === 'latierrita_app' || u.username === 'latierrita_oficial');
+      const staffUser = otherUsers.find(u => u.id === 'user-staff' || u.username === 'latierrita_app' || u.username === 'latierrita_oficial' || u.email === 'latierritaapp@gmail.com');
       if (staffUser && !list.some(u => u.id === staffUser.id || u.username === staffUser.username)) {
         list.unshift(staffUser);
       }
@@ -40,7 +40,7 @@ export const FollowersModal: React.FC<FollowersModalProps> = ({ type, user, onCl
 
   // Compute actual followers list
   let followersList: UserProfile[] = [];
-  const isTargetStaff = user.id === 'user-staff' || user.username === 'latierrita_app' || user.username === 'latierrita_oficial';
+  const isTargetStaff = user.id === 'user-staff' || user.username === 'latierrita_app' || user.username === 'latierrita_oficial' || user.email === 'latierritaapp@gmail.com';
 
   if (isTargetStaff) {
     // Everyone follows the official account
@@ -281,7 +281,7 @@ export const FollowersModal: React.FC<FollowersModalProps> = ({ type, user, onCl
 
                   {!isTargetCurrentUser ? (
                     (() => {
-                      const isOfficial = item.id === 'user-staff' || item.username === 'latierrita_app' || item.username === 'latierrita_oficial';
+                      const isOfficial = item.id === 'user-staff' || item.username === 'latierrita_app' || item.username === 'latierrita_oficial' || item.email === 'latierritaapp@gmail.com';
                       if (isOfficial) {
                         return (
                           <div
