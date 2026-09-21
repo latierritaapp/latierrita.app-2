@@ -665,41 +665,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (sessionUser && sessionUser.id) {
         const dbPayload = buildDBProfileUpdatePayload(data);
         if (Object.keys(dbPayload).length > 0) {
-          const { data: updateRes, error: updateError } = await supabase
+          const { error: updateError } = await supabase
             .from('profiles')
             .update(dbPayload)
-            .eq('id', sessionUser.id)
-            .select();
+            .eq('id', sessionUser.id);
 
-          if (updateError || !updateRes || updateRes.length === 0) {
-            const currentObj: UserProfile = updatedProfile || {
-              id: sessionUser.id,
-              email: sessionUser.email || '',
-              username: 'usuario',
-              name: 'Usuario',
-              avatar: DEFAULT_SILHOUETTE_AVATAR,
-              bio: '🇨🇴 Orgullo colombiano viviendo en España 🇪🇸',
-              website: '',
-              city: 'Madrid',
-              originCity: 'Colombia',
-              followersCount: 0,
-              followingCount: 0,
-              postsCount: 0,
-              isVerified: false,
-              staffRole: 'Usuario',
-              socialLinks: {}
-            };
-            const fullPayload = mapUserProfileToDBProfile({
-              ...currentObj,
-              id: sessionUser.id,
-              email: sessionUser.email || currentObj.email
-            });
-            await supabase.from('profiles').upsert([fullPayload]);
+          if (updateError) {
+            console.warn('Supabase profile update note:', updateError.message);
           }
         }
       }
     } catch (err) {
-      console.warn('Supabase profile sync note:', err);
+      console.warn('Supabase profile sync error:', err);
     }
   };
 
