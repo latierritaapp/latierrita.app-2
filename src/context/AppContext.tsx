@@ -2171,12 +2171,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       try {
         await supabase.from('chat_rooms').insert([{
           id: newRoom.id,
-          type: newRoom.type,
           name: newRoom.name,
           description: newRoom.description || '',
-          avatar: newRoom.avatar || '',
-          city: newRoom.city || null,
-          members: newRoom.members || [],
           created_at: newRoom.createdAt || new Date().toISOString().split('T')[0],
           messages: newRoom.messages
         }]);
@@ -2270,12 +2266,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         try {
           await supabase.from('chat_rooms').insert([{
             id: newRoom.id,
-            type: newRoom.type,
             name: newRoom.name,
             description: newRoom.description || '',
-            avatar: newRoom.avatar || '',
-            city: newRoom.city || null,
-            members: newRoom.members || [],
             created_at: newRoom.createdAt || new Date().toISOString().split('T')[0],
             messages: newRoom.messages
           }]);
