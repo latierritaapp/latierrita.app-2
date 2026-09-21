@@ -779,10 +779,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       });
     } catch (e) {}
 
+    const chatChannel = supabase
+      .channel('public_chat_rooms_changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_rooms' }, () => {
+        fetchRooms();
+      })
+      .subscribe();
+
     return () => {
       isMounted = false;
       clearInterval(interval);
       if (typeof unsub === 'function') unsub();
+      supabase.removeChannel(chatChannel);
     };
   }, []);
 
