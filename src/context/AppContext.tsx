@@ -8,6 +8,7 @@ import {
   PostItem,
   AdBanner,
   ChatRoom,
+  ChatMessage,
   GroupInvite,
   AppNotification,
   ContentReport,
@@ -307,6 +308,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   });
   const currentUserRef = useRef<UserProfile | null>(currentUser);
   currentUserRef.current = currentUser;
+  const chatChannelRef = useRef<any>(null);
 
   const [followingIds, setFollowingIds] = useState<string[]>(() => {
     const saved = localStorage.getItem('latierrita_following');
@@ -694,21 +696,36 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, []);
 
-  // Sync Chat Rooms from Firestore with auto-seeding and polling fallback
+  // Sync Chat Rooms from Supabase with safe auto-seeding, real-time broadcasts, and fast polling fallback
   useEffect(() => {
     let isMounted = true;
 
-    // Seed default rooms once on mount if they don't exist in DB
+    // Seed default rooms once on mount ONLY if they don't exist in Supabase (NEVER overwrite existing messages)
     const seedDefaultRooms = async () => {
       for (const defaultRoom of INITIAL_CHAT_ROOMS) {
         try {
-          const docRef = doc(db, 'chat_rooms', defaultRoom.id);
-          const docSnap = await getDoc(docRef);
-          if (!docSnap.exists()) {
-            await setDoc(docRef, defaultRoom, { merge: true });
+          const { data, error } = await supabase
+            .from('chat_rooms')
+            .select('id')
+            .eq('id', defaultRoom.id)
+            .maybeSingle();
+
+          if (!data && !error) {
+            const snake = {
+              id: defaultRoom.id,
+              type: defaultRoom.type,
+              name: defaultRoom.name,
+              description: defaultRoom.description || '',
+              avatar: defaultRoom.avatar || '',
+              city: defaultRoom.city || null,
+              members: defaultRoom.members || [],
+              created_at: defaultRoom.createdAt || new Date().toISOString().split('T')[0],
+              messages: []
+            };
+            await supabase.from('chat_rooms').insert([snake]);
           }
         } catch (err) {
-          // Ignore seeding errors if offline
+          // Ignore offline errors
         }
       }
     };
@@ -717,60 +734,133 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const fetchRooms = async () => {
       try {
-        const snapshot = await getDocs(query(collection(db, 'chat_rooms')));
+        const { data, error } = await supabase
+          .from('chat_rooms')
+          .select('*');
+
+        if (error) {
+          console.warn('Supabase fetchRooms error:', error);
+          return;
+        }
+
         if (!isMounted) return;
 
-        setChatRooms(prevRooms => {
-          const roomsMap = new Map<string, ChatRoom>();
-          prevRooms.forEach(r => roomsMap.set(r.id, r));
+        if (data && Array.isArray(data)) {
+          setChatRooms(prevRooms => {
+            const roomsMap = new Map<string, ChatRoom>();
+            prevRooms.forEach(r => roomsMap.set(r.id, r));
 
-          INITIAL_CHAT_ROOMS.forEach(r => {
-            if (!roomsMap.has(r.id)) {
-              roomsMap.set(r.id, { ...r, messages: Array.isArray(r.messages) ? r.messages : [] });
-            }
-          });
+            INITIAL_CHAT_ROOMS.forEach(r => {
+              if (!roomsMap.has(r.id)) {
+                roomsMap.set(r.id, { ...r, messages: Array.isArray(r.messages) ? r.messages : [] });
+              }
+            });
 
-          if (!snapshot.empty) {
-            snapshot.forEach((docSnap: any) => {
-              const data = docSnap.data() || {};
-              const room: ChatRoom = {
-                id: docSnap.id,
-                type: data.type || 'general',
-                name: data.name || 'Chat',
-                avatar: data.avatar || '',
-                city: data.city,
-                targetUserId: data.targetUserId,
-                targetUser: data.targetUser,
-                description: data.description,
-                members: Array.isArray(data.members) ? data.members : [],
-                admins: Array.isArray(data.admins) ? data.admins : [],
-                createdBy: data.createdBy,
-                createdAt: data.createdAt || '2026-01-01',
-                messages: Array.isArray(data.messages) ? data.messages : []
+            data.forEach((row: any) => {
+              let roomMessages: any[] = [];
+              if (Array.isArray(row.messages)) {
+                roomMessages = row.messages;
+              } else if (typeof row.messages === 'string') {
+                try {
+                  const parsed = JSON.parse(row.messages);
+                  if (Array.isArray(parsed)) roomMessages = parsed;
+                } catch {}
+              }
+
+              // Fallback: check if description had JSON metadata from previous version
+              let desc = row.description || '';
+              if (desc.startsWith('{')) {
+                try {
+                  const meta = JSON.parse(desc);
+                  if (roomMessages.length === 0 && Array.isArray(meta.messages)) {
+                    roomMessages = meta.messages;
+                  }
+                  if (meta.description) desc = meta.description;
+                } catch {}
+              }
+
+              const existing = roomsMap.get(row.id);
+
+              // Merge messages: preserve local messages not yet flushed, but accept all DB messages
+              const msgMap = new Map<string, any>();
+              if (existing && Array.isArray(existing.messages)) {
+                existing.messages.forEach(m => msgMap.set(m.id, m));
+              }
+              roomMessages.forEach(m => msgMap.set(m.id, m));
+
+              const mergedRoom: ChatRoom = {
+                id: row.id,
+                type: row.type || existing?.type || 'general',
+                name: row.name || existing?.name || 'Chat',
+                avatar: row.avatar || existing?.avatar || '',
+                city: row.city || existing?.city,
+                targetUserId: row.target_user_id || existing?.targetUserId,
+                targetUser: existing?.targetUser,
+                description: desc,
+                members: Array.isArray(row.members) ? row.members : (existing?.members || []),
+                admins: Array.isArray(row.admins) ? row.admins : (existing?.admins || []),
+                createdBy: row.created_by || existing?.createdBy,
+                createdAt: row.created_at || existing?.createdAt || '2026-01-01',
+                messages: Array.from(msgMap.values())
               };
 
-              const existing = roomsMap.get(room.id);
-              if (existing && Array.isArray(existing.messages)) {
-                const msgMap = new Map<string, any>();
-                existing.messages.forEach(m => msgMap.set(m.id, m));
-                if (Array.isArray(room.messages)) {
-                  room.messages.forEach(m => msgMap.set(m.id, m));
-                }
-                room.messages = Array.from(msgMap.values());
-              }
-              roomsMap.set(room.id, room);
+              roomsMap.set(row.id, mergedRoom);
             });
-          }
 
-          return Array.from(roomsMap.values());
-        });
+            return Array.from(roomsMap.values());
+          });
+        }
       } catch (e) {
         console.warn('Failed to sync chat_rooms:', e);
       }
     };
 
     fetchRooms();
-    const interval = setInterval(fetchRooms, 3000); // Poll every 3 seconds for fast real-time sync across accounts
+    // Fast polling every 2 seconds to ensure messages sync rapidly across all browsers and devices
+    const interval = setInterval(fetchRooms, 2000);
+
+    // Supabase Realtime channel with both Postgres Changes AND direct peer-to-peer Broadcast
+    const chatChannel = supabase
+      .channel('tierrita_community_chat_sync')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_rooms' }, (payload) => {
+        console.log('Realtime chat_rooms table change:', payload);
+        fetchRooms();
+      })
+      .on('broadcast', { event: 'new_chat_message' }, ({ payload }) => {
+        // Immediate cross-account WebSocket message delivery
+        if (payload && payload.chatId && payload.message) {
+          setChatRooms(prevRooms => prevRooms.map(room => {
+            if (room.id === payload.chatId) {
+              const alreadyExists = room.messages.some(m => m.id === payload.message.id);
+              if (!alreadyExists) {
+                return {
+                  ...room,
+                  messages: [...room.messages, payload.message]
+                };
+              }
+            }
+            return room;
+          }));
+        }
+      })
+      .on('broadcast', { event: 'update_chat_messages' }, ({ payload }) => {
+        if (payload && payload.chatId && Array.isArray(payload.messages)) {
+          setChatRooms(prevRooms => prevRooms.map(room => {
+            if (room.id === payload.chatId) {
+              return {
+                ...room,
+                messages: payload.messages
+              };
+            }
+            return room;
+          }));
+        }
+      })
+      .subscribe((status) => {
+        console.log('Supabase community chat channel status:', status);
+      });
+
+    chatChannelRef.current = chatChannel;
 
     let unsub: any;
     try {
@@ -779,18 +869,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       });
     } catch (e) {}
 
-    const chatChannel = supabase
-      .channel('public_chat_rooms_changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_rooms' }, () => {
-        fetchRooms();
-      })
-      .subscribe();
-
     return () => {
       isMounted = false;
       clearInterval(interval);
       if (typeof unsub === 'function') unsub();
       supabase.removeChannel(chatChannel);
+      chatChannelRef.current = null;
     };
   }, []);
 
@@ -1757,8 +1841,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const simulatedHash = 'SHA256:' + Array.from(crypto.getRandomValues(new Uint8Array(8)))
       .map(b => b.toString(16).padStart(2, '0')).join('');
 
-    const newMsg = {
-      id: `msg-${Date.now()}`,
+    const newMsg: ChatMessage = {
+      id: `msg-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`,
       senderId: currentUser.id,
       senderName: currentUser.name,
       senderAvatar: currentUser.avatar,
@@ -1772,16 +1856,88 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const targetRoom = chatRooms.find(r => r.id === chatId);
     if (!targetRoom) return;
 
+    // 1. Optimistic update in local state for zero latency UI
+    const optimisticMessages = [...targetRoom.messages, newMsg];
     const updatedRoom = {
       ...targetRoom,
-      messages: [...targetRoom.messages, newMsg]
+      messages: optimisticMessages
     };
 
     setChatRooms(prev => prev.map(room => room.id === chatId ? updatedRoom : room));
 
+    // 2. Real-time broadcast to all connected accounts immediately via Supabase Realtime WebSocket
     try {
-      await setDoc(doc(db, 'chat_rooms', chatId), updatedRoom, { merge: true });
+      if (chatChannelRef.current) {
+        chatChannelRef.current.send({
+          type: 'broadcast',
+          event: 'new_chat_message',
+          payload: { chatId, message: newMsg }
+        });
+      }
+    } catch (bcErr) {
+      console.warn('Realtime broadcast error:', bcErr);
+    }
+
+    // 3. Persist into Supabase PostgreSQL database
+    try {
+      // Fetch latest messages from Supabase to prevent overwriting messages sent by other accounts
+      const { data: dbRoom } = await supabase
+        .from('chat_rooms')
+        .select('id, messages')
+        .eq('id', chatId)
+        .maybeSingle();
+
+      let dbMessages: any[] = [];
+      if (dbRoom) {
+        if (Array.isArray(dbRoom.messages)) {
+          dbMessages = dbRoom.messages;
+        } else if (typeof dbRoom.messages === 'string') {
+          try {
+            const parsed = JSON.parse(dbRoom.messages);
+            if (Array.isArray(parsed)) dbMessages = parsed;
+          } catch {}
+        }
+      }
+
+      const msgMap = new Map<string, any>();
+      dbMessages.forEach(m => msgMap.set(m.id, m));
+      targetRoom.messages.forEach(m => msgMap.set(m.id, m));
+      msgMap.set(newMsg.id, newMsg);
+
+      const finalMessages = Array.from(msgMap.values());
+
+      if (dbRoom) {
+        const { error: updateErr } = await supabase
+          .from('chat_rooms')
+          .update({ messages: finalMessages })
+          .eq('id', chatId);
+
+        if (updateErr) {
+          console.error('Error updating chat_rooms in Supabase:', updateErr);
+          await setDoc(doc(db, 'chat_rooms', chatId), { ...targetRoom, messages: finalMessages }, { merge: true });
+        }
+      } else {
+        const { error: upsertErr } = await supabase
+          .from('chat_rooms')
+          .upsert([{
+            id: targetRoom.id,
+            type: targetRoom.type,
+            name: targetRoom.name,
+            description: targetRoom.description || '',
+            avatar: targetRoom.avatar || '',
+            city: targetRoom.city || null,
+            members: targetRoom.members || [],
+            created_at: targetRoom.createdAt || new Date().toISOString().split('T')[0],
+            messages: finalMessages
+          }], { onConflict: 'id' });
+
+        if (upsertErr) {
+          console.error('Error upserting chat_rooms in Supabase:', upsertErr);
+          await setDoc(doc(db, 'chat_rooms', chatId), { ...targetRoom, messages: finalMessages }, { merge: true });
+        }
+      }
     } catch (error) {
+      console.error('Database write error in sendMessage:', error);
       handleFirestoreError(error, OperationType.UPDATE, 'chat_rooms');
     }
   };
@@ -2016,7 +2172,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     setChatRooms(prev => prev.map(room => room.id === chatId ? updatedRoom : room));
 
+    // Broadcast reaction change immediately
     try {
+      if (chatChannelRef.current) {
+        chatChannelRef.current.send({
+          type: 'broadcast',
+          event: 'update_chat_messages',
+          payload: { chatId, messages: updatedMessages }
+        });
+      }
+    } catch {}
+
+    try {
+      await supabase.from('chat_rooms').update({ messages: updatedMessages }).eq('id', chatId);
       await setDoc(doc(db, 'chat_rooms', chatId), updatedRoom, { merge: true });
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, 'chat_rooms');
@@ -2053,7 +2221,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     setChatRooms(prev => prev.map(room => room.id === chatId ? updatedRoom : room));
 
+    // Broadcast deletion for everyone immediately
     try {
+      if (chatChannelRef.current) {
+        chatChannelRef.current.send({
+          type: 'broadcast',
+          event: 'update_chat_messages',
+          payload: { chatId, messages: updatedMessages }
+        });
+      }
+    } catch {}
+
+    try {
+      await supabase.from('chat_rooms').update({ messages: updatedMessages }).eq('id', chatId);
       await setDoc(doc(db, 'chat_rooms', chatId), updatedRoom, { merge: true });
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, 'chat_rooms');

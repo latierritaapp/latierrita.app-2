@@ -75,17 +75,29 @@ function formatRowData(tableName: string, data: any): any {
       x: item.x || ''
     };
   } else if (tableName === 'chat_rooms') {
+    // 1. Process messages column (Postgres JSONB or stringified JSON)
+    if (typeof item.messages === 'string') {
+      try {
+        item.messages = JSON.parse(item.messages);
+      } catch (e) {
+        item.messages = [];
+      }
+    }
+
+    // 2. Fallback: check if description had JSON metadata from previous version
     if (item.description && typeof item.description === 'string' && item.description.startsWith('{')) {
       try {
         const meta = JSON.parse(item.description);
+        if (!Array.isArray(item.messages) || item.messages.length === 0) {
+          if (Array.isArray(meta.messages)) item.messages = meta.messages;
+        }
         item.description = meta.description || '';
-        item.targetUserId = meta.targetUserId;
-        item.targetUser = meta.targetUser;
-        item.admins = meta.admins || [];
-        item.createdBy = meta.createdBy;
-        item.status = meta.status;
-        item.unreadCount = meta.unreadCount;
-        item.messages = Array.isArray(meta.messages) ? meta.messages : (Array.isArray(item.messages) ? item.messages : []);
+        item.targetUserId = meta.targetUserId || item.targetUserId;
+        item.targetUser = meta.targetUser || item.targetUser;
+        item.admins = meta.admins || item.admins || [];
+        item.createdBy = meta.createdBy || item.createdBy;
+        item.status = meta.status || item.status;
+        item.unreadCount = meta.unreadCount || item.unreadCount;
       } catch (e) {
         // Not JSON
       }
@@ -187,28 +199,38 @@ function sanitizePayloadForTable(tableName: string, payload: any): any {
       delete clean.social_links;
     }
   } else if (tableName === 'chat_rooms') {
-    const meta = {
-      targetUserId: clean.targetUserId || clean.target_user_id,
-      targetUser: clean.targetUser || clean.target_user,
-      admins: clean.admins || [],
-      createdBy: clean.createdBy || clean.created_by,
-      status: clean.status,
-      unreadCount: clean.unreadCount || clean.unread_count,
-      description: clean.description || '',
-      messages: clean.messages || []
-    };
-    clean.description = JSON.stringify(meta);
+    // 1. Ensure messages is kept as an array for the Postgres JSONB column
+    if (typeof clean.messages === 'string') {
+      try {
+        clean.messages = JSON.parse(clean.messages);
+      } catch {
+        clean.messages = [];
+      }
+    } else if (!Array.isArray(clean.messages)) {
+      clean.messages = [];
+    }
+
+    // 2. Ensure description is a clean text string, NOT a giant JSON object
+    if (typeof clean.description === 'string' && clean.description.startsWith('{')) {
+      try {
+        const parsed = JSON.parse(clean.description);
+        if (parsed.description && typeof parsed.description === 'string') {
+          clean.description = parsed.description;
+        }
+      } catch {
+        // Keep string as is
+      }
+    } else if (typeof clean.description !== 'string') {
+      clean.description = '';
+    }
+
+    // Clean up temporary frontend-only fields
     delete clean.targetUserId;
     delete clean.target_user_id;
     delete clean.targetUser;
     delete clean.target_user;
-    delete clean.admins;
-    delete clean.createdBy;
-    delete clean.created_by;
-    delete clean.status;
     delete clean.unreadCount;
     delete clean.unread_count;
-    delete clean.messages;
 
     if (!Array.isArray(clean.members)) clean.members = [];
     if (!clean.created_at) clean.created_at = new Date().toISOString().split('T')[0];

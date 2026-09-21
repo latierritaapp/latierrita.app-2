@@ -138,3 +138,48 @@ sudo systemctl reload nginx
      ```
   3. Escribe `\q` y presiona Enter para salir de la consola de PostgreSQL.
 
+### Sincronización en Tiempo Real del Chat General y Salas de Chat en el VPS
+* **Causa:** Para que los mensajes enviados entre diferentes cuentas en el Chat General o en cualquier sala se sincronicen en vivo, la tabla `chat_rooms` debe tener habilitado Realtime (`supabase_realtime`) y las políticas de acceso (RLS) deben permitir tanto a usuarios anónimos como autenticados leer y actualizar los mensajes.
+* **Solución rápida en tu VPS:**
+  1. Entra al contenedor de Postgres en tu VPS:
+     ```bash
+     docker exec -it supabase-db psql -U postgres
+     ```
+  2. Pega y ejecuta este bloque SQL completo:
+     ```sql
+     -- 1. Asegurar columna messages en formato JSONB en chat_rooms
+     ALTER TABLE chat_rooms ADD COLUMN IF NOT EXISTS messages JSONB DEFAULT '[]'::jsonb;
+
+     -- 2. Habilitar réplica completa para que Supabase Realtime emita los cambios
+     ALTER TABLE chat_rooms REPLICA IDENTITY FULL;
+
+     -- 3. Agregar chat_rooms a la publicación de Realtime si aún no está
+     DO $$
+     BEGIN
+       IF NOT EXISTS (
+         SELECT 1 FROM pg_publication_tables 
+         WHERE pubname = 'supabase_realtime' AND tablename = 'chat_rooms'
+       ) THEN
+         ALTER PUBLICATION supabase_realtime ADD TABLE chat_rooms;
+       END IF;
+     END $$;
+
+     -- 4. Habilitar RLS y otorgar permisos de lectura y escritura para sincronización
+     ALTER TABLE chat_rooms ENABLE ROW LEVEL SECURITY;
+     DROP POLICY IF EXISTS "Permitir sincronizar chat_rooms" ON chat_rooms;
+     CREATE POLICY "Permitir sincronizar chat_rooms" ON chat_rooms 
+       FOR ALL TO anon, authenticated 
+       USING (true) 
+       WITH CHECK (true);
+
+     -- 5. Recargar la caché de PostgREST
+     NOTIFY pgrst, 'reload schema';
+     ```
+  3. Escribe `\q` y presiona Enter para salir.
+  4. En la carpeta de la app (`/var/www/latierrita.app-2`), vuelve a compilar y reiniciar:
+     ```bash
+     npm run build
+     sudo systemctl reload nginx
+     ```
+
+
