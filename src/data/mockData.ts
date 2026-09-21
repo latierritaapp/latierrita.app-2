@@ -105,7 +105,7 @@ export const OTHER_USERS: UserProfile[] = [
   },
   {
     id: 'user-staff',
-    username: 'latierrita_oficial',
+    username: 'latierrita_app',
     name: 'La Tierrita 🇨🇴',
     avatar: 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=400&auto=format&fit=crop&q=80',
     bio: '⭐ Cuenta oficial de Staff & Publicidad de La Tierrita España. Conectando a los colombianos.',
@@ -319,7 +319,7 @@ export const INITIAL_STAFF_MEMBERS: StaffMember[] = [
   {
     id: 'staff-1',
     name: 'Administrador Principal La Tierrita',
-    username: 'latierrita_oficial',
+    username: 'latierrita_app',
     avatar: 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=400&auto=format&fit=crop&q=80',
     role: 'ADMIN',
     email: 'admin@latierrita.es',
@@ -380,7 +380,7 @@ export const INITIAL_POSTS: PostItem[] = [
   {
     id: 'post-staff-1',
     userId: 'user-staff',
-    username: 'latierrita_oficial',
+    username: 'latierrita_app',
     userAvatar: 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=400&auto=format&fit=crop&q=80',
     userCity: 'Madrid',
     mediaUrl: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=1000&auto=format&fit=crop&q=80',
@@ -421,7 +421,7 @@ export const INITIAL_POSTS: PostItem[] = [
   {
     id: 'post-staff-2',
     userId: 'user-staff',
-    username: 'latierrita_oficial',
+    username: 'latierrita_app',
     userAvatar: 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=400&auto=format&fit=crop&q=80',
     userCity: 'Barcelona',
     mediaUrl: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=1000&auto=format&fit=crop&q=80',

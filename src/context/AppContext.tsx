@@ -238,7 +238,34 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return INITIAL_CURRENT_USER;
   });
 
-  // Sync with Firebase userProfile
+  const isStaffAccount = (id?: string, username?: string) => {
+    return id === 'user-staff' || username === 'latierrita_app' || username === 'latierrita_oficial';
+  };
+
+  const [otherUsers, setOtherUsers] = useState<UserProfile[]>(OTHER_USERS);
+  const [followingIds, setFollowingIds] = useState<string[]>(() => {
+    const saved = localStorage.getItem('latierrita_following');
+    const isCurrentStaff = isStaffAccount(currentUser?.id, currentUser?.username);
+    let list: string[] = [];
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          const currentId = currentUser?.id;
+          list = parsed.filter(id => id !== currentId && (!isCurrentStaff || id !== 'user-staff'));
+        }
+      } catch (e) {
+        console.warn('Error parsing latierrita_following:', e);
+      }
+    }
+    // Automatically follow official staff account @latierrita_app for all non-staff accounts
+    if (!isCurrentStaff && !list.includes('user-staff')) {
+      list.push('user-staff');
+    }
+    return isCurrentStaff ? list.filter(id => id !== 'user-staff') : list;
+  });
+
+  // Sync with Firebase/Supabase userProfile
   useEffect(() => {
     if (userProfile) {
       const sanitized = { ...userProfile };
@@ -246,34 +273,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         sanitized.staffRole = 'Usuario';
         sanitized.isVerified = false;
       }
+      const isStaff = isStaffAccount(sanitized.id, sanitized.username);
+      if (!isStaff) {
+        sanitized.followingCount = Math.max(sanitized.followingCount || 0, followingIds.length, 1);
+      }
       setCurrentUser(sanitized);
     }
-  }, [userProfile]);
+  }, [userProfile, followingIds]);
 
-  const [otherUsers, setOtherUsers] = useState<UserProfile[]>(OTHER_USERS);
-  const [followingIds, setFollowingIds] = useState<string[]>(() => {
-    const saved = localStorage.getItem('latierrita_following');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
-          const currentId = currentUser?.id;
-          const isCurrentStaff = currentUser?.username === 'latierrita_oficial' || currentId === 'user-staff';
-          return parsed.filter(id => id !== currentId && (!isCurrentStaff || id !== 'user-staff'));
-        }
-      } catch (e) {
-        console.warn('Error parsing latierrita_following:', e);
-      }
-    }
-    return [];
-  });
-
-  // Keep following list strictly clean of self-following
+  // Keep following list strictly clean of self-following and ensure @latierrita_app is followed
   useEffect(() => {
-    const isCurrentStaff = currentUser?.username === 'latierrita_oficial' || currentUser?.id === 'user-staff';
+    const isCurrentStaff = isStaffAccount(currentUser?.id, currentUser?.username);
     setFollowingIds(prev => {
-      const cleaned = prev.filter(id => id !== currentUser.id && (!isCurrentStaff || id !== 'user-staff'));
-      if (cleaned.length !== prev.length) {
+      let cleaned = prev.filter(id => id !== currentUser.id && (!isCurrentStaff || id !== 'user-staff'));
+      if (!isCurrentStaff && !cleaned.includes('user-staff')) {
+        cleaned.push('user-staff');
+      }
+      if (cleaned.length !== prev.length || !cleaned.every((val, idx) => val === prev[idx])) {
         return cleaned;
       }
       return prev;
@@ -1024,7 +1040,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Follow / Unfollow
   const followUser = (userId: string) => {
     if (userId === currentUser.id) return;
-    if ((currentUser.username === 'latierrita_oficial' || currentUser.id === 'user-staff') && (userId === 'user-staff' || userId === currentUser.id)) return;
+    if (isStaffAccount(currentUser.id, currentUser.username) && (userId === 'user-staff' || userId === currentUser.id)) return;
     if (followingIds.includes(userId)) return;
     setFollowingIds(prev => [...prev, userId]);
     setCurrentUser(prev => ({ ...prev, followingCount: prev.followingCount + 1 }));
@@ -1041,9 +1057,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const unfollowUser = (userId: string) => {
     if (userId === currentUser.id) return;
-    if (userId === 'user-staff' && currentUser.username !== 'latierrita_oficial' && currentUser.id !== 'user-staff') {
-      // Keep official staff followed for ordinary users if default, but allow if desired
+
+    // Check if target is official staff account @latierrita_app
+    const target = otherUsers.find(u => u.id === userId || u.username === userId);
+    const isTargetOfficial = userId === 'user-staff' || target?.username === 'latierrita_app' || target?.username === 'latierrita_oficial';
+    
+    if (isTargetOfficial) {
+      triggerPlushNotification({
+        type: 'system',
+        title: 'Cuenta Oficial',
+        message: 'No es posible dejar de seguir la cuenta oficial @latierrita_app para recibir información y anuncios de la comunidad.',
+        avatar: target?.avatar || 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=400&auto=format&fit=crop&q=80'
+      });
+      return;
     }
+
     setFollowingIds(prev => prev.filter(id => id !== userId));
     setCurrentUser(prev => ({ ...prev, followingCount: Math.max(0, prev.followingCount - 1) }));
     setOtherUsers(prev => prev.map(u => u.id === userId ? { ...u, followersCount: Math.max(0, u.followersCount - 1) } : u));
@@ -1051,6 +1079,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Block / Unblock
   const blockUser = (userId: string, userName?: string) => {
+    const isTargetOfficial = userId === 'user-staff' || userName === 'latierrita_app' || userName === 'latierrita_oficial';
+    if (isTargetOfficial) {
+      triggerPlushNotification({
+        type: 'system',
+        title: 'Acción no permitida',
+        message: 'No es posible bloquear la cuenta oficial del sistema @latierrita_app.'
+      });
+      return;
+    }
+
     if (!blockedUserIds.includes(userId)) {
       setBlockedUserIds(prev => [...prev, userId]);
       unfollowUser(userId);

@@ -258,6 +258,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
           if (profile) {
             const mapped = mapDBProfileToUserProfile(profile);
+            const isStaff = mapped.username === 'latierrita_app' || user.id === 'user-staff';
+
+            // Ensure existing accounts follow @latierrita_app
+            if (!isStaff) {
+              const savedFollowing = localStorage.getItem('latierrita_following');
+              let fList: string[] = [];
+              if (savedFollowing) {
+                try {
+                  fList = JSON.parse(savedFollowing);
+                } catch {
+                  fList = [];
+                }
+              }
+              if (!fList.includes('user-staff')) {
+                fList.push('user-staff');
+                localStorage.setItem('latierrita_following', JSON.stringify(fList));
+              }
+              mapped.followingCount = Math.max(mapped.followingCount || 0, fList.length);
+            }
+
             const merged: UserProfile = {
               ...mapped,
               id: user.id,
@@ -269,6 +289,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               age: localProfile.age !== undefined ? localProfile.age : mapped.age,
               city: localProfile.city || mapped.city,
               originCity: localProfile.originCity || mapped.originCity,
+              followingCount: mapped.followingCount || (isStaff ? 0 : 1),
               socialLinks: {
                 ...(mapped.socialLinks || {}),
                 ...(localProfile.socialLinks || {})
@@ -301,7 +322,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               city: localProfile.city || (meta.city as any) || 'Madrid',
               originCity: localProfile.originCity || meta.origin_city || 'Colombia',
               followersCount: localProfile.followersCount || 0,
-              followingCount: localProfile.followingCount || 0,
+              followingCount: localProfile.followingCount || (cleanUsername === 'latierrita_app' || user.id === 'user-staff' ? 0 : 1),
               postsCount: 0,
               isVerified: localProfile.isVerified || false,
               staffRole: localProfile.staffRole || 'Usuario',
@@ -316,6 +337,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }
             setUserProfile(newProfile);
             localStorage.setItem('latierrita_user', JSON.stringify(newProfile));
+            if (cleanUsername !== 'latierrita_app' && user.id !== 'user-staff') {
+              const currentFollowing = localStorage.getItem('latierrita_following');
+              if (!currentFollowing) {
+                localStorage.setItem('latierrita_following', JSON.stringify(['user-staff']));
+              }
+            }
           }
         } catch (error) {
           console.error('Error fetching user profile from Supabase:', error);
@@ -398,6 +425,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (profile) {
         const mapped = mapDBProfileToUserProfile(profile);
+        const isStaff = mapped.username === 'latierrita_app' || user.id === 'user-staff';
+        if (!isStaff) {
+          const savedFollowing = localStorage.getItem('latierrita_following');
+          let fList: string[] = [];
+          if (savedFollowing) {
+            try {
+              fList = JSON.parse(savedFollowing);
+            } catch {
+              fList = [];
+            }
+          }
+          if (!fList.includes('user-staff')) {
+            fList.push('user-staff');
+            localStorage.setItem('latierrita_following', JSON.stringify(fList));
+          }
+          mapped.followingCount = Math.max(mapped.followingCount || 0, fList.length);
+        }
         setUserProfile(mapped);
         localStorage.setItem('latierrita_user', JSON.stringify(mapped));
       } else {
@@ -532,7 +576,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       city: data.city || 'Madrid',
       originCity: data.originCity?.trim() || 'Colombia',
       followersCount: 0,
-      followingCount: 0,
+      followingCount: (cleanUsername === 'latierrita_app' || user.id === 'user-staff') ? 0 : 1,
       postsCount: 0,
       isVerified: false,
       staffRole: 'Usuario',
@@ -564,6 +608,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     setUserProfile(newProfile);
     localStorage.setItem('latierrita_user', JSON.stringify(newProfile));
+    if (cleanUsername !== 'latierrita_app' && user.id !== 'user-staff') {
+      localStorage.setItem('latierrita_following', JSON.stringify(['user-staff']));
+    }
   };
 
   const loginWithGoogle = async () => {

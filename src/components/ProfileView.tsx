@@ -69,11 +69,14 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userToDisplay }) => {
   const isMe = !userToDisplay || userToDisplay.id === currentUser.id || (Boolean(currentUser.username) && userToDisplay.username === currentUser.username);
   const user = isMe ? currentUser : userToDisplay;
 
-  const isFollowing = !isMe && followingIds.includes(user.id) && user.id !== currentUser.id;
-  const isOfficialStaff = user.username === 'latierrita_oficial' || user.id === 'user-staff';
+  const isOfficialStaff = user.username === 'latierrita_app' || user.username === 'latierrita_oficial' || user.id === 'user-staff';
+  const isFollowing = !isMe && (isOfficialStaff || (followingIds.includes(user.id) && user.id !== currentUser.id));
 
+  const isCurrentStaff = currentUser.username === 'latierrita_app' || currentUser.username === 'latierrita_oficial' || currentUser.id === 'user-staff';
   const displayFollowersCount = user.followersCount || 0;
-  const displayFollowingCount = isMe ? followingIds.length : (user.followingCount || 0);
+  const displayFollowingCount = isMe
+    ? (isCurrentStaff ? (currentUser.followingCount || 0) : Math.max(1, followingIds.length))
+    : (isOfficialStaff ? (user.followingCount || 12) : (user.followingCount || 0));
 
   // Posts for the profile
   const userPosts: PostItem[] = (isMe
@@ -451,9 +454,19 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userToDisplay }) => {
                 )}
               </>
             ) : isOfficialStaff ? (
-              <div className="w-full py-2 bg-amber-400/20 border border-amber-400/30 text-amber-300 text-xs font-bold rounded-xl text-center flex items-center justify-center gap-1.5 shadow-sm">
-                <UserCheck className="w-3.5 h-3.5" />
-                <span>Cuenta oficial de La Tierrita</span>
+              <div className="flex items-center gap-2">
+                <div className="flex-1 py-2 px-3 bg-amber-400/15 border border-amber-400/30 text-amber-300 text-xs font-bold rounded-xl text-center flex items-center justify-center gap-1.5 shadow-sm select-none">
+                  <UserCheck className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Siguiendo (Cuenta Oficial)</span>
+                </div>
+                <button
+                  id={`btn-message-user-${user.id}`}
+                  onClick={() => startPrivateChat(user.id)}
+                  className="py-2 px-4 bg-white/10 hover:bg-white/15 text-white text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 border border-white/15 active:scale-95 shadow-sm shrink-0"
+                >
+                  <MessageCircle className="w-3.5 h-3.5 text-sky-400" />
+                  <span>Mensaje</span>
+                </button>
               </div>
             ) : (
               <div className="flex items-center gap-2">

@@ -19,7 +19,15 @@ export const FollowersModal: React.FC<FollowersModalProps> = ({ type, user, onCl
   // Compute actual following list
   let followingList: UserProfile[] = [];
   if (isMe) {
-    followingList = otherUsers.filter(u => followingIds.includes(u.id) && u.id !== user.id && u.username !== user.username);
+    const isCurrentStaff = currentUser.id === 'user-staff' || currentUser.username === 'latierrita_app' || currentUser.username === 'latierrita_oficial';
+    const list = otherUsers.filter(u => followingIds.includes(u.id) && u.id !== user.id && u.username !== user.username);
+    if (!isCurrentStaff) {
+      const staffUser = otherUsers.find(u => u.id === 'user-staff' || u.username === 'latierrita_app' || u.username === 'latierrita_oficial');
+      if (staffUser && !list.some(u => u.id === staffUser.id || u.username === staffUser.username)) {
+        list.unshift(staffUser);
+      }
+    }
+    followingList = list;
   } else {
     // If viewing another profile
     if ((user.followingCount || 0) > 0) {
@@ -32,7 +40,18 @@ export const FollowersModal: React.FC<FollowersModalProps> = ({ type, user, onCl
 
   // Compute actual followers list
   let followersList: UserProfile[] = [];
-  if (isMe) {
+  const isTargetStaff = user.id === 'user-staff' || user.username === 'latierrita_app' || user.username === 'latierrita_oficial';
+
+  if (isTargetStaff) {
+    // Everyone follows the official account
+    const list: UserProfile[] = [];
+    if (currentUser.id !== 'user-staff' && currentUser.username !== 'latierrita_app') {
+      list.push(currentUser);
+    }
+    const otherCommunity = otherUsers.filter(u => u.id !== 'user-staff' && u.username !== 'latierrita_app' && u.id !== currentUser.id);
+    list.push(...otherCommunity);
+    followersList = list;
+  } else if (isMe) {
     // For current user: in a fresh account, followers are 0 unless other users follow them
     if ((currentUser.followersCount || 0) > 0) {
       followersList = otherUsers.filter(u => u.id !== currentUser.id && u.username !== currentUser.username).slice(0, currentUser.followersCount);
@@ -261,32 +280,50 @@ export const FollowersModal: React.FC<FollowersModalProps> = ({ type, user, onCl
                   </div>
 
                   {!isTargetCurrentUser ? (
-                    <button
-                      onClick={() => {
-                        if (isFollowing) {
-                          unfollowUser(item.id);
-                        } else {
-                          followUser(item.id);
-                        }
-                      }}
-                      className={`px-3.5 py-2 rounded-xl text-xs font-black transition-all shrink-0 active:scale-95 shadow-xs flex items-center gap-1.5 ${
-                        isFollowing
-                          ? 'bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border border-neutral-700'
-                          : 'bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-neutral-950 shadow-amber-400/20'
-                      }`}
-                    >
-                      {isFollowing ? (
-                        <>
-                          <UserCheck className="w-3.5 h-3.5" />
-                          <span>Siguiendo</span>
-                        </>
-                      ) : (
-                        <>
-                          <UserPlus className="w-3.5 h-3.5" />
-                          <span>Seguir</span>
-                        </>
-                      )}
-                    </button>
+                    (() => {
+                      const isOfficial = item.id === 'user-staff' || item.username === 'latierrita_app' || item.username === 'latierrita_oficial';
+                      if (isOfficial) {
+                        return (
+                          <div
+                            onClick={() => unfollowUser(item.id)}
+                            className="px-3 py-1.5 rounded-xl text-xs font-black bg-amber-400/20 text-amber-300 border border-amber-400/30 flex items-center gap-1.5 shrink-0 cursor-pointer shadow-xs select-none"
+                            title="Cuenta Oficial de La Tierrita"
+                          >
+                            <UserCheck className="w-3.5 h-3.5 text-amber-400" />
+                            <span>Siguiendo</span>
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <button
+                          onClick={() => {
+                            if (isFollowing) {
+                              unfollowUser(item.id);
+                            } else {
+                              followUser(item.id);
+                            }
+                          }}
+                          className={`px-3.5 py-2 rounded-xl text-xs font-black transition-all shrink-0 active:scale-95 shadow-xs flex items-center gap-1.5 ${
+                            isFollowing
+                              ? 'bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border border-neutral-700'
+                              : 'bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-neutral-950 shadow-amber-400/20'
+                          }`}
+                        >
+                          {isFollowing ? (
+                            <>
+                              <UserCheck className="w-3.5 h-3.5" />
+                              <span>Siguiendo</span>
+                            </>
+                          ) : (
+                            <>
+                              <UserPlus className="w-3.5 h-3.5" />
+                              <span>Seguir</span>
+                            </>
+                          )}
+                        </button>
+                      );
+                    })()
                   ) : (
                     <span className="text-[10px] font-bold px-2 py-1 bg-neutral-800 text-neutral-400 rounded-lg shrink-0">
                       Tú
