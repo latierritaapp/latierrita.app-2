@@ -470,7 +470,17 @@ export const ChatsView: React.FC = () => {
                     <div className="flex items-center gap-3 min-w-0">
                       <div className="relative shrink-0">
                         <img
-                          src={room.avatar || 'https://images.unsplash.com/photo-1511632765486-a01980e01a18?w=100&auto=format&fit=crop&q=80'}
+                          src={
+                            (room.type === 'private'
+                              ? (() => {
+                                  const otherMemberId = room.members.find(id => id !== currentUser.id);
+                                  const otherUser = otherMemberId ? getUserInfo(otherMemberId) : undefined;
+                                  return otherUser?.avatar;
+                                })()
+                              : undefined) ||
+                            room.avatar ||
+                            DEFAULT_SILHOUETTE_AVATAR
+                          }
                           alt={room.name}
                           className={`w-12 h-12 object-cover border border-neutral-200 dark:border-neutral-700 ${
                             isGroup ? 'rounded-2xl' : 'rounded-full'
@@ -489,10 +499,18 @@ export const ChatsView: React.FC = () => {
                       <div className="min-w-0">
                         <div className="flex items-center gap-1.5">
                           <span className="text-sm font-bold text-neutral-900 dark:text-white truncate">
-                            {room.name}
+                            {room.type === 'private'
+                              ? (() => {
+                                  const otherMemberId = room.members.find(id => id !== currentUser.id);
+                                  const otherUser = otherMemberId ? getUserInfo(otherMemberId) : undefined;
+                                  return otherUser ? otherUser.name : (room.name || 'Chat Privado');
+                                })()
+                              : room.name}
                           </span>
                           {room.type === 'private' && (() => {
-                            const targetUser = room.targetUserId ? getUserInfo(room.targetUserId) : room.targetUser;
+                            const otherMemberId = room.members.find(id => id !== currentUser.id);
+                            const otherUser = otherMemberId ? getUserInfo(otherMemberId) : undefined;
+                            const targetUser = otherUser || (room.targetUserId ? getUserInfo(room.targetUserId) : room.targetUser);
                             return <UserBadges isVerified={targetUser?.isVerified} staffRole={targetUser?.staffRole} />;
                           })()}
                           {isGroup ? (
@@ -718,8 +736,15 @@ export const ChatsView: React.FC = () => {
                   <div className="relative shrink-0">
                     <img
                       src={
+                        (activeChat.type === 'private'
+                          ? (() => {
+                              const otherMemberId = activeChat.members.find(id => id !== currentUser.id);
+                              const otherUser = otherMemberId ? getUserInfo(otherMemberId) : undefined;
+                              return otherUser?.avatar;
+                            })()
+                          : undefined) ||
                         activeChat.avatar ||
-                        'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=100&auto=format&fit=crop&q=80'
+                        DEFAULT_SILHOUETTE_AVATAR
                       }
                       alt={activeChat.name}
                       className={`w-9 h-9 object-cover border border-neutral-200 dark:border-neutral-700 ${
@@ -737,9 +762,21 @@ export const ChatsView: React.FC = () => {
 
                 <div className="min-w-0">
                   <h3 className="text-xs sm:text-sm font-extrabold text-white truncate max-w-[200px] sm:max-w-sm flex items-center gap-1.5">
-                    <span className="truncate">{activeChat.type === 'general' ? 'Parceros en España.' : activeChat.name}</span>
+                    <span className="truncate">
+                      {activeChat.type === 'general'
+                        ? 'Parceros en España.'
+                        : activeChat.type === 'private'
+                        ? (() => {
+                            const otherMemberId = activeChat.members.find(id => id !== currentUser.id);
+                            const otherUser = otherMemberId ? getUserInfo(otherMemberId) : undefined;
+                            return otherUser ? otherUser.name : (activeChat.name || 'Chat Privado');
+                          })()
+                        : activeChat.name}
+                    </span>
                     {activeChat.type === 'private' && (() => {
-                      const targetUser = activeChat.targetUserId ? getUserInfo(activeChat.targetUserId) : activeChat.targetUser;
+                      const otherMemberId = activeChat.members.find(id => id !== currentUser.id);
+                      const otherUser = otherMemberId ? getUserInfo(otherMemberId) : undefined;
+                      const targetUser = otherUser || (activeChat.targetUserId ? getUserInfo(activeChat.targetUserId) : activeChat.targetUser);
                       return <UserBadges isVerified={targetUser?.isVerified} staffRole={targetUser?.staffRole} />;
                     })()}
                   </h3>
@@ -1365,7 +1402,7 @@ export const ChatsView: React.FC = () => {
                 <div
                   key={user.id}
                   onClick={() => {
-                    const newChatId = startPrivateChat(user.id);
+                    const newChatId = startPrivateChat(user.id, user.name, user.avatar);
                     setSelectedPrivateOrGroupId(newChatId);
                     setActiveChatId(newChatId);
                     setShowNewPrivateModal(false);
@@ -1712,7 +1749,7 @@ export const ChatsView: React.FC = () => {
               {/* Mensaje directo */}
               <button
                 onClick={() => {
-                  const privateId = startPrivateChat(activeUserMenu.userId);
+                  const privateId = startPrivateChat(activeUserMenu.userId, activeUserMenu.userName, activeUserMenu.userAvatar);
                   setChatTypeTab('messages');
                   setSelectedPrivateOrGroupId(privateId);
                   setActiveUserMenu(null);

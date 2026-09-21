@@ -122,7 +122,7 @@ interface AppContextType {
   setActiveChatId: (id: string | null) => void;
   sendMessage: (chatId: string, text: string) => Promise<void>;
   createGroupChat: (name: string, description: string, invitedUserIds: string[], avatar?: string) => Promise<void>;
-  startPrivateChat: (targetUserId: string) => string;
+  startPrivateChat: (targetUserId: string, targetUserName?: string, targetUserAvatar?: string) => string;
   groupInvites: GroupInvite[];
   respondToGroupInvite: (inviteId: string, accept: boolean) => Promise<void>;
   inviteUserToGroup: (groupId: string, targetUserId: string) => void;
@@ -527,7 +527,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   });
 
   // Chats
-  const [chatRooms, setChatRooms] = useState<ChatRoom[]>(INITIAL_CHAT_ROOMS);
+  const [chatRooms, setChatRooms] = useState<ChatRoom[]>(() => {
+    const saved = localStorage.getItem('latierrita_chat_rooms');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      } catch {}
+    }
+    return INITIAL_CHAT_ROOMS;
+  });
+
+  useEffect(() => {
+    if (chatRooms && chatRooms.length > 0) {
+      localStorage.setItem('latierrita_chat_rooms', JSON.stringify(chatRooms));
+    }
+  }, [chatRooms]);
+
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [groupInvites, setGroupInvites] = useState<GroupInvite[]>(INITIAL_GROUP_INVITES);
   const [deletedMessageIdsForMe, setDeletedMessageIdsForMe] = useState<string[]>(() => {
@@ -2171,7 +2189,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   };
 
-  const startPrivateChat = (targetUserId: string): string => {
+  const startPrivateChat = (targetUserId: string, targetUserName?: string, targetUserAvatar?: string): string => {
     // Check if private chat already exists
     const existing = chatRooms.find(
       r => r.type === 'private' && (r.targetUserId === targetUserId || (r.members.includes(targetUserId) && r.members.includes(currentUser.id)))
@@ -2187,8 +2205,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const targetUser: UserProfile = existingUser || {
       id: targetUserId,
       username: targetUserId.replace(/^user-/, ''),
-      name: targetUserId.replace(/^user-/, '').replace(/_/g, ' '),
-      avatar: DEFAULT_SILHOUETTE_AVATAR,
+      name: targetUserName || targetUserId.replace(/^user-/, '').replace(/_/g, ' '),
+      avatar: targetUserAvatar || DEFAULT_SILHOUETTE_AVATAR,
       bio: `Usuario de La Tierrita España.`,
       website: '',
       city: currentUser.city || 'Madrid',

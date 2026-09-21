@@ -160,6 +160,7 @@ export const Navbar: React.FC = () => {
               id="btn-nav-chat-private"
               onClick={() => {
                 setChatTypeTab('messages');
+                setActiveChatId(null);
               }}
               className={`relative py-2 px-1 text-center rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1 active:scale-95 ${
                 chatTypeTab === 'messages'
