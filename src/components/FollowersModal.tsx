@@ -24,15 +24,24 @@ export const FollowersModal: React.FC<FollowersModalProps> = ({ type, user, onCl
   if (isTargetStaff) {
     // Official staff account follows 0 accounts
     followingList = [];
-  } else if (isMe) {
+  } else  if (isMe) {
     if (isCurrentStaff) {
       followingList = [];
     } else {
-      const staffUser = otherUsers.find(u => u.email === 'latierritaapp@gmail.com' || u.username === 'latierrita_app');
-      const list = otherUsers.filter(u => followingIds.includes(u.id) && u.id !== user.id && u.username !== user.username);
-      if (staffUser && !list.some(u => u.id === staffUser.id || u.username === 'latierrita_app')) {
-        list.unshift(staffUser);
-      }
+      // Find all uniquely followed users
+      const list: UserProfile[] = [];
+      const seenIds = new Set<string>();
+
+      otherUsers.forEach(u => {
+        const isFollowed = followingIds.includes(u.id) || 
+          (u.username === 'latierrita_app' && followingIds.some(id => id === 'user-staff' || id === 'latierrita_app'));
+        
+        if (isFollowed && u.id !== user.id && u.username !== user.username && !seenIds.has(u.id) && !seenIds.has(u.username)) {
+          seenIds.add(u.id);
+          seenIds.add(u.username);
+          list.push(u);
+        }
+      });
       followingList = list;
     }
   } else {
@@ -51,21 +60,26 @@ export const FollowersModal: React.FC<FollowersModalProps> = ({ type, user, onCl
   if (isTargetStaff) {
     // Everyone follows the official account: Prioritize real registered users
     const list: UserProfile[] = [];
+    const seenUsernames = new Set<string>();
+
     if (currentUser.email !== 'latierritaapp@gmail.com' && currentUser.username !== 'latierrita_app' && currentUser.id !== 'user-staff') {
       list.push(currentUser);
+      seenUsernames.add(currentUser.username.toLowerCase());
     }
+
     const otherCommunity = otherUsers.filter(u => 
       u.id !== user.id && 
       u.id !== 'user-staff' && 
       u.username !== 'latierrita_app' && 
       u.email !== 'latierritaapp@gmail.com' && 
-      u.id !== currentUser.id
+      u.id !== currentUser.id &&
+      !seenUsernames.has((u.username || '').toLowerCase())
     );
 
-    // Sort: real registered users (from database) first
+    // Sort: real registered users (from database/storage) first, mock parceros after
     otherCommunity.sort((a, b) => {
-      const aIsMock = a.id.startsWith('user-') && !a.id.includes('_') && !a.id.includes('-me');
-      const bIsMock = b.id.startsWith('user-') && !b.id.includes('_') && !b.id.includes('-me');
+      const aIsMock = a.id === 'user-mariana' || a.id === 'user-carlos' || a.id === 'user-valen' || a.id === 'user-andres' || a.id === 'user-1' || a.id === 'user-2';
+      const bIsMock = b.id === 'user-mariana' || b.id === 'user-carlos' || b.id === 'user-valen' || b.id === 'user-andres' || b.id === 'user-1' || b.id === 'user-2';
       if (!aIsMock && bIsMock) return -1;
       if (aIsMock && !bIsMock) return 1;
       return 0;

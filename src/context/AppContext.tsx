@@ -242,7 +242,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return id === 'user-staff' || username === 'latierrita_app' || username === 'latierrita_oficial' || email === 'latierritaapp@gmail.com';
   };
 
-  const [otherUsers, setOtherUsers] = useState<UserProfile[]>(OTHER_USERS);
+  const getLocalCommunity = (): UserProfile[] => {
+    try {
+      const raw = localStorage.getItem('latierrita_registered_community');
+      if (!raw) return [];
+      const list = JSON.parse(raw);
+      return Array.isArray(list) ? list : [];
+    } catch {
+      return [];
+    }
+  };
+
+  const [otherUsers, setOtherUsers] = useState<UserProfile[]>(() => {
+    const localCommunity = getLocalCommunity().filter(u => 
+      u.id !== 'user-staff' && 
+      u.username !== 'latierrita_app' && 
+      u.email !== 'latierritaapp@gmail.com' &&
+      (!currentUser || (u.id !== currentUser.id && u.username !== currentUser.username && (!u.email || u.email !== currentUser.email)))
+    );
+
+    const initial = [...localCommunity];
+    OTHER_USERS.forEach(p => {
+      if (!initial.some(m => m.id === p.id || m.username === p.username || (p.email && m.email === p.email))) {
+        initial.push(p);
+      }
+    });
+    return initial;
+  });
   const currentUserRef = useRef<UserProfile | null>(currentUser);
   currentUserRef.current = currentUser;
 
@@ -266,7 +292,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return list;
   });
 
-  // Fetch real users from Supabase profiles table
+  // Fetch real users from Supabase profiles table and sync with local community cache
   useEffect(() => {
     let isMounted = true;
     const fetchRealProfiles = async () => {
@@ -275,13 +301,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           .from('profiles')
           .select('*');
 
-        if (!error && Array.isArray(profiles) && profiles.length > 0 && isMounted) {
-          const mappedList: UserProfile[] = profiles.map(p => mapDBProfileToUserProfile(p));
-          const current = currentUserRef.current;
+        const localList = getLocalCommunity();
+        const current = currentUserRef.current;
+        let mappedList: UserProfile[] = [];
 
+        if (!error && Array.isArray(profiles) && profiles.length > 0) {
+          mappedList = profiles.map(p => mapDBProfileToUserProfile(p));
+        }
+
+        // Merge DB profiles and local community
+        const allReal = [...mappedList];
+        localList.forEach(loc => {
+          if (!allReal.some(r => r.id === loc.id || r.username === loc.username || (loc.email && r.email === loc.email))) {
+            allReal.push(loc);
+          }
+        });
+
+        if (allReal.length > 0 && isMounted) {
           setOtherUsers(prev => {
-            // Only keep valid profiles from database, excluding current user and any fake user-staff
-            const validProfiles = mappedList.filter(p => {
+            // Filter out current user and staff account
+            const validProfiles = allReal.filter(p => {
               if (p.id === 'user-staff') return false;
               if (p.username === 'latierrita_app' && p.email !== 'latierritaapp@gmail.com') return false;
               if (current && (p.id === current.id || (p.email && current.email && p.email === current.email))) return false;

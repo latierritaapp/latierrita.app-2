@@ -68,6 +68,32 @@ const sanitizeDisplayName = (name: string | undefined | null, username: string, 
   return 'Colombiano en España';
 };
 
+export const safeSetLocalStorage = (key: string, value: any): void => {
+  try {
+    localStorage.setItem(key, typeof value === 'string' ? value : JSON.stringify(value));
+  } catch (e) {
+    console.warn(`[Storage] Failed to save key "${key}" to localStorage:`, e);
+  }
+};
+
+export const saveUserToCommunityCache = (user: UserProfile): void => {
+  if (!user || !user.id || user.id === 'user-staff' || user.username === 'latierrita_app' || user.email === 'latierritaapp@gmail.com') return;
+  try {
+    const raw = localStorage.getItem('latierrita_registered_community');
+    let list: UserProfile[] = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(list)) list = [];
+    const idx = list.findIndex(u => u.id === user.id || u.username === user.username || (u.email && user.email && u.email === user.email));
+    if (idx >= 0) {
+      list[idx] = { ...list[idx], ...user };
+    } else {
+      list.unshift(user);
+    }
+    safeSetLocalStorage('latierrita_registered_community', list);
+  } catch (e) {
+    console.warn('Error saving to community cache:', e);
+  }
+};
+
 // Mapeador de base de datos Postgres (snake_case) a React State (camelCase)
 export const mapDBProfileToUserProfile = (db: any): UserProfile => {
   const isOfficialEmail = (db.email || '').trim().toLowerCase() === 'latierritaapp@gmail.com';
@@ -100,8 +126,8 @@ export const mapDBProfileToUserProfile = (db: any): UserProfile => {
     website: db.website || (isStaff ? 'https://latierrita.es' : ''),
     city: db.city || 'Madrid',
     originCity: db.origin_city || (isStaff ? 'Toda Colombia' : 'Colombia'),
-    followersCount: Array.isArray(db.followers) ? db.followers.length : (isStaff ? 15420 : 0),
-    followingCount: Array.isArray(db.following) ? db.following.length : (isStaff ? 12 : 1),
+    followersCount: Array.isArray(db.followers) ? db.followers.length : (typeof db.followers_count === 'number' ? db.followers_count : 0),
+    followingCount: isStaff ? 0 : (Array.isArray(db.following) ? db.following.length : 1),
     postsCount: 0,
     isVerified: isStaff ? true : (db.verified || false),
     staffRole: isStaff ? 'ADMIN' : (db.staff_role || 'Usuario'),
@@ -319,8 +345,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 ...(localProfile.socialLinks || {})
               }
             };
+            saveUserToCommunityCache(merged);
             setUserProfile(merged);
-            localStorage.setItem('latierrita_user', JSON.stringify(merged));
+            safeSetLocalStorage('latierrita_user', merged);
           } else {
             // New user from OAuth or first login - synthesize profile while preserving all local edits
             const meta = user.user_metadata || {};
@@ -359,12 +386,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             } catch (upsertErr) {
               console.warn('Upsert note in onAuthStateChange:', upsertErr);
             }
+            saveUserToCommunityCache(newProfile);
             setUserProfile(newProfile);
-            localStorage.setItem('latierrita_user', JSON.stringify(newProfile));
+            safeSetLocalStorage('latierrita_user', newProfile);
             if (cleanUsername !== 'latierrita_app' && user.id !== 'user-staff') {
               const currentFollowing = localStorage.getItem('latierrita_following');
               if (!currentFollowing) {
-                localStorage.setItem('latierrita_following', JSON.stringify([]));
+                safeSetLocalStorage('latierrita_following', []);
               }
             }
           }
@@ -728,7 +756,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       };
       updatedProfile = merged;
-      localStorage.setItem('latierrita_user', JSON.stringify(merged));
+      saveUserToCommunityCache(merged);
+      safeSetLocalStorage('latierrita_user', merged);
       return merged;
     });
 

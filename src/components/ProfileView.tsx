@@ -82,14 +82,14 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userToDisplay }) => {
   ).length + (!isMe && !isCurrentStaff ? 1 : 0);
 
   const displayFollowersCount = isOfficialStaff 
-    ? Math.max(user.followersCount || 0, communityFollowersCount)
-    : (user.followersCount || 0);
+    ? communityFollowersCount
+    : (isMe ? (currentUser.followersCount || 0) : (user.followersCount || 0));
 
   const cleanFollowingLength = followingIds.filter(id => id !== 'user-staff' && id !== 'latierrita_oficial' && id !== currentUser.id).length;
 
   const displayFollowingCount = isOfficialStaff || isCurrentStaff
     ? 0
-    : (isMe ? Math.max(1, cleanFollowingLength) : (user.followingCount || 0));
+    : (isMe ? cleanFollowingLength : (user.followingCount || 0));
 
   // Posts for the profile
   const userPosts: PostItem[] = (isMe

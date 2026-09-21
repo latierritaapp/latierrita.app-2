@@ -1,5 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { useApp } from '../context/AppContext';
+import { DEFAULT_SILHOUETTE_AVATAR } from '../context/AuthContext';
+import { optimizeAvatarImage } from '../lib/imageOptimizer';
 import {
   X,
   Camera,
@@ -16,7 +18,9 @@ import {
   AtSign,
   FileText,
   Lock,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Loader2,
+  Trash2
 } from 'lucide-react';
 import { SPANISH_CITIES } from '../data/citiesData';
 import { SpanishCity } from '../types';
@@ -44,28 +48,47 @@ export const EditProfileModal: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isOptimizingImage, setIsOptimizingImage] = useState(false);
 
-  const handleAvatarFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAvatarFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      if (file.size > 8 * 1024 * 1024) {
-        setValidationError('La imagen no debe superar los 8MB.');
-        return;
-      }
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        if (event.target?.result) {
-          setAvatar(event.target.result as string);
-          setValidationError(null);
-        }
-      };
-      reader.readAsDataURL(file);
+    if (!file) return;
+
+    if (file.size > 20 * 1024 * 1024) {
+      setValidationError('La imagen no debe superar los 20MB.');
+      return;
+    }
+
+    try {
+      setIsOptimizingImage(true);
+      setValidationError(null);
+      const optimizedUrl = await optimizeAvatarImage(file, 400, 0.85);
+      setAvatar(optimizedUrl);
+    } catch (err: any) {
+      console.error('Error procesando imagen:', err);
+      setValidationError('No se pudo procesar la imagen seleccionada. Inténtalo con otra foto.');
+    } finally {
+      setIsOptimizingImage(false);
+      // Reset input value so same file can be picked again if desired
+      if (e.target) e.target.value = '';
     }
   };
 
   const triggerGalleryPicker = () => {
     fileInputRef.current?.click();
   };
+
+  const handleRemoveAvatar = () => {
+    setAvatar(DEFAULT_SILHOUETTE_AVATAR);
+    setValidationError(null);
+  };
+
+  const hasCustomAvatar = Boolean(
+    avatar &&
+    avatar.trim() !== '' &&
+    avatar !== DEFAULT_SILHOUETTE_AVATAR &&
+    !avatar.includes('data:image/svg+xml')
+  );
 
   // Sincronizar el estado del formulario con el usuario actual al abrir el modal
   React.useEffect(() => {
@@ -212,32 +235,76 @@ export const EditProfileModal: React.FC = () => {
             <div
               className="relative group cursor-pointer"
               onClick={triggerGalleryPicker}
-              title="Toca para elegir una foto de tu galería"
+              title={hasCustomAvatar ? "Toca para cambiar foto" : "Toca para añadir foto"}
             >
               <div className="w-24 h-24 rounded-full p-1 bg-gradient-to-tr from-amber-400 via-rose-500 to-blue-600 shadow-md">
                 <img
-                  src={avatar || undefined}
+                  src={avatar || DEFAULT_SILHOUETTE_AVATAR}
                   alt={name}
                   className="w-full h-full rounded-full object-cover border-2 border-white dark:border-neutral-900"
                   referrerPolicy="no-referrer"
                 />
               </div>
-              <div className="absolute inset-0 bg-black/40 rounded-full flex flex-col items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity">
-                <Camera className="w-6 h-6 mb-1" />
-                <span className="text-[10px] font-bold">Galería</span>
-              </div>
+              {isOptimizingImage ? (
+                <div className="absolute inset-0 bg-black/60 rounded-full flex flex-col items-center justify-center text-white">
+                  <Loader2 className="w-6 h-6 animate-spin text-amber-400 mb-1" />
+                  <span className="text-[10px] font-bold">Procesando</span>
+                </div>
+              ) : (
+                <div className="absolute inset-0 bg-black/40 rounded-full flex flex-col items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity">
+                  <Camera className="w-6 h-6 mb-1" />
+                  <span className="text-[10px] font-bold">{hasCustomAvatar ? "Cambiar" : "Añadir foto"}</span>
+                </div>
+              )}
             </div>
-            <button
-              type="button"
-              id="btn-choose-avatar-gallery"
-              onClick={triggerGalleryPicker}
-              className="inline-flex items-center gap-1.5 text-xs font-bold text-amber-600 dark:text-amber-400 hover:text-amber-500 hover:underline mt-2.5 px-3 py-1.5 rounded-full bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 active:scale-95 transition-all"
-            >
-              <ImageIcon className="w-3.5 h-3.5 text-amber-500" />
-              <span>Elegir foto de la galería</span>
-            </button>
+
+            {hasCustomAvatar ? (
+              <div className="flex items-center gap-2 mt-2.5">
+                <button
+                  type="button"
+                  id="btn-change-avatar-gallery"
+                  disabled={isOptimizingImage}
+                  onClick={triggerGalleryPicker}
+                  className="inline-flex items-center gap-1.5 text-xs font-bold text-amber-600 dark:text-amber-400 hover:text-amber-500 hover:underline px-3.5 py-1.5 rounded-full bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 active:scale-95 transition-all disabled:opacity-50"
+                >
+                  {isOptimizingImage ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-500" />
+                  ) : (
+                    <Camera className="w-3.5 h-3.5 text-amber-500" />
+                  )}
+                  <span>{isOptimizingImage ? 'Optimizando foto...' : 'Cambiar foto'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  id="btn-remove-avatar"
+                  disabled={isOptimizingImage}
+                  onClick={handleRemoveAvatar}
+                  className="inline-flex items-center gap-1.5 text-xs font-bold text-rose-600 dark:text-rose-400 hover:text-rose-500 hover:underline px-3.5 py-1.5 rounded-full bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800/60 active:scale-95 transition-all disabled:opacity-50"
+                >
+                  <Trash2 className="w-3.5 h-3.5 text-rose-500" />
+                  <span>Quitar foto</span>
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                id="btn-add-avatar-gallery"
+                disabled={isOptimizingImage}
+                onClick={triggerGalleryPicker}
+                className="inline-flex items-center gap-1.5 text-xs font-bold text-amber-600 dark:text-amber-400 hover:text-amber-500 hover:underline mt-2.5 px-4 py-1.5 rounded-full bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 active:scale-95 transition-all disabled:opacity-50"
+              >
+                {isOptimizingImage ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-500" />
+                ) : (
+                  <Camera className="w-3.5 h-3.5 text-amber-500" />
+                )}
+                <span>{isOptimizingImage ? 'Optimizando foto...' : 'Añadir foto de Perfil'}</span>
+              </button>
+            )}
+
             <span className="text-[11px] text-neutral-400 mt-1">
-              Formatos JPG, PNG, WEBP (máx. 8MB)
+              Formatos JPG, PNG, WEBP (se optimiza automáticamente)
             </span>
           </div>
 
