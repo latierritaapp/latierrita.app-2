@@ -2071,8 +2071,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 type: targetRoom.type,
                 name: targetRoom.name,
                 description: targetRoom.description || '',
-                city: targetRoom.city || null,
-                members: targetRoom.members || [],
                 created_at: targetRoom.createdAt || new Date().toISOString().split('T')[0],
                 messages: finalMessages
               }], { onConflict: 'id' });
