@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { useAuth, DEFAULT_SILHOUETTE_AVATAR, mapDBProfileToUserProfile } from './AuthContext';
 import { supabase } from '../lib/supabase';
-import { db, doc, updateDoc, deleteDoc, setDoc, collection, onSnapshot, addDoc, getDocs, query, where } from '../lib/firebase';
+import { db, doc, updateDoc, deleteDoc, setDoc, collection, onSnapshot, addDoc, getDoc, getDocs, query, where } from '../lib/firebase';
 import {
   UserProfile,
   StoryItem,
@@ -698,17 +698,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     let isMounted = true;
 
+    // Seed default rooms once on mount if they don't exist in DB
+    const seedDefaultRooms = async () => {
+      for (const defaultRoom of INITIAL_CHAT_ROOMS) {
+        try {
+          const docRef = doc(db, 'chat_rooms', defaultRoom.id);
+          const docSnap = await getDoc(docRef);
+          if (!docSnap.exists()) {
+            await setDoc(docRef, defaultRoom, { merge: true });
+          }
+        } catch (err) {
+          // Ignore seeding errors if offline
+        }
+      }
+    };
+
+    seedDefaultRooms();
+
     const fetchRooms = async () => {
       try {
-        // Auto-seed default rooms so they always exist in DB for any user/account
-        for (const defaultRoom of INITIAL_CHAT_ROOMS) {
-          try {
-            await setDoc(doc(db, 'chat_rooms', defaultRoom.id), defaultRoom, { merge: true });
-          } catch (err) {
-            // Ignore seeding errors if offline
-          }
-        }
-
         const snapshot = await getDocs(query(collection(db, 'chat_rooms')));
         if (!isMounted) return;
 
@@ -762,7 +770,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     fetchRooms();
-    const interval = setInterval(fetchRooms, 4000); // Poll every 4 seconds for bulletproof real-time sync across accounts
+    const interval = setInterval(fetchRooms, 3000); // Poll every 3 seconds for fast real-time sync across accounts
 
     let unsub: any;
     try {
