@@ -43,12 +43,29 @@ export const FollowersModal: React.FC<FollowersModalProps> = ({ type, user, onCl
   const isTargetStaff = user.id === 'user-staff' || user.username === 'latierrita_app' || user.username === 'latierrita_oficial' || user.email === 'latierritaapp@gmail.com';
 
   if (isTargetStaff) {
-    // Everyone follows the official account
+    // Everyone follows the official account: Prioritize real registered users
     const list: UserProfile[] = [];
-    if (currentUser.id !== 'user-staff' && currentUser.username !== 'latierrita_app') {
+    if (currentUser.id !== 'user-staff' && currentUser.username !== 'latierrita_app' && currentUser.username !== 'latierrita_oficial' && currentUser.email !== 'latierritaapp@gmail.com') {
       list.push(currentUser);
     }
-    const otherCommunity = otherUsers.filter(u => u.id !== 'user-staff' && u.username !== 'latierrita_app' && u.id !== currentUser.id);
+    const otherCommunity = otherUsers.filter(u => 
+      u.id !== user.id && 
+      u.id !== 'user-staff' && 
+      u.username !== 'latierrita_app' && 
+      u.username !== 'latierrita_oficial' && 
+      u.email !== 'latierritaapp@gmail.com' && 
+      u.id !== currentUser.id
+    );
+
+    // Sort: real registered users (from database) first
+    otherCommunity.sort((a, b) => {
+      const aIsMock = a.id.startsWith('user-') && !a.id.includes('_') && !a.id.includes('-me');
+      const bIsMock = b.id.startsWith('user-') && !b.id.includes('_') && !b.id.includes('-me');
+      if (!aIsMock && bIsMock) return -1;
+      if (aIsMock && !bIsMock) return 1;
+      return 0;
+    });
+
     list.push(...otherCommunity);
     followersList = list;
   } else if (isMe) {

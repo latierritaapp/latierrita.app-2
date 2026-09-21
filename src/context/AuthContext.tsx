@@ -294,6 +294,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               age: localProfile.age !== undefined ? localProfile.age : mapped.age,
               city: localProfile.city || mapped.city,
               originCity: localProfile.originCity || mapped.originCity,
+              followersCount: mapped.followersCount !== undefined ? mapped.followersCount : (localProfile.followersCount || 0),
               followingCount: mapped.followingCount || (isStaff ? 0 : 1),
               socialLinks: {
                 ...(mapped.socialLinks || {}),

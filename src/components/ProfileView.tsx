@@ -53,6 +53,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userToDisplay }) => {
     addComment,
     deletePostByAdmin,
     setSelectedUserProfile,
+    otherUsers,
     triggerPlushNotification
   } = useApp();
   const { isGuest, logout } = useAuth();
@@ -73,7 +74,18 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userToDisplay }) => {
   const isFollowing = !isMe && (isOfficialStaff || (followingIds.includes(user.id) && user.id !== currentUser.id));
 
   const isCurrentStaff = currentUser.username === 'latierrita_app' || currentUser.username === 'latierrita_oficial' || currentUser.id === 'user-staff' || currentUser.email === 'latierritaapp@gmail.com';
-  const displayFollowersCount = user.followersCount || 0;
+  
+  const communityFollowersCount = otherUsers.filter(u => 
+    u.id !== user.id && 
+    u.username !== 'latierrita_app' && 
+    u.username !== 'latierrita_oficial' && 
+    u.email !== 'latierritaapp@gmail.com'
+  ).length + (!isMe && !isCurrentStaff ? 1 : 0);
+
+  const displayFollowersCount = isOfficialStaff 
+    ? Math.max(user.followersCount || 0, communityFollowersCount)
+    : (user.followersCount || 0);
+
   const displayFollowingCount = isMe
     ? (isCurrentStaff ? (currentUser.followingCount || 0) : Math.max(1, followingIds.length))
     : (isOfficialStaff ? (user.followingCount || 12) : (user.followingCount || 0));

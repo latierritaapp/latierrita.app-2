@@ -267,13 +267,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Fetch real users from Supabase profiles table
   useEffect(() => {
+    let isMounted = true;
     const fetchRealProfiles = async () => {
       try {
         const { data: profiles, error } = await supabase
           .from('profiles')
           .select('*');
 
-        if (!error && Array.isArray(profiles) && profiles.length > 0) {
+        if (!error && Array.isArray(profiles) && profiles.length > 0 && isMounted) {
           const mappedList: UserProfile[] = profiles.map(p => mapDBProfileToUserProfile(p));
 
           setOtherUsers(prev => {
@@ -283,10 +284,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             // Retain mock users only if they don't conflict with real database users
             prev.forEach(p => {
               // If real staff exists in DB, replace placeholder 'user-staff'
-              if (realStaff && (p.id === 'user-staff' || p.username === 'latierrita_app' || p.username === 'latierrita_oficial')) {
+              if (realStaff && (p.id === 'user-staff' || p.username === 'latierrita_app' || p.username === 'latierrita_oficial' || p.email === 'latierritaapp@gmail.com')) {
                 return;
               }
-              if (!merged.some(m => m.id === p.id || m.username === p.username)) {
+              if (!merged.some(m => m.id === p.id || m.username === p.username || (m.email && m.email === p.email))) {
                 merged.push(p);
               }
             });
@@ -310,6 +311,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     fetchRealProfiles();
+
+    // Subscribe to realtime profile updates from Supabase
+    const channel = supabase
+      .channel('public_profiles_changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => {
+        fetchRealProfiles();
+      })
+      .subscribe();
+
+    return () => {
+      isMounted = false;
+      supabase.removeChannel(channel);
+    };
   }, [currentUser]);
 
   // Sync with Firebase/Supabase userProfile
@@ -320,17 +334,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         sanitized.staffRole = 'Usuario';
         sanitized.isVerified = false;
       }
-      const isStaff = isStaffAccount(sanitized.id, sanitized.username);
+      const isStaff = isStaffAccount(sanitized.id, sanitized.username, sanitized.email);
       if (!isStaff) {
         sanitized.followingCount = Math.max(sanitized.followingCount || 0, followingIds.length, 1);
+      } else {
+        const communityFollowersCount = otherUsers.filter(u => !isStaffAccount(u.id, u.username, u.email)).length;
+        sanitized.followersCount = Math.max(sanitized.followersCount || 0, communityFollowersCount);
       }
       setCurrentUser(sanitized);
     }
-  }, [userProfile, followingIds]);
+  }, [userProfile, followingIds, otherUsers]);
 
   // Keep following list strictly clean of self-following and ensure @latierrita_app is followed
   useEffect(() => {
-    const isCurrentStaff = isStaffAccount(currentUser?.id, currentUser?.username);
+    const isCurrentStaff = isStaffAccount(currentUser?.id, currentUser?.username, currentUser?.email);
     setFollowingIds(prev => {
       let cleaned = prev.filter(id => id !== currentUser.id && (!isCurrentStaff || id !== 'user-staff'));
       if (!isCurrentStaff && !cleaned.includes('user-staff')) {
