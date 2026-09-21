@@ -70,15 +70,14 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userToDisplay }) => {
   const isMe = !userToDisplay || userToDisplay.id === currentUser.id || (Boolean(currentUser.username) && userToDisplay.username === currentUser.username);
   const user = isMe ? currentUser : userToDisplay;
 
-  const isOfficialStaff = user.username === 'latierrita_app' || user.username === 'latierrita_oficial' || user.id === 'user-staff' || user.email === 'latierritaapp@gmail.com';
+  const isOfficialStaff = (user.email && user.email.trim().toLowerCase() === 'latierritaapp@gmail.com') || user.username === 'latierrita_app' || user.id === 'user-staff';
   const isFollowing = !isMe && (isOfficialStaff || (followingIds.includes(user.id) && user.id !== currentUser.id));
 
-  const isCurrentStaff = currentUser.username === 'latierrita_app' || currentUser.username === 'latierrita_oficial' || currentUser.id === 'user-staff' || currentUser.email === 'latierritaapp@gmail.com';
+  const isCurrentStaff = (currentUser.email && currentUser.email.trim().toLowerCase() === 'latierritaapp@gmail.com') || currentUser.username === 'latierrita_app' || currentUser.id === 'user-staff';
   
   const communityFollowersCount = otherUsers.filter(u => 
     u.id !== user.id && 
     u.username !== 'latierrita_app' && 
-    u.username !== 'latierrita_oficial' && 
     u.email !== 'latierritaapp@gmail.com'
   ).length + (!isMe && !isCurrentStaff ? 1 : 0);
 

@@ -19,17 +19,12 @@ export const FollowersModal: React.FC<FollowersModalProps> = ({ type, user, onCl
   // Compute actual following list
   let followingList: UserProfile[] = [];
   if (isMe) {
-    const isCurrentStaff = currentUser.id === 'user-staff' || currentUser.username === 'latierrita_app' || currentUser.username === 'latierrita_oficial' || currentUser.email === 'latierritaapp@gmail.com';
+    const isCurrentStaff = currentUser.email === 'latierritaapp@gmail.com' || currentUser.username === 'latierrita_app' || currentUser.id === 'user-staff';
     const list = otherUsers.filter(u => followingIds.includes(u.id) && u.id !== user.id && u.username !== user.username);
     if (!isCurrentStaff) {
-      let staffUser = otherUsers.find(u => u.id === 'user-staff' || u.username === 'latierrita_app' || u.username === 'latierrita_oficial' || u.email === 'latierritaapp@gmail.com');
-      if (staffUser) {
-        if (staffUser.username === 'latierrita_oficial') {
-          staffUser = { ...staffUser, username: 'latierrita_app' };
-        }
-        if (!list.some(u => u.id === staffUser?.id || u.username === 'latierrita_app' || u.username === 'latierrita_oficial')) {
-          list.unshift(staffUser);
-        }
+      const staffUser = otherUsers.find(u => u.email === 'latierritaapp@gmail.com' || u.username === 'latierrita_app');
+      if (staffUser && !list.some(u => u.id === staffUser.id || u.username === 'latierrita_app')) {
+        list.unshift(staffUser);
       }
     }
     followingList = list;
@@ -45,19 +40,18 @@ export const FollowersModal: React.FC<FollowersModalProps> = ({ type, user, onCl
 
   // Compute actual followers list
   let followersList: UserProfile[] = [];
-  const isTargetStaff = user.id === 'user-staff' || user.username === 'latierrita_app' || user.username === 'latierrita_oficial' || user.email === 'latierritaapp@gmail.com';
+  const isTargetStaff = user.email === 'latierritaapp@gmail.com' || user.username === 'latierrita_app' || user.id === 'user-staff';
 
   if (isTargetStaff) {
     // Everyone follows the official account: Prioritize real registered users
     const list: UserProfile[] = [];
-    if (currentUser.id !== 'user-staff' && currentUser.username !== 'latierrita_app' && currentUser.username !== 'latierrita_oficial' && currentUser.email !== 'latierritaapp@gmail.com') {
+    if (currentUser.email !== 'latierritaapp@gmail.com' && currentUser.username !== 'latierrita_app' && currentUser.id !== 'user-staff') {
       list.push(currentUser);
     }
     const otherCommunity = otherUsers.filter(u => 
       u.id !== user.id && 
       u.id !== 'user-staff' && 
       u.username !== 'latierrita_app' && 
-      u.username !== 'latierrita_oficial' && 
       u.email !== 'latierritaapp@gmail.com' && 
       u.id !== currentUser.id
     );
@@ -292,7 +286,7 @@ export const FollowersModal: React.FC<FollowersModalProps> = ({ type, user, onCl
                         )}
                       </div>
                       <div className="text-xs text-amber-400/90 font-semibold truncate">
-                        @{item.username === 'latierrita_oficial' ? 'latierrita_app' : item.username}
+                        @{item.username}
                       </div>
                       <div className="text-[11px] text-neutral-400 flex items-center gap-1 mt-0.5 truncate">
                         <MapPin className="w-3 h-3 text-neutral-500 shrink-0" />
@@ -303,7 +297,7 @@ export const FollowersModal: React.FC<FollowersModalProps> = ({ type, user, onCl
 
                   {!isTargetCurrentUser ? (
                     (() => {
-                      const isOfficial = item.id === 'user-staff' || item.username === 'latierrita_app' || item.username === 'latierrita_oficial' || item.email === 'latierritaapp@gmail.com';
+                      const isOfficial = item.email === 'latierritaapp@gmail.com' || item.username === 'latierrita_app' || item.id === 'user-staff';
                       if (isOfficial) {
                         return (
                           <div

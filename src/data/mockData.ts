@@ -102,21 +102,6 @@ export const OTHER_USERS: UserProfile[] = [
     followersCount: 890,
     followingCount: 298,
     postsCount: 19,
-  },
-  {
-    id: 'user-staff',
-    username: 'latierrita_app',
-    name: 'La Tierrita 🇨🇴',
-    avatar: 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=400&auto=format&fit=crop&q=80',
-    bio: '⭐ Cuenta oficial de Staff & Publicidad de La Tierrita España. Conectando a los colombianos.',
-    website: 'https://latierrita.es',
-    city: 'Madrid',
-    originCity: 'Toda Colombia',
-    followersCount: 15420,
-    followingCount: 12,
-    postsCount: 45,
-    isVerified: true,
-    staffRole: 'ADMIN'
   }
 ];
 
@@ -322,7 +307,7 @@ export const INITIAL_STAFF_MEMBERS: StaffMember[] = [
     username: 'latierrita_app',
     avatar: 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=400&auto=format&fit=crop&q=80',
     role: 'ADMIN',
-    email: 'admin@latierrita.es',
+    email: 'latierritaapp@gmail.com',
     pin: '7890',
     status: 'Activo'
   },

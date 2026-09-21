@@ -275,30 +275,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           .select('*');
 
         if (!error && Array.isArray(profiles) && profiles.length > 0 && isMounted) {
-          const mappedList: UserProfile[] = profiles.map(p => {
-            const mapped = mapDBProfileToUserProfile(p);
-            if (mapped.username === 'latierrita_oficial' || mapped.email === 'latierritaapp@gmail.com') {
-              mapped.username = 'latierrita_app';
-            }
-            return mapped;
-          });
+          const mappedList: UserProfile[] = profiles.map(p => mapDBProfileToUserProfile(p));
 
           setOtherUsers(prev => {
-            const realStaff = mappedList.find(p => p.email === 'latierritaapp@gmail.com' || p.username === 'latierrita_app' || p.username === 'latierrita_oficial');
-            const merged = [...mappedList];
+            const realStaff = mappedList.find(p => p.email === 'latierritaapp@gmail.com');
             
-            // Retain mock users only if they don't conflict with real database users
+            // Only keep valid profiles from database, excluding current user and any fake user-staff
+            const validProfiles = mappedList.filter(p => {
+              if (p.id === 'user-staff') return false;
+              if (p.username === 'latierrita_app' && p.email !== 'latierritaapp@gmail.com') return false;
+              if (currentUser && (p.id === currentUser.id || (p.email && currentUser.email && p.email === currentUser.email))) return false;
+              return true;
+            });
+
+            const merged = [...validProfiles];
+            
+            // Retain mock parceros (mariana, carlos, valen, andres) only if they are not the official account or current user
             prev.forEach(p => {
-              // If real staff exists in DB, replace placeholder 'user-staff'
-              if (realStaff && (p.id === 'user-staff' || p.username === 'latierrita_app' || p.username === 'latierrita_oficial' || p.email === 'latierritaapp@gmail.com')) {
+              // Strictly discard any fake staff account or username duplicates
+              if (p.id === 'user-staff' || p.username === 'latierrita_app' || p.username === 'latierrita_oficial') {
                 return;
               }
-              const cleanUser = { ...p };
-              if (cleanUser.username === 'latierrita_oficial') {
-                cleanUser.username = 'latierrita_app';
+              if (currentUser && (p.id === currentUser.id || (p.email && currentUser.email && p.email === currentUser.email))) {
+                return;
               }
-              if (!merged.some(m => m.id === cleanUser.id || m.username === cleanUser.username || (cleanUser.email && m.email === cleanUser.email))) {
-                merged.push(cleanUser);
+              if (!merged.some(m => m.id === p.id || m.username === p.username || (p.email && m.email === p.email))) {
+                merged.push(p);
               }
             });
 
@@ -306,7 +308,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             if (realStaff && !isStaffAccount(currentUser?.id, currentUser?.username, currentUser?.email)) {
               setFollowingIds(fIds => {
                 const targetId = realStaff.id;
-                const cleaned = fIds.filter(id => id !== 'latierrita_oficial');
+                const cleaned = fIds.filter(id => id !== 'user-staff' && id !== 'latierrita_oficial');
                 if (!cleaned.includes(targetId)) {
                   return [...cleaned, targetId];
                 }

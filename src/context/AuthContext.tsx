@@ -70,20 +70,21 @@ const sanitizeDisplayName = (name: string | undefined | null, username: string, 
 
 // Mapeador de base de datos Postgres (snake_case) a React State (camelCase)
 export const mapDBProfileToUserProfile = (db: any): UserProfile => {
-  const isOfficialEmail = db.email === 'latierritaapp@gmail.com';
-  let cleanUsername = (isOfficialEmail || db.username === 'latierrita_oficial') 
+  const isOfficialEmail = (db.email || '').trim().toLowerCase() === 'latierritaapp@gmail.com';
+  let cleanUsername = isOfficialEmail 
     ? 'latierrita_app' 
     : sanitizeHandle(db.username, db.email, db.id);
 
-  if (cleanUsername === 'latierrita_oficial') {
-    cleanUsername = 'latierrita_app';
+  // If any other profile claims latierrita_app or latierrita_oficial without the official email, sanitize it
+  if (!isOfficialEmail && (cleanUsername === 'latierrita_app' || cleanUsername === 'latierrita_oficial')) {
+    cleanUsername = sanitizeHandle('', db.email, db.id);
   }
 
   const displayName = isOfficialEmail && (!db.name || db.name.includes('@')) 
     ? 'La Tierrita 🇨🇴' 
     : sanitizeDisplayName(db.name, cleanUsername, db.email);
 
-  const isStaff = isOfficialEmail || cleanUsername === 'latierrita_app';
+  const isStaff = isOfficialEmail;
 
   return {
     id: db.id,
@@ -290,11 +291,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               mapped.followingCount = Math.max(mapped.followingCount || 0, fList.length);
             }
 
+            const isOfficial = (user.email || '').trim().toLowerCase() === 'latierritaapp@gmail.com';
+            let finalUsername = isOfficial ? 'latierrita_app' : (localProfile.username || mapped.username);
+            if (!isOfficial && (finalUsername === 'latierrita_app' || finalUsername === 'latierrita_oficial')) {
+              finalUsername = mapped.username && mapped.username !== 'latierrita_app' && mapped.username !== 'latierrita_oficial' 
+                ? mapped.username 
+                : sanitizeHandle('', user.email, user.id);
+            }
+
             const merged: UserProfile = {
               ...mapped,
               id: user.id,
               name: (localProfile.name && localProfile.name !== 'Colombiano en España' && localProfile.name !== 'Usuario') ? localProfile.name : (mapped.name || localProfile.name || 'Usuario'),
-              username: localProfile.username || mapped.username,
+              username: finalUsername,
               bio: localProfile.bio !== undefined ? localProfile.bio : mapped.bio,
               website: localProfile.website !== undefined ? localProfile.website : (mapped.website || ''),
               avatar: (localProfile.avatar && localProfile.avatar !== DEFAULT_SILHOUETTE_AVATAR) ? localProfile.avatar : (mapped.avatar || DEFAULT_SILHOUETTE_AVATAR),
