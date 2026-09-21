@@ -502,7 +502,7 @@ export const EditProfileModal: React.FC = () => {
                     type="text"
                     value={instagram}
                     onChange={e => setInstagram(e.target.value)}
-                    placeholder="usuario (ej. juancamilo_es)"
+                    placeholder="usuario (ej. usuario_colombia)"
                     className="w-full pl-7 pr-3.5 py-2 bg-neutral-100 dark:bg-neutral-800 text-neutral-900 dark:text-white text-xs rounded-xl border border-neutral-200 dark:border-neutral-700 focus:outline-none focus:ring-1 focus:ring-pink-500"
                   />
                 </div>

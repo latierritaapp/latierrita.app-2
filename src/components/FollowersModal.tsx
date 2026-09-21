@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useApp } from '../context/AppContext';
+import { useApp, isFictitiousUser } from '../context/AppContext';
 import { UserProfile } from '../types';
 import { ArrowLeft, X, Search, UserCheck, UserPlus, Users, BadgeCheck, Compass, MapPin } from 'lucide-react';
 
@@ -33,6 +33,7 @@ export const FollowersModal: React.FC<FollowersModalProps> = ({ type, user, onCl
       const seenIds = new Set<string>();
 
       otherUsers.forEach(u => {
+        if (isFictitiousUser(u.id, u.username)) return;
         const isFollowed = followingIds.includes(u.id) || 
           (u.username === 'latierrita_app' && followingIds.some(id => id === 'user-staff' || id === 'latierrita_app'));
         
@@ -48,7 +49,7 @@ export const FollowersModal: React.FC<FollowersModalProps> = ({ type, user, onCl
     // If viewing another profile
     if ((user.followingCount || 0) > 0) {
       // Return known followed users up to followingCount
-      followingList = otherUsers.filter(u => u.id !== user.id && u.username !== user.username).slice(0, user.followingCount);
+      followingList = otherUsers.filter(u => !isFictitiousUser(u.id, u.username) && u.id !== user.id && u.username !== user.username).slice(0, user.followingCount);
     } else {
       followingList = [];
     }
@@ -73,24 +74,16 @@ export const FollowersModal: React.FC<FollowersModalProps> = ({ type, user, onCl
       u.username !== 'latierrita_app' && 
       u.email !== 'latierritaapp@gmail.com' && 
       u.id !== currentUser.id &&
+      !isFictitiousUser(u.id, u.username) &&
       !seenUsernames.has((u.username || '').toLowerCase())
     );
-
-    // Sort: real registered users (from database/storage) first, mock parceros after
-    otherCommunity.sort((a, b) => {
-      const aIsMock = a.id === 'user-mariana' || a.id === 'user-carlos' || a.id === 'user-valen' || a.id === 'user-andres' || a.id === 'user-1' || a.id === 'user-2';
-      const bIsMock = b.id === 'user-mariana' || b.id === 'user-carlos' || b.id === 'user-valen' || b.id === 'user-andres' || b.id === 'user-1' || b.id === 'user-2';
-      if (!aIsMock && bIsMock) return -1;
-      if (aIsMock && !bIsMock) return 1;
-      return 0;
-    });
 
     list.push(...otherCommunity);
     followersList = list;
   } else if (isMe) {
     // For current user: in a fresh account, followers are 0 unless other users follow them
     if ((currentUser.followersCount || 0) > 0) {
-      followersList = otherUsers.filter(u => u.id !== currentUser.id && u.username !== currentUser.username).slice(0, currentUser.followersCount);
+      followersList = otherUsers.filter(u => !isFictitiousUser(u.id, u.username) && u.id !== currentUser.id && u.username !== currentUser.username).slice(0, currentUser.followersCount);
     } else {
       followersList = [];
     }
@@ -101,10 +94,10 @@ export const FollowersModal: React.FC<FollowersModalProps> = ({ type, user, onCl
       list.push(currentUser);
     }
     if ((user.followersCount || 0) > list.length) {
-      const remaining = otherUsers.filter(u => u.id !== user.id && u.id !== currentUser.id && u.username !== user.username);
+      const remaining = otherUsers.filter(u => !isFictitiousUser(u.id, u.username) && u.id !== user.id && u.id !== currentUser.id && u.username !== user.username);
       list.push(...remaining.slice(0, (user.followersCount || 0) - list.length));
     }
-    followersList = list.filter(u => u.id !== user.id && u.username !== user.username);
+    followersList = list.filter(u => !isFictitiousUser(u.id, u.username) && u.id !== user.id && u.username !== user.username);
   }
 
   const currentList = activeTabType === 'following' ? followingList : followersList;

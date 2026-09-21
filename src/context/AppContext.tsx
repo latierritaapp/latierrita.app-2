@@ -119,21 +119,21 @@ interface AppContextType {
   chatRooms: ChatRoom[];
   activeChatId: string | null;
   setActiveChatId: (id: string | null) => void;
-  sendMessage: (chatId: string, text: string) => void;
-  createGroupChat: (name: string, description: string, invitedUserIds: string[], avatar?: string) => void;
+  sendMessage: (chatId: string, text: string) => Promise<void>;
+  createGroupChat: (name: string, description: string, invitedUserIds: string[], avatar?: string) => Promise<void>;
   startPrivateChat: (targetUserId: string) => string;
   groupInvites: GroupInvite[];
-  respondToGroupInvite: (inviteId: string, accept: boolean) => void;
+  respondToGroupInvite: (inviteId: string, accept: boolean) => Promise<void>;
   inviteUserToGroup: (groupId: string, targetUserId: string) => void;
-  reactToMessage: (chatId: string, messageId: string, emoji: string) => void;
+  reactToMessage: (chatId: string, messageId: string, emoji: string) => Promise<void>;
   deleteMessageForMe: (messageId: string) => void;
-  deleteMessageForEveryone: (chatId: string, messageId: string) => void;
+  deleteMessageForEveryone: (chatId: string, messageId: string) => Promise<void>;
   deletedMessageIdsForMe: string[];
-  deleteChatRoom: (chatId: string) => void;
-  leaveGroupChat: (groupId: string) => void;
-  toggleGroupAdmin: (groupId: string, userId: string) => void;
-  removeGroupMember: (groupId: string, userId: string) => void;
-  addMembersToGroup: (groupId: string, userIds: string[]) => void;
+  deleteChatRoom: (chatId: string) => Promise<void>;
+  leaveGroupChat: (groupId: string) => Promise<void>;
+  toggleGroupAdmin: (groupId: string, userId: string) => Promise<void>;
+  removeGroupMember: (groupId: string, userId: string) => Promise<void>;
+  addMembersToGroup: (groupId: string, userIds: string[]) => Promise<void>;
 
   // Reports
   reports: ContentReport[];
@@ -217,6 +217,42 @@ const handleFirestoreError = (error: unknown, operationType: OperationType, path
   console.warn('Database non-fatal warning: ', JSON.stringify(errInfo));
 };
 
+export const FICTITIOUS_USERNAMES = [
+  'juancamilo_es',
+  'mariana_bcn',
+  'carlos_valencia',
+  'valen_madrid',
+  'andres_sevilla'
+];
+
+export const FICTITIOUS_IDS = [
+  'user-mariana',
+  'user-carlos',
+  'user-valen',
+  'user-andres',
+  'user-1',
+  'user-2',
+  'user-juancamilo'
+];
+
+export const isFictitiousUser = (id?: string, username?: string): boolean => {
+  if (!id && !username) return false;
+  const cleanId = (id || '').toLowerCase();
+  const cleanUsername = (username || '').toLowerCase();
+  if (FICTITIOUS_IDS.includes(cleanId)) return true;
+  if (FICTITIOUS_USERNAMES.includes(cleanUsername)) return true;
+  if (
+    cleanUsername.includes('juancamilo_es') ||
+    cleanUsername.includes('mariana_bcn') ||
+    cleanUsername.includes('carlos_valencia') ||
+    cleanUsername.includes('valen_madrid') ||
+    cleanUsername.includes('andres_sevilla')
+  ) {
+    return true;
+  }
+  return false;
+};
+
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { userProfile, updateUserProfile } = useAuth();
 
@@ -226,9 +262,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (parsed.username === 'juancamilo_es') {
-          parsed.staffRole = 'Usuario';
-          parsed.isVerified = false;
+        if (isFictitiousUser(parsed.id, parsed.username)) {
+          return INITIAL_CURRENT_USER;
         }
         return parsed;
       } catch (e) {
@@ -258,12 +293,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       u.id !== 'user-staff' && 
       u.username !== 'latierrita_app' && 
       u.email !== 'latierritaapp@gmail.com' &&
+      !isFictitiousUser(u.id, u.username) &&
       (!currentUser || (u.id !== currentUser.id && u.username !== currentUser.username && (!u.email || u.email !== currentUser.email)))
     );
 
     const initial = [...localCommunity];
     OTHER_USERS.forEach(p => {
-      if (!initial.some(m => m.id === p.id || m.username === p.username || (p.email && m.email === p.email))) {
+      if (!isFictitiousUser(p.id, p.username) && !initial.some(m => m.id === p.id || m.username === p.username || (p.email && m.email === p.email))) {
         initial.push(p);
       }
     });
@@ -309,29 +345,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           mappedList = profiles.map(p => mapDBProfileToUserProfile(p));
         }
 
-        // Merge DB profiles and local community
-        const allReal = [...mappedList];
+        // Merge DB profiles and local community, filtering out fictitious users
+        const allReal = [...mappedList].filter(p => !isFictitiousUser(p.id, p.username));
         localList.forEach(loc => {
-          if (!allReal.some(r => r.id === loc.id || r.username === loc.username || (loc.email && r.email === loc.email))) {
+          if (!isFictitiousUser(loc.id, loc.username) && !allReal.some(r => r.id === loc.id || r.username === loc.username || (loc.email && r.email === loc.email))) {
             allReal.push(loc);
           }
         });
 
         if (allReal.length > 0 && isMounted) {
           setOtherUsers(prev => {
-            // Filter out current user and staff account
+            // Filter out current user, staff account, and fictitious users
             const validProfiles = allReal.filter(p => {
               if (p.id === 'user-staff') return false;
               if (p.username === 'latierrita_app' && p.email !== 'latierritaapp@gmail.com') return false;
+              if (isFictitiousUser(p.id, p.username)) return false;
               if (current && (p.id === current.id || (p.email && current.email && p.email === current.email))) return false;
               return true;
             });
 
             const merged = [...validProfiles];
             
-            // Retain mock parceros only if they are not the official account or current user
+            // Do NOT retain fictitious parceros
             prev.forEach(p => {
-              if (p.id === 'user-staff' || p.username === 'latierrita_app' || p.username === 'latierrita_oficial') {
+              if (p.id === 'user-staff' || p.username === 'latierrita_app' || p.username === 'latierrita_oficial' || isFictitiousUser(p.id, p.username)) {
                 return;
               }
               if (current && (p.id === current.id || (p.email && current.email && p.email === current.email))) {
@@ -654,6 +691,56 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } catch (e) {
       setPosts([]);
       console.warn('Failed to listen to posts in DB:', e);
+    }
+  }, []);
+
+  // Sync Chat Rooms from Firestore
+  useEffect(() => {
+    try {
+      const unsub = onSnapshot(collection(db, 'chat_rooms'), async (snapshot) => {
+        const roomsMap = new Map<string, ChatRoom>();
+        
+        INITIAL_CHAT_ROOMS.forEach(r => {
+          roomsMap.set(r.id, { ...r, messages: Array.isArray(r.messages) ? r.messages : [] });
+        });
+
+        if (!snapshot.empty) {
+          snapshot.forEach((docSnap: any) => {
+            const data = docSnap.data() || {};
+            const room: ChatRoom = {
+              id: docSnap.id,
+              type: data.type || 'general',
+              name: data.name || 'Chat',
+              avatar: data.avatar || '',
+              city: data.city,
+              targetUserId: data.targetUserId,
+              targetUser: data.targetUser,
+              description: data.description,
+              members: Array.isArray(data.members) ? data.members : [],
+              admins: Array.isArray(data.admins) ? data.admins : [],
+              createdBy: data.createdBy,
+              createdAt: data.createdAt || '2026-01-01',
+              messages: Array.isArray(data.messages) ? data.messages : []
+            };
+            roomsMap.set(room.id, room);
+          });
+        } else {
+          for (const defaultRoom of INITIAL_CHAT_ROOMS) {
+            try {
+              await setDoc(doc(db, 'chat_rooms', defaultRoom.id), defaultRoom);
+            } catch (err) {
+              console.warn('Failed to seed default chat room:', err);
+            }
+          }
+        }
+
+        setChatRooms(Array.from(roomsMap.values()));
+      }, (error) => {
+        console.warn('Chat rooms listener error:', error?.message || error);
+      });
+      return () => unsub();
+    } catch (e) {
+      console.warn('Failed to listen to chat_rooms in DB:', e);
     }
   }, []);
 
@@ -1570,7 +1657,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Chats
-  const sendMessage = (chatId: string, text: string) => {
+  const sendMessage = async (chatId: string, text: string) => {
     if (!text.trim()) return;
 
     // Simulated SHA-256 E2E Encryption fingerprint
@@ -1589,16 +1676,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       encryptedHash: simulatedHash
     };
 
-    setChatRooms(prev => prev.map(room => {
-      if (room.id !== chatId) return room;
-      return {
-        ...room,
-        messages: [...room.messages, newMsg]
-      };
-    }));
+    const targetRoom = chatRooms.find(r => r.id === chatId);
+    if (!targetRoom) return;
+
+    const updatedRoom = {
+      ...targetRoom,
+      messages: [...targetRoom.messages, newMsg]
+    };
+
+    setChatRooms(prev => prev.map(room => room.id === chatId ? updatedRoom : room));
+
+    try {
+      await setDoc(doc(db, 'chat_rooms', chatId), updatedRoom, { merge: true });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, 'chat_rooms');
+    }
   };
 
-  const createGroupChat = (name: string, description: string, invitedUserIds: string[], avatar?: string) => {
+  const createGroupChat = async (name: string, description: string, invitedUserIds: string[], avatar?: string) => {
     const newGroupId = `chat-group-${Date.now()}`;
     const newRoom: ChatRoom = {
       id: newGroupId,
@@ -1609,6 +1704,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       createdBy: currentUser.id,
       createdAt: new Date().toISOString().split('T')[0],
       members: [currentUser.id],
+      admins: [currentUser.id],
       status: 'active',
       messages: [
         {
@@ -1626,6 +1722,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     setChatRooms(prev => [...prev, newRoom]);
     setActiveChatId(newGroupId);
+
+    try {
+      await setDoc(doc(db, 'chat_rooms', newGroupId), newRoom);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, 'chat_rooms');
+    }
 
     // Send invitations
     invitedUserIds.forEach(targetId => {
@@ -1699,6 +1801,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setChatRooms(prev => [...prev, newRoom]);
     setActiveChatId(newChatId);
     setActiveTab('chats');
+
+    setDoc(doc(db, 'chat_rooms', newChatId), newRoom).catch(error => {
+      handleFirestoreError(error, OperationType.CREATE, 'chat_rooms');
+    });
+
     return newChatId;
   };
 
@@ -1716,7 +1823,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   };
 
-  const respondToGroupInvite = (inviteId: string, accept: boolean) => {
+  const respondToGroupInvite = async (inviteId: string, accept: boolean) => {
     const invite = groupInvites.find(i => i.id === inviteId);
     if (!invite) return;
 
@@ -1724,15 +1831,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     if (accept) {
       // Add user to the group
-      setChatRooms(prev => prev.map(room => {
-        if (room.id === invite.groupId) {
-          return {
-            ...room,
-            members: [...room.members, currentUser.id]
-          };
+      const targetRoom = chatRooms.find(r => r.id === invite.groupId);
+      if (targetRoom) {
+        const updatedMembers = Array.from(new Set([...targetRoom.members, currentUser.id]));
+        const updatedRoom = {
+          ...targetRoom,
+          members: updatedMembers
+        };
+        setChatRooms(prev => prev.map(room => room.id === invite.groupId ? updatedRoom : room));
+        try {
+          await setDoc(doc(db, 'chat_rooms', invite.groupId), updatedRoom, { merge: true });
+        } catch (error) {
+          handleFirestoreError(error, OperationType.UPDATE, 'chat_rooms');
         }
-        return room;
-      }));
+      }
 
       triggerPlushNotification({
         type: 'group_invite',
@@ -1750,62 +1862,72 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const reactToMessage = (chatId: string, messageId: string, emoji: string) => {
-    setChatRooms(prev => prev.map(room => {
-      if (room.id !== chatId) return room;
-      return {
-        ...room,
-        messages: room.messages.map(msg => {
-          if (msg.id !== messageId) return msg;
-          const currentReactions = msg.reactions || [];
+  const reactToMessage = async (chatId: string, messageId: string, emoji: string) => {
+    const targetRoom = chatRooms.find(r => r.id === chatId);
+    if (!targetRoom) return;
 
-          // 1. Check if user already reacted with THIS exact emoji
-          const existingSameEmoji = currentReactions.find(r => r.emoji === emoji && r.users.includes(currentUser.id));
+    const updatedMessages = targetRoom.messages.map(msg => {
+      if (msg.id !== messageId) return msg;
+      const currentReactions = msg.reactions || [];
 
-          // Remove currentUser.id from ALL existing reactions on this message
-          let cleanedReactions = currentReactions.map(r => {
-            if (r.users.includes(currentUser.id)) {
-              const filteredUsers = r.users.filter(u => u !== currentUser.id);
-              return {
-                ...r,
-                count: filteredUsers.length,
-                users: filteredUsers
-              };
-            }
-            return r;
-          }).filter(r => r.count > 0);
+      // 1. Check if user already reacted with THIS exact emoji
+      const existingSameEmoji = currentReactions.find(r => r.emoji === emoji && r.users.includes(currentUser.id));
 
-          // If user already had this exact emoji, removing it toggles it OFF
-          if (existingSameEmoji) {
-            return {
-              ...msg,
-              reactions: cleanedReactions
-            };
-          }
-
-          // Otherwise, add currentUser.id to the target emoji
-          const targetEmojiIndex = cleanedReactions.findIndex(r => r.emoji === emoji);
-          if (targetEmojiIndex > -1) {
-            cleanedReactions[targetEmojiIndex] = {
-              ...cleanedReactions[targetEmojiIndex],
-              count: cleanedReactions[targetEmojiIndex].count + 1,
-              users: [...cleanedReactions[targetEmojiIndex].users, currentUser.id]
-            };
-          } else {
-            cleanedReactions.push({
-              emoji,
-              count: 1,
-              users: [currentUser.id]
-            });
-          }
-
+      // Remove currentUser.id from ALL existing reactions on this message
+      let cleanedReactions = currentReactions.map(r => {
+        if (r.users.includes(currentUser.id)) {
+          const filteredUsers = r.users.filter(u => u !== currentUser.id);
           return {
-            ...msg,
-            reactions: cleanedReactions
+            ...r,
+            count: filteredUsers.length,
+            users: filteredUsers
           };
-        })
+        }
+        return r;
+      }).filter(r => r.count > 0);
+
+      // If user already had this exact emoji, removing it toggles it OFF
+      if (existingSameEmoji) {
+        return {
+          ...msg,
+          reactions: cleanedReactions
+        };
+      }
+
+      // Otherwise, add currentUser.id to the target emoji
+      const targetEmojiIndex = cleanedReactions.findIndex(r => r.emoji === emoji);
+      if (targetEmojiIndex > -1) {
+        cleanedReactions[targetEmojiIndex] = {
+          ...cleanedReactions[targetEmojiIndex],
+          count: cleanedReactions[targetEmojiIndex].count + 1,
+          users: [...cleanedReactions[targetEmojiIndex].users, currentUser.id]
+        };
+      } else {
+        cleanedReactions.push({
+          emoji,
+          count: 1,
+          users: [currentUser.id]
+        });
+      }
+
+      return {
+        ...msg,
+        reactions: cleanedReactions
       };
-    }));
+    });
+
+    const updatedRoom = {
+      ...targetRoom,
+      messages: updatedMessages
+    };
+
+    setChatRooms(prev => prev.map(room => room.id === chatId ? updatedRoom : room));
+
+    try {
+      await setDoc(doc(db, 'chat_rooms', chatId), updatedRoom, { merge: true });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, 'chat_rooms');
+    }
   };
 
   const deleteMessageForMe = (messageId: string) => {
@@ -1817,22 +1939,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   };
 
-  const deleteMessageForEveryone = (chatId: string, messageId: string) => {
-    setChatRooms(prev => prev.map(room => {
-      if (room.id !== chatId) return room;
+  const deleteMessageForEveryone = async (chatId: string, messageId: string) => {
+    const targetRoom = chatRooms.find(r => r.id === chatId);
+    if (!targetRoom) return;
+
+    const updatedMessages = targetRoom.messages.map(msg => {
+      if (msg.id !== messageId) return msg;
       return {
-        ...room,
-        messages: room.messages.map(msg => {
-          if (msg.id !== messageId) return msg;
-          return {
-            ...msg,
-            text: 'Este mensaje se elimino para todos.',
-            deletedForEveryone: true,
-            reactions: []
-          };
-        })
+        ...msg,
+        text: 'Este mensaje se elimino para todos.',
+        deletedForEveryone: true,
+        reactions: []
       };
-    }));
+    });
+
+    const updatedRoom = {
+      ...targetRoom,
+      messages: updatedMessages
+    };
+
+    setChatRooms(prev => prev.map(room => room.id === chatId ? updatedRoom : room));
+
+    try {
+      await setDoc(doc(db, 'chat_rooms', chatId), updatedRoom, { merge: true });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, 'chat_rooms');
+    }
+
     triggerPlushNotification({
       type: 'system',
       title: 'Mensaje eliminado',
@@ -1840,10 +1973,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   };
 
-  const deleteChatRoom = (chatId: string) => {
+  const deleteChatRoom = async (chatId: string) => {
     setChatRooms(prev => prev.filter(r => r.id !== chatId));
     if (activeChatId === chatId) {
       setActiveChatId(null);
+    }
+    try {
+      await deleteDoc(doc(db, 'chat_rooms', chatId));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, 'chat_rooms');
     }
     triggerPlushNotification({
       type: 'system',
@@ -1852,21 +1990,34 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   };
 
-  const leaveGroupChat = (groupId: string) => {
+  const leaveGroupChat = async (groupId: string) => {
     const group = chatRooms.find(r => r.id === groupId);
-    setChatRooms(prev => prev.map(room => {
-      if (room.id !== groupId) return room;
-      const newMembers = room.members.filter(id => id !== currentUser.id);
-      const newAdmins = (room.admins || []).filter(id => id !== currentUser.id);
-      return {
-        ...room,
+    if (!group) return;
+
+    const newMembers = group.members.filter(id => id !== currentUser.id);
+    const newAdmins = (group.admins || []).filter(id => id !== currentUser.id);
+
+    if (newMembers.length === 0) {
+      setChatRooms(prev => prev.filter(r => r.id !== groupId));
+      if (activeChatId === groupId) setActiveChatId(null);
+      try {
+        await deleteDoc(doc(db, 'chat_rooms', groupId));
+      } catch (err) {
+        handleFirestoreError(err, OperationType.DELETE, 'chat_rooms');
+      }
+    } else {
+      const updatedRoom = {
+        ...group,
         members: newMembers,
         admins: newAdmins
       };
-    }).filter(room => room.type !== 'group' || room.members.length > 0));
-
-    if (activeChatId === groupId) {
-      setActiveChatId(null);
+      setChatRooms(prev => prev.map(room => room.id === groupId ? updatedRoom : room));
+      if (activeChatId === groupId) setActiveChatId(null);
+      try {
+        await setDoc(doc(db, 'chat_rooms', groupId), updatedRoom, { merge: true });
+      } catch (err) {
+        handleFirestoreError(err, OperationType.UPDATE, 'chat_rooms');
+      }
     }
 
     triggerPlushNotification({
@@ -1876,7 +2027,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   };
 
-  const toggleGroupAdmin = (groupId: string, userId: string) => {
+  const toggleGroupAdmin = async (groupId: string, userId: string) => {
     const room = chatRooms.find(r => r.id === groupId);
     if (!room) return;
 
@@ -1889,19 +2040,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return;
     }
 
-    setChatRooms(prev => prev.map(r => {
-      if (r.id !== groupId) return r;
-      const currentAdmins = r.admins || (r.createdBy ? [r.createdBy] : [currentUser.id]);
-      const isAdmin = currentAdmins.includes(userId);
-      const newAdmins = isAdmin
-        ? currentAdmins.filter(id => id !== userId)
-        : [...currentAdmins, userId];
+    const currentAdmins = room.admins || (room.createdBy ? [room.createdBy] : [currentUser.id]);
+    const isAdmin = currentAdmins.includes(userId);
+    const newAdmins = isAdmin
+      ? currentAdmins.filter(id => id !== userId)
+      : [...currentAdmins, userId];
 
-      return {
-        ...r,
-        admins: newAdmins
-      };
-    }));
+    const updatedRoom = {
+      ...room,
+      admins: newAdmins
+    };
+
+    setChatRooms(prev => prev.map(r => r.id === groupId ? updatedRoom : r));
+
+    try {
+      await setDoc(doc(db, 'chat_rooms', groupId), updatedRoom, { merge: true });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, 'chat_rooms');
+    }
 
     const targetUser = otherUsers.find(u => u.id === userId);
     triggerPlushNotification({
@@ -1911,7 +2067,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   };
 
-  const removeGroupMember = (groupId: string, userId: string) => {
+  const removeGroupMember = async (groupId: string, userId: string) => {
     const room = chatRooms.find(r => r.id === groupId);
     if (!room) return;
 
@@ -1924,14 +2080,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return;
     }
 
-    setChatRooms(prev => prev.map(r => {
-      if (r.id !== groupId) return r;
-      return {
-        ...r,
-        members: r.members.filter(id => id !== userId),
-        admins: (r.admins || []).filter(id => id !== userId)
-      };
-    }));
+    const updatedRoom = {
+      ...room,
+      members: room.members.filter(id => id !== userId),
+      admins: (room.admins || []).filter(id => id !== userId)
+    };
+
+    setChatRooms(prev => prev.map(r => r.id === groupId ? updatedRoom : r));
+
+    try {
+      await setDoc(doc(db, 'chat_rooms', groupId), updatedRoom, { merge: true });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, 'chat_rooms');
+    }
 
     const targetUser = otherUsers.find(u => u.id === userId);
     triggerPlushNotification({
@@ -1941,16 +2102,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   };
 
-  const addMembersToGroup = (groupId: string, userIds: string[]) => {
-    setChatRooms(prev => prev.map(room => {
-      if (room.id !== groupId) return room;
-      const existingMembers = new Set(room.members);
-      userIds.forEach(id => existingMembers.add(id));
-      return {
-        ...room,
-        members: Array.from(existingMembers)
-      };
-    }));
+  const addMembersToGroup = async (groupId: string, userIds: string[]) => {
+    const room = chatRooms.find(r => r.id === groupId);
+    if (!room) return;
+
+    const existingMembers = new Set(room.members);
+    userIds.forEach(id => existingMembers.add(id));
+
+    const updatedRoom = {
+      ...room,
+      members: Array.from(existingMembers)
+    };
+
+    setChatRooms(prev => prev.map(r => r.id === groupId ? updatedRoom : r));
+
+    try {
+      await setDoc(doc(db, 'chat_rooms', groupId), updatedRoom, { merge: true });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, 'chat_rooms');
+    }
 
     userIds.forEach(id => inviteUserToGroup(groupId, id));
   };
