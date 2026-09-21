@@ -571,7 +571,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       const unsub = onSnapshot(collection(db, 'banners'), (snapshot) => {
         if (snapshot.empty) {
-          setAdBanners(INITIAL_AD_BANNERS);
+          setAdBanners([]);
         } else {
           const list: AdBanner[] = [];
           snapshot.forEach((docSnap: any) => {
@@ -580,12 +580,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           setAdBanners(list);
         }
       }, (error) => {
-        setAdBanners(INITIAL_AD_BANNERS);
-        console.warn('Banners listener using fallback data:', error?.message || error);
+        setAdBanners([]);
+        console.warn('Banners listener error:', error?.message || error);
       });
       return () => unsub();
     } catch (e) {
-      setAdBanners(INITIAL_AD_BANNERS);
+      setAdBanners([]);
       console.warn('Failed to listen to banners in DB:', e);
     }
   }, []);
@@ -595,7 +595,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       const unsub = onSnapshot(collection(db, 'stories'), (snapshot) => {
         if (snapshot.empty) {
-          setStories(INITIAL_STORIES);
+          setStories([]);
         } else {
           const list: StoryItem[] = [];
           snapshot.forEach((docSnap: any) => {
@@ -612,12 +612,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           setStories(list);
         }
       }, (error) => {
-        setStories(INITIAL_STORIES);
-        console.warn('Stories listener using fallback data:', error?.message || error);
+        setStories([]);
+        console.warn('Stories listener error:', error?.message || error);
       });
       return () => unsub();
     } catch (e) {
-      setStories(INITIAL_STORIES);
+      setStories([]);
       console.warn('Failed to listen to stories in DB:', e);
     }
   }, []);
@@ -627,7 +627,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       const unsub = onSnapshot(collection(db, 'posts'), (snapshot) => {
         if (snapshot.empty) {
-          setPosts(INITIAL_POSTS);
+          setPosts([]);
         } else {
           const list: PostItem[] = [];
           snapshot.forEach((docSnap: any) => {
@@ -647,12 +647,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           setPosts(list);
         }
       }, (error) => {
-        setPosts(INITIAL_POSTS);
-        console.warn('Posts listener using fallback data:', error?.message || error);
+        setPosts([]);
+        console.warn('Posts listener error:', error?.message || error);
       });
       return () => unsub();
     } catch (e) {
-      setPosts(INITIAL_POSTS);
+      setPosts([]);
       console.warn('Failed to listen to posts in DB:', e);
     }
   }, []);
@@ -662,7 +662,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       const unsub = onSnapshot(collection(db, 'support_tickets'), (snapshot) => {
         if (snapshot.empty) {
-          setSupportTickets(INITIAL_SUPPORT_TICKETS);
+          setSupportTickets([]);
         } else {
           const list: SupportTicket[] = [];
           snapshot.forEach((docSnap: any) => {
@@ -671,12 +671,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           setSupportTickets(list);
         }
       }, (error) => {
-        setSupportTickets(INITIAL_SUPPORT_TICKETS);
-        console.warn('Support tickets listener using fallback data:', error?.message || error);
+        setSupportTickets([]);
+        console.warn('Support tickets listener error:', error?.message || error);
       });
       return () => unsub();
     } catch (e) {
-      setSupportTickets(INITIAL_SUPPORT_TICKETS);
+      setSupportTickets([]);
       console.warn('Failed to listen to support_tickets in DB:', e);
     }
   }, []);
@@ -686,7 +686,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       const unsub = onSnapshot(collection(db, 'verification_requests'), (snapshot) => {
         if (snapshot.empty) {
-          setVerificationRequests(INITIAL_VERIFICATION_REQUESTS);
+          setVerificationRequests([]);
         } else {
           const list: VerificationRequest[] = [];
           snapshot.forEach((docSnap: any) => {
@@ -695,12 +695,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           setVerificationRequests(list);
         }
       }, (error) => {
-        setVerificationRequests(INITIAL_VERIFICATION_REQUESTS);
-        console.warn('Verification requests listener using fallback data:', error?.message || error);
+        setVerificationRequests([]);
+        console.warn('Verification requests listener error:', error?.message || error);
       });
       return () => unsub();
     } catch (e) {
-      setVerificationRequests(INITIAL_VERIFICATION_REQUESTS);
+      setVerificationRequests([]);
       console.warn('Failed to listen to verification_requests in DB:', e);
     }
   }, []);
@@ -710,7 +710,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       const unsub = onSnapshot(collection(db, 'staff_members'), (snapshot) => {
         if (snapshot.empty) {
-          setStaffMembers(INITIAL_STAFF_MEMBERS);
+          setStaffMembers([]);
         } else {
           const list: StaffMember[] = [];
           snapshot.forEach((docSnap: any) => {
@@ -719,12 +719,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           setStaffMembers(list);
         }
       }, (error) => {
-        setStaffMembers(INITIAL_STAFF_MEMBERS);
-        console.warn('Staff members listener using fallback data:', error?.message || error);
+        setStaffMembers([]);
+        console.warn('Staff members listener error:', error?.message || error);
       });
       return () => unsub();
     } catch (e) {
-      setStaffMembers(INITIAL_STAFF_MEMBERS);
+      setStaffMembers([]);
       console.warn('Failed to listen to staff_members in DB:', e);
     }
   }, []);
@@ -736,15 +736,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (docSnap.exists() && docSnap.data()) {
           setStartupAdConfig({ id: docSnap.id, ...docSnap.data() } as StartupAdConfig);
         } else {
-          setStartupAdConfig(DEFAULT_STARTUP_AD);
+          setStartupAdConfig(null);
         }
       }, (error) => {
-        setStartupAdConfig(DEFAULT_STARTUP_AD);
-        console.warn('Startup ad config listener using fallback data:', error?.message || error);
+        setStartupAdConfig(null);
+        console.warn('Startup ad config listener error:', error?.message || error);
       });
       return () => unsub();
     } catch (e) {
-      setStartupAdConfig(DEFAULT_STARTUP_AD);
+      setStartupAdConfig(null);
       console.warn('Failed to listen to startup_ad config in DB:', e);
     }
   }, []);
@@ -1097,14 +1097,43 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Places state
-  const [places, setPlaces] = useState<PlaceItem[]>(INITIAL_PLACES);
+  const [places, setPlaces] = useState<PlaceItem[]>([]);
 
-  const addPlace = (placeData: Omit<PlaceItem, 'id'>) => {
+  useEffect(() => {
+    try {
+      const unsub = onSnapshot(collection(db, 'places'), (snapshot) => {
+        if (snapshot.empty) {
+          setPlaces([]);
+        } else {
+          const list: PlaceItem[] = [];
+          snapshot.forEach((docSnap: any) => {
+            list.push({ id: docSnap.id, ...docSnap.data() } as PlaceItem);
+          });
+          setPlaces(list);
+        }
+      }, (error) => {
+        setPlaces([]);
+        console.warn('Places listener error:', error?.message || error);
+      });
+      return () => unsub();
+    } catch (e) {
+      setPlaces([]);
+      console.warn('Failed to listen to places in DB:', e);
+    }
+  }, []);
+
+  const addPlace = async (placeData: Omit<PlaceItem, 'id'>) => {
+    const newPlaceId = `place-${Date.now()}`;
     const newPlace: PlaceItem = {
       ...placeData,
-      id: `place-${Date.now()}`
+      id: newPlaceId
     };
     setPlaces(prev => [newPlace, ...prev]);
+    try {
+      await setDoc(doc(db, 'places', newPlaceId), newPlace);
+    } catch (e) {
+      console.warn('Failed to write place to Firestore:', e);
+    }
     triggerPlushNotification({
       type: 'system',
       title: 'Lugar agregado a La Tierrita',

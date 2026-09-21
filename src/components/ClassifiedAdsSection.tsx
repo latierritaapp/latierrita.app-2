@@ -34,73 +34,7 @@ const AD_CATEGORIES: { label: ClassifiedCategory | 'Todos'; icon: React.FC<{ cla
   { label: 'Eventos & Clases', icon: Music }
 ];
 
-const INITIAL_ADS: ClassifiedAdItem[] = [
-  {
-    id: 'ad-1',
-    title: 'Se alquila habitación luminosa para persona sola o pareja colombiana',
-    category: 'Vivienda & Habitaciones',
-    city: 'Madrid',
-    description: 'Habitación amplia amoblada cerca del metro Oporto. Ambiente tranquilo y familiar.',
-    contactName: 'Carlos Alberto Gómez',
-    contactUsername: 'carlos_valencia',
-    contactPhone: '+34 612 345 678',
-    whatsapp: '+34 612 345 678',
-    price: '380 €/mes',
-    imageUrl: 'https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?w=600&auto=format&fit=crop&q=80',
-    date: 'Hoy',
-    isPromoted: true,
-    tags: ['Metro Oporto', 'Gastos incluidos', 'Ambiente familiar']
-  },
-  {
-    id: 'ad-2',
-    title: 'Se busca cocinero(a) con experiencia en sazón colombiana',
-    category: 'Empleo & Trabajo',
-    city: 'Barcelona',
-    description: 'Restaurante típico en centro de Barcelona busca cocinero con sazón en bandeja paisa y ajiaco.',
-    contactName: 'Mariana Restrepo',
-    contactUsername: 'mariana_bcn',
-    contactPhone: '+34 678 901 234',
-    whatsapp: '+34 678 901 234',
-    contactEmail: 'empleo@mitierritabcn.es',
-    price: '1.450 € - 1.650 €',
-    imageUrl: 'https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=600&auto=format&fit=crop&q=80',
-    date: 'Ayer',
-    isPromoted: true,
-    tags: ['Contrato', 'Restaurante', 'Jornada Completa']
-  },
-  {
-    id: 'ad-3',
-    title: 'Venta de camisetas de la Selección Colombia originales y ruanas boyacenses',
-    category: 'Compra & Venta',
-    city: 'Toda España',
-    description: 'Camisetas oficiales de la Selección, ruanas 100% lana virgen de Nobsa y sombreros vueltiaos.',
-    contactName: 'Andrés Felipe Ruiz',
-    contactUsername: 'andres_sevilla',
-    contactPhone: '+34 654 321 098',
-    whatsapp: '+34 654 321 098',
-    price: 'Desde 35 €',
-    imageUrl: 'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=600&auto=format&fit=crop&q=80',
-    date: 'Hace 2 días',
-    isPromoted: false,
-    tags: ['Selección Colombia', 'Ruanas', 'Envíos a toda España']
-  },
-  {
-    id: 'ad-4',
-    title: 'Clases y talleres de Salsa Caleña, Bachata y Cumbia en Valencia',
-    category: 'Eventos & Clases',
-    city: 'Valencia',
-    description: 'Aprende a bailar con profesores colombianos. Clases grupales y personalizadas para todos los niveles.',
-    contactName: 'Valentina Morales',
-    contactUsername: 'valen_madrid',
-    contactPhone: '+34 699 112 233',
-    whatsapp: '+34 699 112 233',
-    price: '15 € / clase',
-    imageUrl: 'https://images.unsplash.com/photo-1450133064473-71024230f91b?w=600&auto=format&fit=crop&q=80',
-    date: 'Hace 3 días',
-    isPromoted: false,
-    tags: ['Salsa Caleña', 'Bailes Latinos', 'Valencia']
-  }
-];
+const INITIAL_ADS: ClassifiedAdItem[] = [];
 
 export const ClassifiedAdsSection: React.FC = () => {
   const {

@@ -84,6 +84,12 @@ service cloud.firestore {
       allow update, delete: if isAuthenticated();
     }
 
+    // Places
+    match /places/{placeId} {
+      allow read: if true;
+      allow write: if isAuthenticated();
+    }
+
     // Config (e.g. startup ad config)
     match /config/{configId} {
       allow read: if true;
