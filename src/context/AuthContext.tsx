@@ -260,12 +260,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const mapped = mapDBProfileToUserProfile(profile);
             const merged: UserProfile = {
               ...mapped,
-              ...(localProfile.id === user.id || localProfile.username === mapped.username ? localProfile : {}),
+              id: user.id,
               name: (localProfile.name && localProfile.name !== 'Colombiano en España') ? localProfile.name : mapped.name,
               username: localProfile.username || mapped.username,
               bio: localProfile.bio !== undefined ? localProfile.bio : mapped.bio,
               website: localProfile.website !== undefined ? localProfile.website : (mapped.website || ''),
-              avatar: localProfile.avatar || mapped.avatar,
+              avatar: (localProfile.avatar && localProfile.avatar !== DEFAULT_SILHOUETTE_AVATAR) ? localProfile.avatar : mapped.avatar,
               age: localProfile.age !== undefined ? localProfile.age : mapped.age,
               city: localProfile.city || mapped.city,
               originCity: localProfile.originCity || mapped.originCity,
@@ -279,9 +279,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           } else {
             // New user from OAuth or first login - synthesize profile while respecting local edits
             const meta = user.user_metadata || {};
-            const cleanUsername = sanitizeHandle(meta.username || meta.user_name, user.email, user.id);
+            const cleanUsername = sanitizeHandle(localProfile.username || meta.username || meta.user_name, user.email, user.id);
             const fullName = sanitizeDisplayName(
-              meta.full_name || meta.name || `${meta.first_name || ''} ${meta.last_name || ''}`.trim(),
+              localProfile.name || meta.full_name || meta.name || `${meta.first_name || ''} ${meta.last_name || ''}`.trim(),
               cleanUsername,
               user.email
             );
@@ -289,13 +289,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const newProfile: UserProfile = {
               id: user.id,
               email: user.email || '',
-              username: localProfile.username || cleanUsername,
-              name: (localProfile.name && localProfile.name !== 'Colombiano en España') ? localProfile.name : fullName,
+              username: cleanUsername,
+              name: fullName,
               firstName: localProfile.firstName || meta.first_name || '',
               lastName: localProfile.lastName || meta.last_name || '',
               birthDate: localProfile.birthDate || meta.birth_date || '',
               age: localProfile.age !== undefined ? localProfile.age : (meta.age || undefined),
-              avatar: localProfile.avatar || meta.avatar_url || DEFAULT_SILHOUETTE_AVATAR,
+              avatar: (localProfile.avatar && localProfile.avatar !== DEFAULT_SILHOUETTE_AVATAR) ? localProfile.avatar : (meta.avatar_url || DEFAULT_SILHOUETTE_AVATAR),
               bio: localProfile.bio !== undefined ? localProfile.bio : '🇨🇴 ¡Orgullo colombiano en España! 🇪🇸',
               website: localProfile.website || '',
               city: localProfile.city || (meta.city as any) || 'Madrid',
@@ -320,7 +320,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         } catch (error) {
           console.error('Error fetching user profile from Supabase:', error);
           if (localProfile && Object.keys(localProfile).length > 0) {
-            setUserProfile(localProfile as UserProfile);
+            setUserProfile({ ...localProfile, id: user.id } as UserProfile);
           }
         }
       } else {
@@ -608,6 +608,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const updateUserProfile = async (data: Partial<UserProfile>) => {
     let updatedProfile: UserProfile | null = null;
+    
+    // Get actual session user if available
+    const { data: authUserRes } = await supabase.auth.getUser().catch(() => ({ data: { user: null } }));
+    const sessionUser = authUserRes?.user || firebaseUser;
+    const realId = sessionUser?.id || userProfile?.id || 'user-me';
+    const realEmail = sessionUser?.email || userProfile?.email || '';
+
     setUserProfile(prev => {
       let base = prev;
       if (!base) {
@@ -622,12 +629,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       if (!base) {
         base = {
-          id: firebaseUser?.id || 'user-me',
-          email: firebaseUser?.email || '',
+          id: realId,
+          email: realEmail,
           username: 'usuario',
           name: 'Usuario',
           avatar: DEFAULT_SILHOUETTE_AVATAR,
-          bio: 'Orgullo colombiano viviendo en España',
+          bio: '🇨🇴 Orgullo colombiano viviendo en España 🇪🇸',
           website: '',
           city: 'Madrid',
           originCity: 'Colombia',
@@ -642,6 +649,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const merged: UserProfile = {
         ...base,
         ...data,
+        id: realId,
+        email: realEmail || base.email,
         socialLinks: {
           ...(base.socialLinks || {}),
           ...(data.socialLinks || {})
@@ -653,36 +662,39 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
 
     try {
-      const sessionData = await supabase.auth.getSession().catch(() => ({ data: { session: null } }));
-      const user = sessionData.data?.session?.user || firebaseUser;
-      const targetId = user?.id || (updatedProfile as UserProfile | null)?.id;
+      if (sessionUser && sessionUser.id) {
+        const dbPayload = buildDBProfileUpdatePayload(data);
+        if (Object.keys(dbPayload).length > 0) {
+          const { data: updateRes, error: updateError } = await supabase
+            .from('profiles')
+            .update(dbPayload)
+            .eq('id', sessionUser.id)
+            .select();
 
-      if (targetId && updatedProfile) {
-        const fullPayload = mapUserProfileToDBProfile(updatedProfile);
-        const { error: upsertErr } = await supabase
-          .from('profiles')
-          .upsert([fullPayload]);
-
-        if (upsertErr) {
-          console.warn('Supabase upsert note, falling back to update:', upsertErr.message);
-          const dbPayload = buildDBProfileUpdatePayload(data);
-          if (Object.keys(dbPayload).length > 0) {
-            const { error: updateError } = await supabase
-              .from('profiles')
-              .update(dbPayload)
-              .eq('id', targetId);
-
-            if (updateError) {
-              const coreFields = ['name', 'username', 'bio', 'city', 'origin_city', 'avatar_url', 'age', 'birth_date', 'first_name', 'last_name', 'instagram', 'facebook'];
-              const fallbackPayload: Record<string, any> = {};
-              coreFields.forEach(field => {
-                if (dbPayload[field] !== undefined) fallbackPayload[field] = dbPayload[field];
-              });
-              await supabase
-                .from('profiles')
-                .update(fallbackPayload)
-                .eq('id', targetId);
-            }
+          if (updateError || !updateRes || updateRes.length === 0) {
+            const currentObj: UserProfile = updatedProfile || {
+              id: sessionUser.id,
+              email: sessionUser.email || '',
+              username: 'usuario',
+              name: 'Usuario',
+              avatar: DEFAULT_SILHOUETTE_AVATAR,
+              bio: '🇨🇴 Orgullo colombiano viviendo en España 🇪🇸',
+              website: '',
+              city: 'Madrid',
+              originCity: 'Colombia',
+              followersCount: 0,
+              followingCount: 0,
+              postsCount: 0,
+              isVerified: false,
+              staffRole: 'Usuario',
+              socialLinks: {}
+            };
+            const fullPayload = mapUserProfileToDBProfile({
+              ...currentObj,
+              id: sessionUser.id,
+              email: sessionUser.email || currentObj.email
+            });
+            await supabase.from('profiles').upsert([fullPayload]);
           }
         }
       }

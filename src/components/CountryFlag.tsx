@@ -90,17 +90,17 @@ export const CountryFlag: React.FC<CountryFlagProps> = ({ code, className, title
 
 export const renderTextWithFlags = (text: string, flagSize: 'xs' | 'sm' | 'md' = 'xs'): React.ReactNode => {
   if (!text) return null;
-  const regex = /(🇨🇴|🇪🇸|:co:|:es:|:colombia:|:espana:)/gi;
+  const regex = /(\uD83C\uDDE8\uD83C\uDDF4|\uD83C\uDDEA\uD83C\uDDF8|🇨🇴|🇪🇸|:co:|:es:|:colombia:|:espana:|:españa:)/gi;
   const parts = text.split(regex);
 
   if (parts.length === 1) return text;
 
   return parts.map((part, index) => {
     const p = part.toLowerCase();
-    if (part === '🇨🇴' || p === ':co:' || p === ':colombia:') {
+    if (part === '🇨🇴' || part === '\uD83C\uDDE8\uD83C\uDDF4' || p === ':co:' || p === ':colombia:') {
       return <FlagColombia key={index} size={flagSize} className="inline-block mx-0.5 align-baseline" />;
     }
-    if (part === '🇪🇸' || p === ':es:' || p === ':espana:') {
+    if (part === '🇪🇸' || part === '\uD83C\uDDEA\uD83C\uDDF8' || p === ':es:' || p === ':espana:' || p === ':españa:') {
       return <FlagSpain key={index} size={flagSize} className="inline-block mx-0.5 align-baseline" />;
     }
     return part;
