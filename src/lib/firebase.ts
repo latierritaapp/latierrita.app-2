@@ -231,6 +231,7 @@ function sanitizePayloadForTable(tableName: string, payload: any): any {
     delete clean.target_user;
     delete clean.unreadCount;
     delete clean.unread_count;
+    delete clean.avatar;
 
     if (!Array.isArray(clean.members)) clean.members = [];
     if (!clean.created_at) clean.created_at = new Date().toISOString().split('T')[0];

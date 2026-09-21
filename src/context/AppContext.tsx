@@ -2015,12 +2015,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     if (hasSupabaseUrl && hasSupabaseKey) {
       try {
+        console.log('DEBUG: sendMessage persist attempt for chatId:', chatId, 'newMsg:', newMsg);
         // Fetch latest messages from Supabase to prevent overwriting messages sent by other accounts
         const { data: dbRoom, error: fetchErr } = await supabase
           .from('chat_rooms')
           .select('id, messages')
           .eq('id', chatId)
           .maybeSingle();
+
+        if (fetchErr) {
+            console.error('DEBUG: sendMessage fetchErr:', fetchErr);
+        }
 
         if (!fetchErr) {
           let dbMessages: any[] = [];
@@ -2047,6 +2052,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               .from('chat_rooms')
               .update({ messages: finalMessages })
               .eq('id', chatId);
+            
+            if (updateErr) {
+                console.error('DEBUG: sendMessage updateErr:', updateErr);
+            }
 
             if (!updateErr) {
               persisted = true;
@@ -2054,6 +2063,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               console.error('Error updating chat_rooms in Supabase:', updateErr);
             }
           } else {
+            console.log('DEBUG: sendMessage upsert attempt');
             const { error: upsertErr } = await supabase
               .from('chat_rooms')
               .upsert([{
@@ -2067,18 +2077,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 created_at: targetRoom.createdAt || new Date().toISOString().split('T')[0],
                 messages: finalMessages
               }], { onConflict: 'id' });
-
-            if (!upsertErr) {
-              persisted = true;
+            
+            if (upsertErr) {
+                console.error('DEBUG: sendMessage upsertErr:', upsertErr);
             } else {
-              console.error('Error upserting chat_rooms in Supabase:', upsertErr);
+                persisted = true;
             }
           }
         } else {
           console.error('Error fetching chat_rooms from Supabase before update:', fetchErr);
         }
       } catch (e) {
-        console.warn('Supabase write exception, falling back to Firestore:', e);
+        console.error('DEBUG: sendMessage exception:', e);
       }
     }
 
