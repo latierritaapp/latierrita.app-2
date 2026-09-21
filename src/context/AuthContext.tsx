@@ -158,45 +158,13 @@ const buildDBProfileUpdatePayload = (data: Partial<UserProfile>): Record<string,
   if (data.bio !== undefined) {
     payload.bio = data.bio.trim();
   }
-  if (data.website !== undefined) {
-    payload.website = data.website.trim();
-  }
   if (data.city !== undefined) {
     payload.city = data.city;
-  }
-  if (data.originCity !== undefined) {
-    payload.origin_city = data.originCity.trim();
   }
   if (data.avatar !== undefined && data.avatar.trim() !== '') {
     payload.avatar_url = data.avatar;
   }
-  if (data.age !== undefined) {
-    const parsedAge = Number(data.age);
-    payload.age = isNaN(parsedAge) ? null : parsedAge;
-  }
-  if (data.birthDate !== undefined) {
-    payload.birth_date = data.birthDate;
-  }
-  if (data.firstName !== undefined) {
-    payload.first_name = data.firstName.trim();
-  }
-  if (data.lastName !== undefined) {
-    payload.last_name = data.lastName.trim();
-  }
-  if (data.isVerified !== undefined) {
-    payload.verified = data.isVerified;
-  }
-  if (data.staffRole !== undefined) {
-    payload.staff_role = data.staffRole;
-    payload.is_staff = data.staffRole !== 'Usuario';
-  }
-  if (data.socialLinks) {
-    if (data.socialLinks.instagram !== undefined) payload.instagram = data.socialLinks.instagram.trim();
-    if (data.socialLinks.facebook !== undefined) payload.facebook = data.socialLinks.facebook.trim();
-    if (data.socialLinks.tiktok !== undefined) payload.tiktok = data.socialLinks.tiktok.trim();
-    if (data.socialLinks.x !== undefined) payload.x = data.socialLinks.x.trim();
-  }
-
+  
   return payload;
 };
 
@@ -210,33 +178,11 @@ const mapUserProfileToDBProfile = (profile: Partial<UserProfile>): any => {
     email: profile.email || '',
     username: cleanUsername,
     name: displayName,
-    first_name: profile.firstName || null,
-    last_name: profile.lastName || null,
-    birth_date: profile.birthDate || null,
-    age: profile.age || null,
     avatar_url: profile.avatar || DEFAULT_SILHOUETTE_AVATAR,
     bio: profile.bio || '🇨🇴 ¡Orgullo colombiano en España! 🇪🇸',
-    website: profile.website || null,
     city: profile.city || 'Madrid',
-    origin_city: profile.originCity || 'Colombia',
-    verified: profile.isVerified || false,
-    is_staff: profile.staffRole && profile.staffRole !== 'Usuario' ? true : false,
-    staff_role: profile.staffRole || 'Usuario',
-    followers: [],
-    following: [],
-    is_deleted: profile.isDeleted || false,
-    deleted_at: profile.deletedAt || null,
-    retention_expires_at: profile.retentionExpiresAt || null,
-    deleted_reason: profile.deletedReason || null,
     created_at: profile.createdAt || new Date().toISOString()
   };
-
-  if (profile.socialLinks) {
-    if (profile.socialLinks.instagram !== undefined) db.instagram = profile.socialLinks.instagram;
-    if (profile.socialLinks.facebook !== undefined) db.facebook = profile.socialLinks.facebook;
-    if (profile.socialLinks.tiktok !== undefined) db.tiktok = profile.socialLinks.tiktok;
-    if (profile.socialLinks.x !== undefined) db.x = profile.socialLinks.x;
-  }
   return db;
 };
 
