@@ -2068,7 +2068,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               .from('chat_rooms')
               .upsert([{
                 id: targetRoom.id,
-                type: targetRoom.type,
                 name: targetRoom.name,
                 description: targetRoom.description || '',
                 created_at: targetRoom.createdAt || new Date().toISOString().split('T')[0],

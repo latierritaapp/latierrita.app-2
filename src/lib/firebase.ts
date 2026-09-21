@@ -225,7 +225,7 @@ function sanitizePayloadForTable(tableName: string, payload: any): any {
     }
 
     // Keep ONLY the fields that exist in the Supabase chat_rooms table
-    const allowedFields = ['id', 'type', 'name', 'description', 'created_at', 'messages'];
+    const allowedFields = ['id', 'name', 'description', 'created_at', 'messages'];
     for (const key in clean) {
       if (!allowedFields.includes(key)) {
         delete clean[key];
