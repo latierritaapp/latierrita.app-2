@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { X, Image, Camera } from 'lucide-react';
 
@@ -16,9 +16,6 @@ export const CreateStoryModal: React.FC = () => {
   const [mediaUrl, setMediaUrl] = useState('');
   const [caption, setCaption] = useState('');
   const [activeFilter, setActiveFilter] = useState('normal');
-
-  const cameraInputRef = useRef<HTMLInputElement>(null);
-  const galleryInputRef = useRef<HTMLInputElement>(null);
 
   if (!isCreateStoryOpen) return null;
 
@@ -58,25 +55,8 @@ export const CreateStoryModal: React.FC = () => {
 
   return (
     <div className="fixed inset-0 z-50 bg-neutral-950 text-white flex flex-col w-full h-full overflow-hidden animate-fade-in">
-      {/* Native hidden inputs */}
-      <input
-        ref={cameraInputRef}
-        type="file"
-        accept="image/*"
-        capture="environment"
-        className="hidden"
-        onChange={handleFileSelected}
-      />
-      <input
-        ref={galleryInputRef}
-        type="file"
-        accept="image/*"
-        className="hidden"
-        onChange={handleFileSelected}
-      />
-
       {!mediaUrl ? (
-        /* STAGE 1: CAMERA UI WITH INSTAGRAM BOTTOM CONTROLS */
+        /* INSTAGRAM-STYLE CAMERA CAPTURE SCREEN */
         <div className="relative flex-1 flex flex-col justify-between bg-neutral-950 overflow-hidden">
           {/* Top Bar */}
           <div className="absolute top-0 inset-x-0 z-20 p-4 flex items-center justify-between bg-gradient-to-b from-black/80 to-transparent">
@@ -90,52 +70,51 @@ export const CreateStoryModal: React.FC = () => {
             </button>
           </div>
 
-          {/* Center Viewfinder Prompt */}
+          {/* Center Viewfinder */}
           <div className="flex-1 flex flex-col items-center justify-center p-6 text-center space-y-4">
-            <button
-              type="button"
-              onClick={() => cameraInputRef.current?.click()}
-              className="w-24 h-24 rounded-full bg-amber-400/20 border-2 border-amber-400 flex items-center justify-center cursor-pointer hover:scale-105 transition-all shadow-2xl group animate-pulse"
-            >
-              <Camera className="w-12 h-12 text-amber-400 group-hover:scale-110 transition-transform" />
-            </button>
+            <div className="w-24 h-24 rounded-full bg-amber-400/20 border-2 border-amber-400 flex items-center justify-center animate-pulse shadow-2xl">
+              <Camera className="w-12 h-12 text-amber-400" />
+            </div>
             <div className="space-y-1">
-              <p className="text-sm font-bold text-white">Toca para abrir la cámara nativa</p>
+              <p className="text-sm font-bold text-white">Cámara de La Tierrita</p>
               <p className="text-xs text-white/60 max-w-xs mx-auto">
-                Usa el botón inferior izquierdo para la galería o el botón central para tomar tu foto con el tamaño original de tu dispositivo.
+                Toca el botón inferior central para abrir la cámara de tu dispositivo o el botón izquierdo para elegir de la galería.
               </p>
             </div>
           </div>
 
           {/* Bottom Bar: Gallery left, Shutter center */}
           <div className="p-8 pb-12 flex items-center justify-between bg-gradient-to-t from-black via-black/80 to-transparent relative">
-            {/* Lado izquierdo inferior: galería */}
-            <button
-              type="button"
-              onClick={() => galleryInputRef.current?.click()}
-              className="w-14 h-14 rounded-full bg-white/20 hover:bg-white/30 border-2 border-white flex items-center justify-center cursor-pointer transition-all active:scale-95 shadow-lg"
-              title="Abrir Galería"
-            >
+            {/* Lado izquierdo inferior: galería como label para abrir archivo instantáneamente */}
+            <label className="w-14 h-14 rounded-full bg-white/20 hover:bg-white/30 border-2 border-white flex items-center justify-center cursor-pointer transition-all active:scale-95 shadow-lg">
               <Image className="w-6 h-6 text-white" />
-            </button>
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleFileSelected}
+              />
+            </label>
 
-            {/* Lado centro inferior: botón obturador */}
-            <button
-              type="button"
-              onClick={() => cameraInputRef.current?.click()}
-              className="absolute left-1/2 -translate-x-1/2 w-20 h-20 rounded-full bg-white p-1 flex items-center justify-center cursor-pointer shadow-2xl active:scale-95 transition-all"
-              title="Tomar Foto"
-            >
+            {/* Lado centro inferior: botón obturador como label para abrir cámara nativa instantáneamente */}
+            <label className="absolute left-1/2 -translate-x-1/2 w-20 h-20 rounded-full bg-white p-1 flex items-center justify-center cursor-pointer shadow-2xl active:scale-95 transition-all">
               <div className="w-16 h-16 rounded-full bg-amber-400 border-4 border-white flex items-center justify-center">
                 <Camera className="w-7 h-7 text-neutral-950" />
               </div>
-            </button>
+              <input
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="hidden"
+                onChange={handleFileSelected}
+              />
+            </label>
 
             <div className="w-14" />
           </div>
         </div>
       ) : (
-        /* STAGE 2: PREVIEW WITH FILTERS & PUBLISH SCREEN */
+        /* PREVIEW WITH FILTERS & PUBLISH SCREEN */
         <div className="relative flex-1 flex flex-col justify-between bg-black">
           {/* Top Bar */}
           <div className="absolute top-0 inset-x-0 z-20 p-4 flex items-center justify-between bg-gradient-to-b from-black/80 to-transparent">
