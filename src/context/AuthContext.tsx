@@ -77,7 +77,7 @@ export const safeSetLocalStorage = (key: string, value: any): void => {
 };
 
 export const saveUserToCommunityCache = (user: UserProfile): void => {
-  if (!user || !user.id || user.id === 'user-staff' || user.username === 'latierrita_app' || user.email === 'latierritaapp@gmail.com') return;
+  if (!user || !user.id || user.id === 'user-staff') return;
   try {
     const raw = localStorage.getItem('latierrita_registered_community');
     let list: UserProfile[] = raw ? JSON.parse(raw) : [];

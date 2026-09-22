@@ -212,11 +212,17 @@ export interface ChatMessage {
   senderCity?: SpanishCity;
   text: string;
   timestamp: string;
+  createdAt?: number;
   isEncrypted: boolean;
   encryptedHash: string; // simulated E2E SHA-256 fingerprint
   read?: boolean;
   reactions?: ChatMessageReaction[];
   deletedForEveryone?: boolean;
+  replyTo?: {
+    id: string;
+    senderName: string;
+    text: string;
+  };
 }
 
 export type ChatType = 'general' | 'city' | 'private' | 'group';

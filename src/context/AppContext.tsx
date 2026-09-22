@@ -120,7 +120,7 @@ interface AppContextType {
   chatRooms: ChatRoom[];
   activeChatId: string | null;
   setActiveChatId: (id: string | null) => void;
-  sendMessage: (chatId: string, text: string) => Promise<void>;
+  sendMessage: (chatId: string, text: string, replyTo?: { id: string; senderName: string; text: string }) => Promise<void>;
   createGroupChat: (name: string, description: string, invitedUserIds: string[], avatar?: string) => Promise<void>;
   startPrivateChat: (targetUserId: string, targetUserName?: string, targetUserAvatar?: string) => string;
   groupInvites: GroupInvite[];
@@ -270,6 +270,48 @@ export const extractMembersFromPrivateChatId = (chatId: string): string[] => {
   return [];
 };
 
+export const PRUNE_MAX_PUBLIC_MESSAGES = 99; // Cap at 99 messages max for general/city chats
+export const PRUNE_MAX_PUBLIC_AGE_MS = 48 * 60 * 60 * 1000; // 48 hours in milliseconds
+
+export const pruneRoomMessages = (room: ChatRoom): ChatRoom => {
+  if (!room || (room.type !== 'general' && room.type !== 'city')) {
+    return room;
+  }
+
+  const now = Date.now();
+  const rawMessages = Array.isArray(room.messages) ? room.messages : [];
+
+  // 1. Filter out messages older than 48 hours
+  const unexpiredMessages = rawMessages.filter(msg => {
+    if (!msg) return false;
+    let msgEpoch = now;
+    if (typeof msg.createdAt === 'number' && msg.createdAt > 0) {
+      msgEpoch = msg.createdAt;
+    } else if (msg.id && msg.id.startsWith('msg-')) {
+      const parts = msg.id.split('-');
+      const possibleTimestamp = parseInt(parts[1], 10);
+      if (!isNaN(possibleTimestamp) && possibleTimestamp > 1600000000000) {
+        msgEpoch = possibleTimestamp;
+      }
+    }
+    return (now - msgEpoch) <= PRUNE_MAX_PUBLIC_AGE_MS;
+  });
+
+  // 2. Keep at most the latest 99 messages
+  const prunedMessages = unexpiredMessages.length > PRUNE_MAX_PUBLIC_MESSAGES
+    ? unexpiredMessages.slice(-PRUNE_MAX_PUBLIC_MESSAGES)
+    : unexpiredMessages;
+
+  if (prunedMessages.length === rawMessages.length && prunedMessages.every((m, i) => m.id === rawMessages[i]?.id)) {
+    return room;
+  }
+
+  return {
+    ...room,
+    messages: prunedMessages
+  };
+};
+
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { userProfile, updateUserProfile } = useAuth();
 
@@ -308,8 +350,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [otherUsers, setOtherUsers] = useState<UserProfile[]>(() => {
     const localCommunity = getLocalCommunity().filter(u => 
       u.id !== 'user-staff' && 
-      u.username !== 'latierrita_app' && 
-      u.email !== 'latierritaapp@gmail.com' &&
       !isFictitiousUser(u.id, u.username) &&
       (!currentUser || (u.id !== currentUser.id && u.username !== currentUser.username && (!u.email || u.email !== currentUser.email)))
     );
@@ -412,7 +452,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             
             // Do NOT retain fictitious parceros
             prev.forEach(p => {
-              if (p.id === 'user-staff' || p.username === 'latierrita_app' || p.username === 'latierrita_oficial' || isFictitiousUser(p.id, p.username)) {
+              if (p.id === 'user-staff' || isFictitiousUser(p.id, p.username)) {
                 return;
               }
               if (current && (p.id === current.id || (p.email && current.email && p.email === current.email))) {
@@ -1097,13 +1137,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           isInitialChatSyncRef.current = false;
         }
 
-        return Array.from(finalMap.values());
+        return Array.from(finalMap.values()).map(r => pruneRoomMessages(r));
       });
     };
 
     fetchRooms();
-    // Rapid polling every 2 seconds for guaranteed synchronization across any browser
-    const interval = setInterval(fetchRooms, 2000);
+    // Periodic synchronization every 15 seconds (Realtime WebSocket handles instant sub-second delivery)
+    const interval = setInterval(fetchRooms, 15000);
 
     // Supabase Realtime channel for sub-second instant message delivery
     let chatChannel: any = null;
@@ -1759,7 +1799,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // Also update any posts/stories authored by me in local state
     if (updated.username || updated.avatar) {
       setPosts(prev => prev.map(p => {
-        if (p.userId === currentUser.id || p.username === currentUser.username) {
+        if (p.userId === currentUser.id || p.username === currentUser.username || (currentUser.username === 'latierrita_app' && (p.isStaffAd || p.username === 'latierrita_app' || p.userId === 'user-staff'))) {
           return {
             ...p,
             username: updated.username || p.username,
@@ -2215,7 +2255,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Chats
-  const sendMessage = async (chatId: string, text: string) => {
+  const sendMessage = async (chatId: string, text: string, replyTo?: { id: string; senderName: string; text: string }) => {
     if (!text.trim()) return;
 
     // Simulated SHA-256 E2E Encryption fingerprint
@@ -2230,8 +2270,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       senderCity: currentUser.city,
       text: text.trim(),
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      createdAt: Date.now(),
       isEncrypted: true,
-      encryptedHash: simulatedHash
+      encryptedHash: simulatedHash,
+      replyTo: replyTo ? {
+        id: replyTo.id,
+        senderName: replyTo.senderName,
+        text: replyTo.text
+      } : undefined
     };
 
     const targetRoom = chatRooms.find(r => r.id === chatId);
@@ -2240,12 +2286,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // Track seen message id so sender doesn't receive a notification
     seenMessageIdsRef.current.add(newMsg.id);
 
-    // 1. Optimistic update in local state for zero latency UI
-    const optimisticMessages = [...targetRoom.messages, newMsg];
-    const updatedRoom = {
+    // 1. Optimistic update in local state for zero latency UI with pruning applied
+    const unprunedRoom = {
       ...targetRoom,
-      messages: optimisticMessages
+      messages: [...targetRoom.messages, newMsg]
     };
+    const updatedRoom = pruneRoomMessages(unprunedRoom);
 
     setChatRooms(prev => prev.map(room => room.id === chatId ? updatedRoom : room));
 
@@ -2273,7 +2319,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     // 3. Persist into Supabase
-    let finalMessages = optimisticMessages;
+    let finalMessages = updatedRoom.messages;
     if (hasSupabaseUrl && hasSupabaseKey) {
       try {
         const { data: dbRoom, error: fetchErr } = await supabase
@@ -2295,11 +2341,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
 
         const msgMap = new Map<string, any>();
-        dbMessages.forEach(m => { if (m && m.id) msgMap.set(m.id, m); });
-        targetRoom.messages.forEach(m => { if (m && m.id) msgMap.set(m.id, m); });
+        dbMessages.forEach((m: any) => { if (m && m.id) msgMap.set(m.id, m); });
+        targetRoom.messages.forEach((m: any) => { if (m && m.id) msgMap.set(m.id, m); });
         msgMap.set(newMsg.id, newMsg);
 
-        finalMessages = Array.from(msgMap.values());
+        finalMessages = pruneRoomMessages({ ...targetRoom, messages: Array.from(msgMap.values()) }).messages;
 
         if (dbRoom) {
           await supabase
@@ -2336,10 +2382,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
 
       const msgMap = new Map<string, any>();
-      firestoreMessages.forEach(m => { if (m && m.id) msgMap.set(m.id, m); });
-      finalMessages.forEach(m => { if (m && m.id) msgMap.set(m.id, m); });
+      firestoreMessages.forEach((m: any) => { if (m && m.id) msgMap.set(m.id, m); });
+      finalMessages.forEach((m: any) => { if (m && m.id) msgMap.set(m.id, m); });
 
-      const mergedMessages = Array.from(msgMap.values());
+      const mergedMessages = pruneRoomMessages({ ...targetRoom, messages: Array.from(msgMap.values()) }).messages;
 
       await setDoc(roomRef, { 
         id: targetRoom.id,

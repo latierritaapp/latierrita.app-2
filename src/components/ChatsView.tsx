@@ -29,7 +29,9 @@ import {
   ShieldCheck,
   MoreVertical,
   MessageCircle,
-  BadgeCheck
+  BadgeCheck,
+  Reply,
+  Copy
 } from 'lucide-react';
 import { SPANISH_CITIES } from '../data/mockData';
 import { FlagColombia, FlagSpain, CountryFlag } from './CountryFlag';
@@ -103,6 +105,7 @@ export const ChatsView: React.FC = () => {
     groupInvites,
     respondToGroupInvite,
     openReportModal,
+    triggerPlushNotification,
     blockUser,
     blockedUserIds,
     otherUsers,
@@ -275,7 +278,13 @@ export const ChatsView: React.FC = () => {
   } | null>(null);
 
   const [showExtendedEmojis, setShowExtendedEmojis] = useState(false);
+  const [replyingToMessage, setReplyingToMessage] = useState<{
+    id: string;
+    senderName: string;
+    text: string;
+  } | null>(null);
 
+  const chatInputRef = useRef<HTMLInputElement>(null);
   const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const handleTouchStartMessage = (msg: ChatMessage, e: React.TouchEvent<HTMLDivElement>) => {
@@ -480,8 +489,9 @@ export const ChatsView: React.FC = () => {
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault();
     if (!inputMessage.trim() || !activeChat) return;
-    sendMessage(activeChat.id, inputMessage);
+    sendMessage(activeChat.id, inputMessage, replyingToMessage || undefined);
     setInputMessage('');
+    setReplyingToMessage(null);
   };
 
   // Handle Group Creation (from same session as private chats)
@@ -1279,7 +1289,24 @@ export const ChatsView: React.FC = () => {
                                 <span>Este mensaje fue eliminado solo para ti.</span>
                               </div>
                             ) : (
-                              <p className="whitespace-pre-wrap break-words">{msg.text}</p>
+                              <>
+                                {msg.replyTo && (
+                                  <div className={`mb-1.5 p-1.5 px-2.5 rounded-xl text-[11px] border-l-2 ${
+                                    isMe
+                                      ? 'border-neutral-950 bg-black/10 text-neutral-950 font-medium'
+                                      : 'border-amber-500 bg-black/20 dark:bg-white/10 text-neutral-800 dark:text-neutral-200 font-medium'
+                                  }`}>
+                                    <div className="font-bold text-[10px] opacity-90 truncate flex items-center gap-1">
+                                      <Reply className="w-2.5 h-2.5 shrink-0" />
+                                      <span>{msg.replyTo.senderName}</span>
+                                    </div>
+                                    <div className="truncate opacity-80 text-[10.5px]">
+                                      {msg.replyTo.text}
+                                    </div>
+                                  </div>
+                                )}
+                                <p className="whitespace-pre-wrap break-words">{msg.text}</p>
+                              </>
                             )}
 
                             <div
@@ -1327,7 +1354,7 @@ export const ChatsView: React.FC = () => {
 
                       <button
                         onClick={() => setActiveMessageMenu({ message: msg, chatId: activeChat.id })}
-                        className="opacity-0 group-hover:opacity-100 p-1 text-neutral-400 hover:text-white transition-opacity shrink-0"
+                        className="hidden md:block opacity-0 group-hover:opacity-100 p-1 text-neutral-400 hover:text-white transition-opacity shrink-0"
                         title="Opciones de mensaje"
                       >
                         <MoreHorizontal className="w-3.5 h-3.5" />
@@ -1340,6 +1367,30 @@ export const ChatsView: React.FC = () => {
 
             {/* Message Input - Always pinned at bottom flush above the bottom navigation */}
             <div className="shrink-0 bg-[#001428]/95 backdrop-blur-xl border-t border-white/15 px-3 py-2 sm:py-2.5 shadow-2xl relative z-30">
+              {/* Replying To Message Banner (WhatsApp style) */}
+              {replyingToMessage && (
+                <div className="max-w-2xl mx-auto mb-2 p-2 bg-[#001c38]/95 border border-amber-500/40 rounded-xl flex items-center justify-between gap-2 text-xs text-white animate-in fade-in duration-150">
+                  <div className="flex items-center gap-2 overflow-hidden">
+                    <div className="w-1 h-8 bg-amber-400 rounded-full shrink-0" />
+                    <div className="overflow-hidden">
+                      <div className="text-[10px] font-bold text-amber-300 flex items-center gap-1">
+                        <Reply className="w-3 h-3 shrink-0" />
+                        <span>Respondiendo a {replyingToMessage.senderName}</span>
+                      </div>
+                      <p className="text-white/80 text-[11px] truncate">{replyingToMessage.text}</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setReplyingToMessage(null)}
+                    className="p-1 text-white/60 hover:text-white rounded-lg transition-colors shrink-0 cursor-pointer"
+                    title="Cancelar respuesta"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+
               {/* Quick Colombian & Reaction Emoji Tray */}
               {showQuickEmojis && (
                 <>
@@ -1389,6 +1440,7 @@ export const ChatsView: React.FC = () => {
 
                 <div className="flex-1 relative flex items-center">
                   <input
+                    ref={chatInputRef}
                     type="text"
                     value={inputMessage}
                     onChange={e => setInputMessage(e.target.value)}
@@ -1799,6 +1851,44 @@ export const ChatsView: React.FC = () => {
 
             {/* Menu Items */}
             <div className="space-y-0.5">
+              <button
+                onClick={() => {
+                  setReplyingToMessage({
+                    id: activeMessageMenu.message.id,
+                    senderName: activeMessageMenu.message.senderName,
+                    text: activeMessageMenu.message.text
+                  });
+                  setActiveMessageMenu(null);
+                  setShowExtendedEmojis(false);
+                  setTimeout(() => chatInputRef.current?.focus(), 100);
+                }}
+                className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800 flex items-center gap-2 text-neutral-700 dark:text-neutral-300 font-medium transition-colors cursor-pointer"
+              >
+                <Reply className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                <span>Responder</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  if (activeMessageMenu.message.text) {
+                    try {
+                      navigator.clipboard.writeText(activeMessageMenu.message.text);
+                      triggerPlushNotification({
+                        type: 'system',
+                        title: 'Mensaje copiado',
+                        message: 'El texto del mensaje se copió al portapapeles.'
+                      });
+                    } catch {}
+                  }
+                  setActiveMessageMenu(null);
+                  setShowExtendedEmojis(false);
+                }}
+                className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800 flex items-center gap-2 text-neutral-700 dark:text-neutral-300 font-medium transition-colors cursor-pointer"
+              >
+                <Copy className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                <span>Copiar texto</span>
+              </button>
+
               <button
                 onClick={() => {
                   openReportModal({
