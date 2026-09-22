@@ -404,6 +404,11 @@ export const ChatsView: React.FC = () => {
 
   // Cooldown State for General and City chats (3 seconds)
   const [cooldownTimeLeft, setCooldownTimeLeft] = useState<number>(0);
+  const [dismissedReplyIds, setDismissedReplyIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    setDismissedReplyIds([]);
+  }, [chatTypeTab, selectedPrivateOrGroupId]);
 
   // Highlight message on click / scroll
   const [highlightedMsgId, setHighlightedMsgId] = useState<string | null>(null);
@@ -424,17 +429,26 @@ export const ChatsView: React.FC = () => {
     if (!room || !currentUser) return 0;
     const myNameLower = (currentUser.name || '').toLowerCase();
     const myUsernameLower = (currentUser.username || '').toLowerCase();
+    const myId = currentUser.id;
 
     return (room.messages || []).filter(m => {
-      if (m.senderId === currentUser.id) return false;
+      if (m.senderId === myId) return false;
+      let isForMe = false;
       if (m.replyTo) {
         const replyAuthorLower = (m.replyTo.senderName || '').toLowerCase();
-        if (replyAuthorLower === myNameLower || replyAuthorLower === myUsernameLower) return true;
+        if (replyAuthorLower === myNameLower || replyAuthorLower === myUsernameLower) {
+          isForMe = true;
+        } else {
+          const originalMsg = (room.messages || []).find(orig => orig.id === m.replyTo?.id);
+          if (originalMsg && originalMsg.senderId === myId) {
+            isForMe = true;
+          }
+        }
       }
       if (m.text && (m.text.toLowerCase().includes(`@${myUsernameLower}`) || m.text.toLowerCase().includes(`@${myNameLower}`))) {
-        return true;
+        isForMe = true;
       }
-      return false;
+      return isForMe;
     }).length;
   }, [currentUser]);
 
@@ -661,19 +675,30 @@ export const ChatsView: React.FC = () => {
     if (!activeChat || !currentUser) return [];
     const myNameLower = (currentUser.name || '').toLowerCase();
     const myUsernameLower = (currentUser.username || '').toLowerCase();
+    const myId = currentUser.id;
 
     return (activeChat.messages || []).filter(m => {
-      if (m.senderId === currentUser.id) return false;
+      if (m.senderId === myId) return false;
+      if (dismissedReplyIds.includes(m.id)) return false;
+
+      let isForMe = false;
       if (m.replyTo) {
         const replyAuthorLower = (m.replyTo.senderName || '').toLowerCase();
-        if (replyAuthorLower === myNameLower || replyAuthorLower === myUsernameLower) return true;
+        if (replyAuthorLower === myNameLower || replyAuthorLower === myUsernameLower) {
+          isForMe = true;
+        } else {
+          const originalMsg = (activeChat.messages || []).find(orig => orig.id === m.replyTo?.id);
+          if (originalMsg && originalMsg.senderId === myId) {
+            isForMe = true;
+          }
+        }
       }
       if (m.text && (m.text.toLowerCase().includes(`@${myUsernameLower}`) || m.text.toLowerCase().includes(`@${myNameLower}`))) {
-        return true;
+        isForMe = true;
       }
-      return false;
+      return isForMe;
     });
-  }, [activeChat, currentUser]);
+  }, [activeChat, currentUser, dismissedReplyIds]);
 
   // Scroll to bottom when messages change or chat is switched
   useEffect(() => {
@@ -1494,6 +1519,7 @@ export const ChatsView: React.FC = () => {
                           scrollToMessage(lastReply.id);
                         }
                       }
+                      setDismissedReplyIds(prev => Array.from(new Set([...prev, ...activeRepliesToMe.map(m => m.id)])));
                     }}
                     className="pointer-events-auto bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-neutral-950 font-black text-xs px-3.5 py-1.5 rounded-full shadow-2xl border border-amber-300/80 flex items-center gap-1.5 transition-transform active:scale-95 animate-bounce cursor-pointer"
                     title="Te han respondido un mensaje. Haz clic para ir al mensaje."
@@ -1807,7 +1833,7 @@ export const ChatsView: React.FC = () => {
                     <button
                       type="button"
                       onClick={stopAndSendVoiceRecording}
-                      className="w-10 h-10 rounded-full bg-emerald-500 hover:bg-emerald-400 text-neutral-950 flex items-center justify-center shadow-lg shadow-emerald-500/30 transition-transform active:scale-90 font-bold cursor-pointer"
+                      className="w-10 h-10 rounded-full bg-gradient-to-tr from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-neutral-950 flex items-center justify-center shadow-lg shadow-amber-500/30 transition-transform active:scale-90 font-bold cursor-pointer"
                       title="Enviar nota de voz"
                     >
                       <Send className="w-4 h-4 ml-0.5" />
@@ -1866,7 +1892,7 @@ export const ChatsView: React.FC = () => {
                       type="button"
                       onClick={startVoiceRecording}
                       disabled={cooldownTimeLeft > 0}
-                      className="w-9 sm:w-10 h-9 sm:h-10 rounded-full bg-emerald-500 hover:bg-emerald-400 text-neutral-950 flex items-center justify-center disabled:opacity-40 disabled:scale-95 transition-all active:scale-90 shadow-md shadow-emerald-500/25 shrink-0 font-bold cursor-pointer"
+                      className="w-9 sm:w-10 h-9 sm:h-10 rounded-full bg-gradient-to-tr from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-neutral-950 flex items-center justify-center disabled:opacity-40 disabled:scale-95 transition-all active:scale-90 shadow-md shadow-amber-500/25 shrink-0 font-bold cursor-pointer"
                       title={cooldownTimeLeft > 0 ? `Espera ${cooldownTimeLeft}s` : "Grabar nota de voz (máx 60s)"}
                     >
                       {cooldownTimeLeft > 0 ? (
