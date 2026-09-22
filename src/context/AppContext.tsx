@@ -260,8 +260,8 @@ export const getDeterministicPrivateChatId = (userAId: string, userBId: string):
 };
 
 export const extractMembersFromPrivateChatId = (chatId: string): string[] => {
-  if (chatId.startsWith('chat-priv_')) {
-    const raw = chatId.replace('chat-priv_', '');
+  if (chatId.startsWith('chat-priv_') || chatId.startsWith('chat-priv-') || chatId.startsWith('priv-') || chatId.startsWith('chat-priv')) {
+    const raw = chatId.replace(/^chat-priv[_-]|^priv[_-]|^chat-priv/, '');
     const parts = raw.split('__');
     if (parts.length === 2 && parts[0] && parts[1]) {
       return [parts[0], parts[1]];
@@ -742,9 +742,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (explicitType === 'private' || explicitType === 'group' || explicitType === 'city' || explicitType === 'general') {
         return explicitType;
       }
-      if (id.startsWith('chat-priv-')) return 'private';
-      if (id.startsWith('chat-group-')) return 'group';
-      if (id.startsWith('chat-city-')) return 'city';
+      if (id.startsWith('chat-priv') || id.startsWith('priv-')) return 'private';
+      if (id.startsWith('chat-group') || id.startsWith('group-')) return 'group';
+      if (id.startsWith('chat-city') || id.startsWith('city-')) return 'city';
+      if (id === 'chat-general' || id.startsWith('chat-gen')) return 'general';
       return 'general';
     };
 
@@ -875,7 +876,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           if (resolvedType === 'private') {
             let p1 = '';
             let p2 = '';
-            if (rawRoom.id.startsWith('chat-priv_')) {
+            if (rawRoom.id.startsWith('chat-priv') || rawRoom.id.startsWith('priv-')) {
               const extracted = extractMembersFromPrivateChatId(rawRoom.id);
               if (extracted.length === 2) {
                 p1 = extracted[0];

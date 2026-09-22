@@ -133,8 +133,8 @@ export const ChatsView: React.FC = () => {
   const getOtherUserInPrivateChat = (room: ChatRoom): UserProfile | undefined => {
     if (room.type !== 'private') return undefined;
     let otherId = room.members?.find(id => id && id !== currentUser.id);
-    if (!otherId && room.id.startsWith('chat-priv_')) {
-      const parts = room.id.replace('chat-priv_', '').split('__');
+    if (!otherId && (room.id.startsWith('chat-priv_') || room.id.startsWith('chat-priv-') || room.id.startsWith('chat-priv'))) {
+      const parts = room.id.replace(/^chat-priv[_-]|^chat-priv/, '').split('__');
       if (parts.length === 2) {
         otherId = parts.find(id => id !== currentUser.id);
       }
@@ -326,7 +326,7 @@ export const ChatsView: React.FC = () => {
         if (r.type === 'private') {
           const isParticipant =
             (Array.isArray(r.members) && r.members.includes(currentUser.id)) ||
-            (r.id.startsWith('chat-priv_') && r.id.includes(currentUser.id)) ||
+            (r.id.startsWith('chat-priv') && r.id.includes(currentUser.id)) ||
             r.targetUserId === currentUser.id ||
             r.createdBy === currentUser.id ||
             (Array.isArray(r.messages) && r.messages.some(m => m.senderId === currentUser.id));
