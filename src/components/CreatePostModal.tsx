@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import { X, Image, MapPin, ChevronRight, ArrowLeft, EyeOff, MessageSquareOff, Camera, Search, ChevronDown, ChevronUp, Navigation, Check } from 'lucide-react';
 
@@ -42,6 +42,8 @@ export const CreatePostModal: React.FC = () => {
   const [caption, setCaption] = useState('');
   const [location, setLocation] = useState('Madrid, España');
   const [showLocationSuggestions, setShowLocationSuggestions] = useState(false);
+
+  const galleryInputRef = useRef<HTMLInputElement>(null);
 
   // Gallery Permission & Device Photos
   const [galleryPermission, setGalleryPermission] = useState<'prompt' | 'granted' | 'denied'>(() => {
@@ -89,34 +91,50 @@ export const CreatePostModal: React.FC = () => {
 
   if (!isCreatePostOpen) return null;
 
-  const handleRequestPermissionAndSelect = () => {
+  const handleGrantPermissionAndOpen = () => {
     setGalleryPermission('granted');
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = 'image/*';
-    input.multiple = true;
-    input.onchange = (e: any) => {
-      const files = e.target.files;
-      if (files && files.length > 0) {
-        const newUrls: string[] = [];
-        let loadedCount = 0;
-        Array.from(files).forEach((file: any) => {
-          const reader = new FileReader();
-          reader.onload = () => {
-            if (reader.result) {
-              newUrls.push(reader.result as string);
-              loadedCount++;
-              if (loadedCount === files.length) {
-                setDevicePhotos(prev => [...newUrls, ...prev]);
-                setMediaUrl(newUrls[0]);
-              }
-            }
-          };
-          reader.readAsDataURL(file);
-        });
+    setTimeout(() => {
+      if (galleryInputRef.current) {
+        galleryInputRef.current.click();
       }
-    };
-    input.click();
+    }, 100);
+  };
+
+  const handleFilesSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      const newUrls: string[] = [];
+      let loadedCount = 0;
+      Array.from(files).forEach((file: any) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          if (reader.result) {
+            newUrls.push(reader.result as string);
+            loadedCount++;
+            if (loadedCount === files.length) {
+              setDevicePhotos(prev => [...newUrls, ...prev]);
+              setMediaUrl(newUrls[0]);
+            }
+          }
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+  };
+
+  const handleCameraCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        if (reader.result) {
+          const res = reader.result as string;
+          setDevicePhotos(prev => [res, ...prev]);
+          setMediaUrl(res);
+        }
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
   const handleClose = () => {
@@ -198,13 +216,13 @@ export const CreatePostModal: React.FC = () => {
                 "La Tierrita" quiere acceder a tus fotos
               </h4>
               <p className="text-xs text-white/70 leading-relaxed">
-                Permite el acceso a tu galería para seleccionar tus imágenes personales del dispositivo y publicarlas en tu perfil.
+                Permite el acceso a tu galería para seleccionar tus imágenes personales del dispositivo y publicarlas en tu perfil instantáneamente.
               </p>
             </div>
             <div className="space-y-2 pt-2">
               <button
                 type="button"
-                onClick={handleRequestPermissionAndSelect}
+                onClick={handleGrantPermissionAndOpen}
                 className="w-full py-3 bg-amber-400 hover:bg-amber-300 text-neutral-950 font-black text-xs rounded-xl shadow-lg transition-all cursor-pointer active:scale-95"
               >
                 Permitir acceso a la galería
@@ -220,6 +238,16 @@ export const CreatePostModal: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Hidden gallery file input */}
+      <input
+        ref={galleryInputRef}
+        type="file"
+        accept="image/*"
+        multiple
+        className="hidden"
+        onChange={handleFilesSelected}
+      />
 
       <div
         id="create-post-card"
@@ -260,8 +288,15 @@ export const CreatePostModal: React.FC = () => {
                   referrerPolicy="no-referrer"
                 />
               ) : (
-                <div className="text-center p-6 text-white/60 text-xs">
-                  Selecciona una foto de tu galería o usa la cámara para comenzar
+                <div className="text-center p-6 text-white/60 text-xs space-y-2">
+                  <p>Selecciona una foto de tu galería o usa la cámara para comenzar</p>
+                  <button
+                    type="button"
+                    onClick={() => galleryInputRef.current?.click()}
+                    className="px-4 py-2 bg-amber-400 text-neutral-950 font-bold rounded-xl text-xs cursor-pointer"
+                  >
+                    Abrir Galería
+                  </button>
                 </div>
               )}
               <span className="absolute bottom-2 left-2 bg-black/70 backdrop-blur-md px-2.5 py-1 rounded-lg text-[10px] text-amber-300 font-bold">
@@ -277,10 +312,10 @@ export const CreatePostModal: React.FC = () => {
                 </p>
                 <button
                   type="button"
-                  onClick={handleRequestPermissionAndSelect}
+                  onClick={() => galleryInputRef.current?.click()}
                   className="text-[10px] font-bold text-amber-300 hover:underline cursor-pointer"
                 >
-                  + Agregar fotos
+                  + Agregar más fotos
                 </button>
               </div>
 
@@ -294,20 +329,7 @@ export const CreatePostModal: React.FC = () => {
                     accept="image/*"
                     capture="environment"
                     className="hidden"
-                    onChange={e => {
-                      const file = e.target.files?.[0];
-                      if (file) {
-                        const reader = new FileReader();
-                        reader.onload = () => {
-                          if (reader.result) {
-                            const res = reader.result as string;
-                            setDevicePhotos(prev => [res, ...prev]);
-                            setMediaUrl(res);
-                          }
-                        };
-                        reader.readAsDataURL(file);
-                      }
-                    }}
+                    onChange={handleCameraCapture}
                   />
                 </label>
 
@@ -331,7 +353,7 @@ export const CreatePostModal: React.FC = () => {
                   <p>No hay fotos en tu galería todavía.</p>
                   <button
                     type="button"
-                    onClick={handleRequestPermissionAndSelect}
+                    onClick={() => galleryInputRef.current?.click()}
                     className="px-4 py-2 bg-amber-400 text-neutral-950 font-black rounded-xl text-xs shadow cursor-pointer"
                   >
                     Seleccionar fotos del dispositivo
