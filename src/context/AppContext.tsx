@@ -423,6 +423,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               }
             });
 
+            // Also update selectedUserProfile if it's currently active and was updated in DB
+            setSelectedUserProfile(prevSelected => {
+              if (!prevSelected) return null;
+              const updated = allReal.find(r => r.id === prevSelected.id || r.username === prevSelected.username || (prevSelected.email && r.email === prevSelected.email));
+              return updated ? { ...prevSelected, ...updated } : prevSelected;
+            });
+
             return merged;
           });
         }
@@ -901,8 +908,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             });
           });
         }
-      } catch (e) {
-        console.warn('Firestore fetchRooms error:', e);
+      } catch (e: any) {
+        const msg = String(e?.message || e?.details || e || '');
+        if (!msg.includes('Failed to fetch') && !msg.includes('unavailable') && !msg.includes('network-request-failed')) {
+          console.warn('Firestore fetchRooms note:', msg);
+        }
       }
 
       if (!isMounted) return;
@@ -1210,10 +1220,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       unsubFirestore = onSnapshot(collection(db, 'chat_rooms'), () => {
         fetchRooms();
       }, (err) => {
-        console.warn('Firestore chat_rooms snapshot listener error:', err);
+        const msg = String(err?.message || err?.details || err || '');
+        if (!msg.includes('Failed to fetch') && !msg.includes('unavailable') && !msg.includes('network-request-failed')) {
+          console.warn('Firestore chat_rooms snapshot listener note:', msg);
+        }
       });
-    } catch (e) {
-      console.warn('Failed to listen to chat_rooms in Firestore:', e);
+    } catch (e: any) {
+      const msg = String(e?.message || e?.details || e || '');
+      if (!msg.includes('Failed to fetch') && !msg.includes('unavailable') && !msg.includes('network-request-failed')) {
+        console.warn('Failed to listen to chat_rooms in Firestore:', msg);
+      }
     }
 
     return () => {
@@ -1735,6 +1751,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.setItem('latierrita_user', JSON.stringify(nextUser));
 
     setOtherUsers(prev => prev.map(u => (u.id === currentUser.id || u.username === currentUser.username) ? { ...u, ...updated } : u));
+    
+    if (selectedUserProfile && (selectedUserProfile.id === currentUser.id || selectedUserProfile.username === currentUser.username)) {
+      setSelectedUserProfile(nextUser);
+    }
     
     // Also update any posts/stories authored by me in local state
     if (updated.username || updated.avatar) {

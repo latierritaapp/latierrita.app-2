@@ -20,7 +20,8 @@ export const NotificationsView: React.FC = () => {
     setActiveTab,
     setActiveChatId,
     setSelectedUserProfile,
-    otherUsers
+    otherUsers,
+    currentUser
   } = useApp();
 
   const getNotificationIcon = (type: NotificationType) => {
@@ -97,23 +98,29 @@ export const NotificationsView: React.FC = () => {
             </p>
           </div>
         ) : (
-          notifications.map(notif => (
-            <div
-              key={notif.id}
-              onClick={() => handleNotificationClick(notif)}
-              className={`p-4 flex items-start gap-3.5 hover:bg-white/5 cursor-pointer transition-colors ${
-                !notif.read ? 'bg-amber-400/10' : ''
-              }`}
-            >
-              {/* Avatar + Sub-icon */}
-              <div className="relative shrink-0 mt-0.5">
-                {notif.avatar ? (
-                  <img
-                    src={notif.avatar}
-                    alt=""
-                    className="w-11 h-11 rounded-full object-cover border border-white/20"
-                    referrerPolicy="no-referrer"
-                  />
+          notifications.map(notif => {
+            const senderUser = notif.data?.userId
+              ? (notif.data.userId === currentUser.id ? currentUser : otherUsers.find(u => u.id === notif.data?.userId))
+              : null;
+            const displayAvatar = senderUser?.avatar || notif.avatar;
+
+            return (
+              <div
+                key={notif.id}
+                onClick={() => handleNotificationClick(notif)}
+                className={`p-4 flex items-start gap-3.5 hover:bg-white/5 cursor-pointer transition-colors ${
+                  !notif.read ? 'bg-amber-400/10' : ''
+                }`}
+              >
+                {/* Avatar + Sub-icon */}
+                <div className="relative shrink-0 mt-0.5">
+                  {displayAvatar ? (
+                    <img
+                      src={displayAvatar}
+                      alt=""
+                      className="w-11 h-11 rounded-full object-cover border border-white/20"
+                      referrerPolicy="no-referrer"
+                    />
                 ) : (
                   <div className="w-11 h-11 rounded-full bg-white/10 flex items-center justify-center">
                     <Bell className="w-5 h-5 text-white/60" />
@@ -170,7 +177,8 @@ export const NotificationsView: React.FC = () => {
                 <div className="w-2 h-2 rounded-full bg-amber-400 shrink-0 mt-2"></div>
               )}
             </div>
-          ))
+          );
+        })
         )}
       </div>
     </div>

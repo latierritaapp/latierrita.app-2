@@ -196,6 +196,8 @@ export const ExploreView: React.FC = () => {
         <div className="grid grid-cols-3 gap-0.5 sm:gap-1 p-0.5 sm:p-1">
           {trendingPosts.map((post, idx) => {
             const isTop3 = idx < 3 && !exploreSearchQuery;
+            const author = getAuthorProfile(post);
+            const authorAvatar = author?.avatar || post.userAvatar;
             return (
               <div
                 key={post.id}
@@ -223,7 +225,7 @@ export const ExploreView: React.FC = () => {
                 <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-between p-2">
                   <div className="flex items-center gap-1.5 min-w-0">
                     <img
-                      src={post.userAvatar || undefined}
+                      src={authorAvatar || undefined}
                       alt={post.username}
                       className="w-5 h-5 rounded-full object-cover border border-white/40 shrink-0"
                       referrerPolicy="no-referrer"
@@ -328,7 +330,7 @@ export const ExploreView: React.FC = () => {
                       className="flex items-center gap-3 cursor-pointer group"
                     >
                       <img
-                        src={post.userAvatar || undefined}
+                        src={(getAuthorProfile(post)?.avatar || post.userAvatar) || undefined}
                         alt={post.username}
                         className="w-9 h-9 rounded-full object-cover border border-white/20 group-hover:scale-105 transition-transform"
                         referrerPolicy="no-referrer"

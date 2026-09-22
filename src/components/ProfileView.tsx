@@ -68,7 +68,8 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userToDisplay }) => {
   const [showUserMenu, setShowUserMenu] = useState(false);
 
   const isMe = !userToDisplay || userToDisplay.id === currentUser.id || (Boolean(currentUser.username) && userToDisplay.username === currentUser.username);
-  const user = isMe ? currentUser : userToDisplay;
+  const targetOtherUser = !isMe && userToDisplay ? (otherUsers.find(u => u.id === userToDisplay.id || u.username === userToDisplay.username || (userToDisplay.email && u.email === userToDisplay.email)) || userToDisplay) : null;
+  const user = isMe ? currentUser : (targetOtherUser || userToDisplay || currentUser);
 
   const isOfficialStaff = (user.email && user.email.trim().toLowerCase() === 'latierritaapp@gmail.com') || user.username === 'latierrita_app' || user.id === 'user-staff';
   const isFollowing = !isMe && (isOfficialStaff || (followingIds.includes(user.id) && user.id !== currentUser.id));

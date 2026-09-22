@@ -38,14 +38,19 @@ export const Navbar: React.FC = () => {
     currentUser,
     selectedUserProfile,
     setSelectedUserProfile,
-    setIsSettingsOpen
+    setIsSettingsOpen,
+    otherUsers
   } = useApp();
 
   const isExploreView = activeTab === 'explore';
   const isProfileView = activeTab === 'profile';
   const isChatsView = activeTab === 'chats';
   const isPlacesView = activeTab === 'places';
-  const displayedUser = selectedUserProfile || currentUser;
+  const displayedUser = selectedUserProfile
+    ? ((selectedUserProfile.id === currentUser.id || selectedUserProfile.username === currentUser.username)
+        ? currentUser
+        : (otherUsers.find(u => u.id === selectedUserProfile.id || u.username === selectedUserProfile.username || (selectedUserProfile.email && u.email === selectedUserProfile.email)) || selectedUserProfile))
+    : currentUser;
 
   const pendingInvitesCount = groupInvites.filter(i => i.status === 'pending').length;
 

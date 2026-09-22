@@ -74,6 +74,11 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
     });
   };
 
+  const author = post.userId === currentUser.id || post.username === currentUser.username
+    ? currentUser
+    : (otherUsers.find(u => u.id === post.userId || u.username === post.username) || null);
+  const displayAvatar = author?.avatar || post.userAvatar;
+
   return (
     <article
       id={`post-card-${post.id}`}
@@ -83,7 +88,7 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
       <div className="px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3 cursor-pointer" onClick={handleUserClick}>
           <img
-            src={post.userAvatar || undefined}
+            src={displayAvatar || undefined}
             alt={post.username}
             className="w-9 h-9 rounded-full object-cover border border-white/20"
             referrerPolicy="no-referrer"

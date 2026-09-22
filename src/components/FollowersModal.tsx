@@ -260,29 +260,32 @@ export const FollowersModal: React.FC<FollowersModalProps> = ({ type, user, onCl
           /* Users List */
           <div className="space-y-2.5">
             {filtered.map(item => {
-              const isTargetCurrentUser = item.id === currentUser.id || item.username === currentUser.username;
-              const isFollowing = followingIds.includes(item.id);
+              const displayItem = item.id === currentUser.id || item.username === currentUser.username
+                ? currentUser
+                : (otherUsers.find(u => u.id === item.id || u.username === item.username || (item.email && u.email === item.email)) || item);
+              const isTargetCurrentUser = displayItem.id === currentUser.id || displayItem.username === currentUser.username;
+              const isFollowing = followingIds.includes(displayItem.id);
 
               return (
                 <div
-                  key={item.id}
+                  key={displayItem.id}
                   className="p-3.5 rounded-2xl bg-neutral-900/60 hover:bg-neutral-900 border border-neutral-800/80 flex items-center justify-between gap-3 transition-all"
                 >
                   <div
                     className="flex items-center gap-3 min-w-0 flex-1 cursor-pointer"
                     onClick={() => {
-                      setSelectedUserProfile(item);
+                      setSelectedUserProfile(displayItem);
                       onClose();
                     }}
                   >
                     <div className="relative shrink-0">
                       <img
-                        src={item.avatar || undefined}
-                        alt={item.name}
+                        src={displayItem.avatar || undefined}
+                        alt={displayItem.name}
                         className="w-12 h-12 rounded-full object-cover border border-neutral-700 shadow-sm"
                         referrerPolicy="no-referrer"
                       />
-                      {item.isVerified && (
+                      {displayItem.isVerified && (
                         <BadgeCheck className="w-4 h-4 text-sky-400 fill-sky-400/20 absolute -bottom-0.5 -right-0.5 bg-neutral-900 rounded-full" />
                       )}
                     </div>
@@ -290,20 +293,20 @@ export const FollowersModal: React.FC<FollowersModalProps> = ({ type, user, onCl
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <span className="text-xs sm:text-sm font-extrabold text-white truncate hover:underline">
-                          {item.name}
+                          {displayItem.name}
                         </span>
-                        {item.staffRole && item.staffRole !== 'Usuario' && (
+                        {displayItem.staffRole && displayItem.staffRole !== 'Usuario' && (
                           <span className="text-[9px] px-1.5 py-0.2 font-black uppercase rounded bg-amber-400/20 text-amber-300 border border-amber-400/40 leading-none">
-                            {item.staffRole}
+                            {displayItem.staffRole}
                           </span>
                         )}
                       </div>
                       <div className="text-xs text-amber-400/90 font-semibold truncate">
-                        @{item.username}
+                        @{displayItem.username}
                       </div>
                       <div className="text-[11px] text-neutral-400 flex items-center gap-1 mt-0.5 truncate">
                         <MapPin className="w-3 h-3 text-neutral-500 shrink-0" />
-                        <span>{item.city}, España {item.originCity ? `· de ${item.originCity}` : ''}</span>
+                        <span>{displayItem.city}, España {displayItem.originCity ? `· de ${displayItem.originCity}` : ''}</span>
                       </div>
                     </div>
                   </div>

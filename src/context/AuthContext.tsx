@@ -121,7 +121,7 @@ export const mapDBProfileToUserProfile = (db: any): UserProfile => {
     lastName: db.last_name || '',
     birthDate: db.birth_date || '',
     age: db.age || undefined,
-    avatar: db.avatar_url || (isStaff ? 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=400&auto=format&fit=crop&q=80' : DEFAULT_SILHOUETTE_AVATAR),
+    avatar: db.avatar_url || db.avatar || (isStaff ? 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=400&auto=format&fit=crop&q=80' : DEFAULT_SILHOUETTE_AVATAR),
     bio: db.bio || (isStaff ? '⭐ Cuenta oficial de Staff & Publicidad de La Tierrita España. Conectando a los colombianos.' : '🇨🇴 ¡Orgullo colombiano en España! 🇪🇸'),
     website: db.website || (isStaff ? 'https://latierrita.es' : ''),
     city: db.city || 'Madrid',
@@ -163,6 +163,7 @@ const buildDBProfileUpdatePayload = (data: Partial<UserProfile>): Record<string,
   }
   if (data.avatar !== undefined && data.avatar.trim() !== '') {
     payload.avatar_url = data.avatar;
+    payload.avatar = data.avatar;
   }
   
   return payload;
@@ -179,6 +180,7 @@ const mapUserProfileToDBProfile = (profile: Partial<UserProfile>): any => {
     username: cleanUsername,
     name: displayName,
     avatar_url: profile.avatar || DEFAULT_SILHOUETTE_AVATAR,
+    avatar: profile.avatar || DEFAULT_SILHOUETTE_AVATAR,
     bio: profile.bio || '🇨🇴 ¡Orgullo colombiano en España! 🇪🇸',
     city: profile.city || 'Madrid',
     created_at: profile.createdAt || new Date().toISOString()
