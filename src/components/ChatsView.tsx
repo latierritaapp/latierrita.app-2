@@ -121,7 +121,8 @@ export const ChatsView: React.FC = () => {
     leaveGroupChat,
     toggleGroupAdmin,
     removeGroupMember,
-    addMembersToGroup
+    addMembersToGroup,
+    notifications
   } = useApp();
 
   const getUserInfo = (userId?: string) => {
@@ -132,17 +133,22 @@ export const ChatsView: React.FC = () => {
 
   const getOtherUserInPrivateChat = (room: ChatRoom): UserProfile | undefined => {
     if (room.type !== 'private') return undefined;
-    const myId = currentUser?.id || '';
-    const myUsername = currentUser?.username || '';
-    const myEmail = currentUser?.email || '';
+    const myId = (currentUser?.id || '').toLowerCase();
+    const myUsername = (currentUser?.username || '').toLowerCase();
+    const myEmail = (currentUser?.email || '').toLowerCase();
+    const myName = (currentUser?.name || '').toLowerCase();
     const strippedId = myId.replace(/^user-/, '');
-    const myIdentifiers = [myId, myUsername, myEmail, strippedId].filter(Boolean);
+    const cleanUsername = myUsername.replace(/^@/, '');
+    const myIdentifiers = [myId, myUsername, myEmail, myName, strippedId, cleanUsername].filter(Boolean);
 
     let otherId: string | undefined = undefined;
 
     // 1. Check room.members for an id that is NOT me
     if (Array.isArray(room.members)) {
-      otherId = room.members.find(id => id && !myIdentifiers.some(my => id === my || id.includes(my) || my.includes(id)));
+      otherId = room.members.find(id => id && !myIdentifiers.some(my => {
+        const cleanId = String(id).toLowerCase();
+        return cleanId === my || cleanId.includes(my) || my.includes(cleanId);
+      }));
     }
 
     // 2. Extract from canonical room id: chat-priv_{p1}__{p2}
@@ -150,18 +156,24 @@ export const ChatsView: React.FC = () => {
       const raw = room.id.replace(/^chat-priv[_-]|^priv[_-]|^chat-priv/, '');
       const parts = raw.split('__');
       if (parts.length === 2) {
-        otherId = parts.find(id => !myIdentifiers.some(my => id === my || id.includes(my) || my.includes(id)));
+        otherId = parts.find(id => !myIdentifiers.some(my => {
+          const cleanId = String(id).toLowerCase();
+          return cleanId === my || cleanId.includes(my) || my.includes(cleanId);
+        }));
       }
     }
 
     // 3. From targetUserId if not me
-    if (!otherId && room.targetUserId && !myIdentifiers.some(my => room.targetUserId === my || room.targetUserId?.includes(my))) {
+    if (!otherId && room.targetUserId && !myIdentifiers.some(my => {
+      const cleanTarget = String(room.targetUserId).toLowerCase();
+      return cleanTarget === my || cleanTarget.includes(my) || my.includes(cleanTarget);
+    })) {
       otherId = room.targetUserId;
     }
 
     // 4. From non-self sender in messages
     if (!otherId && Array.isArray(room.messages)) {
-      const nonSelfMsg = room.messages.find(m => m.senderId && m.senderId !== 'system' && !myIdentifiers.some(my => m.senderId === my));
+      const nonSelfMsg = room.messages.find(m => m.senderId && m.senderId !== 'system' && !myIdentifiers.some(my => (m.senderId || '').toLowerCase() === my));
       if (nonSelfMsg) {
         otherId = nonSelfMsg.senderId;
       }
@@ -169,14 +181,21 @@ export const ChatsView: React.FC = () => {
 
     // Look up in otherUsers
     if (otherId) {
-      const found = otherUsers.find(u => u.id === otherId || u.username === otherId || (u.email && u.email === otherId));
+      const cleanOther = otherId.toLowerCase();
+      const found = otherUsers.find(u =>
+        u.id.toLowerCase() === cleanOther ||
+        u.username.toLowerCase() === cleanOther ||
+        (u.email && u.email.toLowerCase() === cleanOther) ||
+        u.id.toLowerCase().includes(cleanOther) ||
+        cleanOther.includes(u.id.toLowerCase())
+      );
       if (found) return found;
-      if (room.targetUser && (room.targetUser.id === otherId || room.targetUser.username === otherId)) return room.targetUser;
+      if (room.targetUser && (room.targetUser.id.toLowerCase() === cleanOther || room.targetUser.username.toLowerCase() === cleanOther)) return room.targetUser;
     }
 
     // Extract other user profile from messages if sender information exists
     if (Array.isArray(room.messages)) {
-      const senderMsg = room.messages.find(m => m.senderId && m.senderId !== 'system' && !myIdentifiers.some(my => m.senderId === my));
+      const senderMsg = room.messages.find(m => m.senderId && m.senderId !== 'system' && !myIdentifiers.some(my => (m.senderId || '').toLowerCase() === my));
       if (senderMsg) {
         return {
           id: senderMsg.senderId,
@@ -201,7 +220,7 @@ export const ChatsView: React.FC = () => {
       return {
         id: otherId,
         username: otherId.replace(/^user-/, ''),
-        name: (room.name && room.name !== 'Chat' && room.name !== 'Chat Privado' && !myIdentifiers.includes(room.name))
+        name: (room.name && room.name !== 'Chat' && room.name !== 'Chat Privado' && !myIdentifiers.includes(room.name.toLowerCase()))
           ? room.name
           : cleanName,
         avatar: room.avatar || DEFAULT_SILHOUETTE_AVATAR,
@@ -367,11 +386,19 @@ export const ChatsView: React.FC = () => {
 
   // Unified list of private and group chats for the "messages" session
   const unifiedChatsList = useMemo(() => {
-    const myId = currentUser?.id || '';
-    const myUsername = currentUser?.username || '';
-    const myEmail = currentUser?.email || '';
+    const myId = (currentUser?.id || '').toLowerCase();
+    const myUsername = (currentUser?.username || '').toLowerCase();
+    const myEmail = (currentUser?.email || '').toLowerCase();
+    const myName = (currentUser?.name || '').toLowerCase();
     const strippedId = myId.replace(/^user-/, '');
-    const myIdentifiers = [myId, myUsername, myEmail, strippedId].filter(Boolean);
+    const cleanUsername = myUsername.replace(/^@/, '');
+    const myIdentifiers = [myId, myUsername, myEmail, myName, strippedId, cleanUsername].filter(Boolean);
+
+    const notifiedChatIds = new Set(
+      notifications
+        .map(n => n.data?.chatId)
+        .filter(Boolean) as string[]
+    );
 
     return chatRooms
       .filter(r => {
@@ -379,12 +406,26 @@ export const ChatsView: React.FC = () => {
 
         // Private chats: display if currentUser is one of the participants
         if (r.type === 'private') {
-          const isParticipant =
-            (Array.isArray(r.members) && r.members.some(m => m && myIdentifiers.some(id => m === id || m.includes(id) || id.includes(m)))) ||
-            (r.id.startsWith('chat-priv') && myIdentifiers.some(id => r.id.includes(id))) ||
-            (r.targetUserId && myIdentifiers.some(id => r.targetUserId === id || r.targetUserId?.includes(id))) ||
-            (r.createdBy && myIdentifiers.some(id => r.createdBy === id || r.createdBy?.includes(id))) ||
-            (Array.isArray(r.messages) && r.messages.some(m => m && myIdentifiers.some(id => m.senderId === id)));
+          // If a notification was sent for this chat, it definitely belongs in this user's inbox
+          let isParticipant = notifiedChatIds.has(r.id);
+
+          if (!isParticipant) {
+            const hasMessages = Array.isArray(r.messages) && r.messages.length > 0;
+            const hasUserMessages = hasMessages && r.messages.some(m => m && m.senderId && m.senderId !== 'system');
+
+            const isExplicitParticipant =
+              (Array.isArray(r.members) && r.members.some(m => {
+                if (!m) return false;
+                const cleanM = String(m).toLowerCase();
+                return myIdentifiers.some(id => cleanM === id || cleanM.includes(id) || id.includes(cleanM));
+              })) ||
+              (r.id && myIdentifiers.some(id => r.id.toLowerCase().includes(id))) ||
+              (r.targetUserId && myIdentifiers.some(id => String(r.targetUserId).toLowerCase().includes(id))) ||
+              (r.createdBy && myIdentifiers.some(id => String(r.createdBy).toLowerCase().includes(id))) ||
+              (hasMessages && r.messages.some(m => m && myIdentifiers.some(id => (m.senderId || '').toLowerCase() === id)));
+
+            isParticipant = isExplicitParticipant || hasUserMessages || (Array.isArray(r.members) && r.members.length >= 1);
+          }
 
           if (!isParticipant) return false;
 
@@ -395,22 +436,30 @@ export const ChatsView: React.FC = () => {
           if (r.targetUserId && blockedUserIds.includes(r.targetUserId)) {
             return false;
           }
+
+          if (!searchQuery.trim()) return true;
+          const query = searchQuery.toLowerCase();
+          const displayName = otherUser ? otherUser.name : (r.name || '');
+          const matchesName = displayName.toLowerCase().includes(query);
+          const matchesDesc = (r.description || '').toLowerCase().includes(query);
+          const matchesMsg = (r.messages || []).some(m => (m.text || '').toLowerCase().includes(query));
+          return matchesName || matchesDesc || matchesMsg;
         }
 
         // Group chats: only display if currentUser is a member or creator
         if (r.type === 'group') {
-          const isMember = (Array.isArray(r.members) && r.members.some(m => myIdentifiers.includes(m))) || (r.createdBy && myIdentifiers.includes(r.createdBy));
+          const isMember = (Array.isArray(r.members) && r.members.some(m => myIdentifiers.some(id => String(m).toLowerCase().includes(id)))) || (r.createdBy && myIdentifiers.some(id => String(r.createdBy).toLowerCase().includes(id)));
           if (!isMember) return false;
+
+          if (!searchQuery.trim()) return true;
+          const query = searchQuery.toLowerCase();
+          const matchesName = (r.name || '').toLowerCase().includes(query);
+          const matchesDesc = (r.description || '').toLowerCase().includes(query);
+          const matchesMsg = (r.messages || []).some(m => (m.text || '').toLowerCase().includes(query));
+          return matchesName || matchesDesc || matchesMsg;
         }
 
-        if (!searchQuery.trim()) return true;
-        const query = searchQuery.toLowerCase();
-        const otherUser = r.type === 'private' ? getOtherUserInPrivateChat(r) : undefined;
-        const displayName = otherUser ? otherUser.name : (r.name || '');
-        const matchesName = displayName.toLowerCase().includes(query);
-        const matchesDesc = (r.description || '').toLowerCase().includes(query);
-        const matchesMsg = (r.messages || []).some(m => (m.text || '').toLowerCase().includes(query));
-        return matchesName || matchesDesc || matchesMsg;
+        return false;
       })
       .sort((a, b) => {
         const lastA = a.messages[a.messages.length - 1];
@@ -419,7 +468,7 @@ export const ChatsView: React.FC = () => {
         const timeB = lastB ? (lastB.timestamp || lastB.id) : b.createdAt;
         return (timeB || '').localeCompare(timeA || '');
       });
-  }, [chatRooms, blockedUserIds, searchQuery, currentUser, otherUsers]);
+  }, [chatRooms, blockedUserIds, searchQuery, currentUser, otherUsers, notifications]);
 
   // Handle Send Message
   const handleSendMessage = (e: React.FormEvent) => {

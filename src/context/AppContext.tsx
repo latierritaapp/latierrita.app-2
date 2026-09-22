@@ -640,7 +640,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (currentActive === targetChatId) return true;
     const cleanActive = currentActive.replace(/^chat-priv[_-]|^priv[_-]|^chat-priv/, '');
     const cleanTarget = targetChatId.replace(/^chat-priv[_-]|^priv[_-]|^chat-priv/, '');
-    return cleanActive === cleanTarget;
+    if (cleanActive === cleanTarget) return true;
+
+    // Check if canonical IDs match when sorted
+    const extractedActive = extractMembersFromPrivateChatId(currentActive);
+    const extractedTarget = extractMembersFromPrivateChatId(targetChatId);
+    if (extractedActive.length === 2 && extractedTarget.length === 2) {
+      const sActive = [...extractedActive].sort().join('__');
+      const sTarget = [...extractedTarget].sort().join('__');
+      if (sActive === sTarget) return true;
+    }
+    return false;
   };
 
   // Support, Verification, Staff & Deleted Accounts state
@@ -2427,6 +2437,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
     setSelectedUserProfile(null);
     setActiveChatId(canonicalChatId);
+    setChatTypeTab('messages');
     setActiveTab('chats');
 
     setDoc(doc(db, 'chat_rooms', canonicalChatId), newRoom).catch(error => {
