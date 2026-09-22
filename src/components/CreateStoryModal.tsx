@@ -1,238 +1,273 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
-import { X, Image, Sparkles, Send, Camera } from 'lucide-react';
-
-const PRESET_STORY_IMAGES = [
-  {
-    label: 'Gran Vía Madrid',
-    url: 'https://images.unsplash.com/photo-1539037116277-4db20889f2d4?w=800&auto=format&fit=crop&q=80',
-    tag: 'Madrid'
-  },
-  {
-    label: 'Arepitas caseras',
-    url: 'https://images.unsplash.com/photo-1544025162-d76694265947?w=800&auto=format&fit=crop&q=80',
-    tag: 'Gastronomía'
-  },
-  {
-    label: 'Café de Colombia',
-    url: 'https://images.unsplash.com/photo-1509042239860-f550ce710b93?w=800&auto=format&fit=crop&q=80',
-    tag: 'Eje Cafetero'
-  },
-  {
-    label: 'Playa en Barcelona',
-    url: 'https://images.unsplash.com/photo-1511527661048-7fe73d85e9a4?w=800&auto=format&fit=crop&q=80',
-    tag: 'Barcelona'
-  },
-  {
-    label: 'Parche con amigos',
-    url: 'https://images.unsplash.com/photo-1511632765486-a01980e01a18?w=800&auto=format&fit=crop&q=80',
-    tag: 'Amigos'
-  }
-];
+import { X, Image, Camera } from 'lucide-react';
 
 export const CreateStoryModal: React.FC = () => {
   const { isCreateStoryOpen, setIsCreateStoryOpen, addStory } = useApp();
-  const [selectedUrl, setSelectedUrl] = useState(PRESET_STORY_IMAGES[0].url);
-  const [customUrl, setCustomUrl] = useState('');
+  const [stage, setStage] = useState<'camera' | 'preview'>('camera');
+  const [mediaUrl, setMediaUrl] = useState('');
   const [caption, setCaption] = useState('');
-  const [sticker, setSticker] = useState('🇨🇴 Paisas en España');
+
+  // Instagram-style gallery permission & device photos state
+  const [galleryPermission, setGalleryPermission] = useState<'prompt' | 'granted' | 'denied'>(() => {
+    return (localStorage.getItem('latierrita_gallery_permission') as any) || 'prompt';
+  });
+  const [devicePhotos, setDevicePhotos] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('latierrita_device_photos');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    localStorage.setItem('latierrita_gallery_permission', galleryPermission);
+  }, [galleryPermission]);
+
+  useEffect(() => {
+    localStorage.setItem('latierrita_device_photos', JSON.stringify(devicePhotos));
+  }, [devicePhotos]);
 
   if (!isCreateStoryOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleRequestPermissionAndSelect = () => {
+    setGalleryPermission('granted');
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.multiple = true;
+    input.onchange = (e: any) => {
+      const files = e.target.files;
+      if (files && files.length > 0) {
+        const newUrls: string[] = [];
+        let loadedCount = 0;
+        Array.from(files).forEach((file: any) => {
+          const reader = new FileReader();
+          reader.onload = () => {
+            if (reader.result) {
+              newUrls.push(reader.result as string);
+              loadedCount++;
+              if (loadedCount === files.length) {
+                setDevicePhotos(prev => [...newUrls, ...prev]);
+                setMediaUrl(newUrls[0]);
+                setStage('preview');
+              }
+            }
+          };
+          reader.readAsDataURL(file);
+        });
+      }
+    };
+    input.click();
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      const newUrls: string[] = [];
+      let loadedCount = 0;
+      Array.from(files).forEach((file: any) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          if (reader.result) {
+            newUrls.push(reader.result as string);
+            loadedCount++;
+            if (loadedCount === files.length) {
+              setDevicePhotos(prev => [...newUrls, ...prev]);
+              setMediaUrl(newUrls[0]);
+              setStage('preview');
+            }
+          }
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+  };
+
+  const handlePublish = (e: React.FormEvent) => {
     e.preventDefault();
-    const finalUrl = customUrl.trim() || selectedUrl;
-    const finalCaption = sticker ? `${sticker} · ${caption}` : caption;
+    if (!mediaUrl) return;
     addStory({
-      mediaUrl: finalUrl,
-      caption: finalCaption
+      mediaUrl,
+      caption: caption.trim() || '🇨🇴 Historia'
     });
+    setIsCreateStoryOpen(false);
+    setStage('camera');
+    setMediaUrl('');
+    setCaption('');
   };
 
   return (
-    <div
-      id="create-story-backdrop"
-      className="fixed inset-0 z-50 bg-[#001845] text-white flex flex-col w-full h-full overflow-hidden animate-fade-in"
-    >
-      <div
-        id="create-story-modal"
-        className="w-full max-w-2xl mx-auto bg-[#001845] border-x border-white/10 flex flex-col h-full shadow-2xl"
-      >
-        <div className="sticky top-0 z-20 px-4 py-3.5 bg-[#002466]/95 backdrop-blur-md border-b border-white/15 flex items-center justify-between text-white shadow-md">
-          <div className="flex items-center gap-2">
-            <Sparkles className="w-5 h-5 text-amber-400" />
-            <h3 className="text-sm font-black text-white">
-              Nueva Historia de Instagram
-            </h3>
+    <div className="fixed inset-0 z-50 bg-neutral-950 text-white flex flex-col w-full h-full overflow-hidden animate-fade-in">
+      {/* Instagram-style permission dialog if not granted */}
+      {galleryPermission !== 'granted' && (
+        <div className="absolute inset-0 z-40 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-[#002466] border border-white/20 rounded-3xl p-6 max-w-sm w-full text-center space-y-4 shadow-2xl">
+            <div className="w-14 h-14 bg-amber-400/20 border-2 border-amber-400 rounded-2xl mx-auto flex items-center justify-center text-amber-400">
+              <Image className="w-7 h-7" />
+            </div>
+            <div className="space-y-1">
+              <h4 className="text-sm font-black text-white">
+                "La Tierrita" quiere acceder a tus fotos
+              </h4>
+              <p className="text-xs text-white/70 leading-relaxed">
+                Permite el acceso a tu galería para seleccionar tus fotos personales del dispositivo y compartirlas en tus historias.
+              </p>
+            </div>
+            <div className="space-y-2 pt-2">
+              <button
+                type="button"
+                onClick={handleRequestPermissionAndSelect}
+                className="w-full py-3 bg-amber-400 hover:bg-amber-300 text-neutral-950 font-black text-xs rounded-xl shadow-lg transition-all cursor-pointer active:scale-95"
+              >
+                Permitir acceso a la galería
+              </button>
+              <button
+                type="button"
+                onClick={() => setGalleryPermission('denied')}
+                className="w-full py-2.5 bg-white/10 hover:bg-white/15 text-white/80 font-bold text-xs rounded-xl transition-all cursor-pointer"
+              >
+                No permitir
+              </button>
+            </div>
           </div>
-          <button
-            onClick={() => setIsCreateStoryOpen(false)}
-            className="p-2 text-white/70 hover:text-white rounded-full hover:bg-white/10 transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
         </div>
+      )}
 
-        <form onSubmit={handleSubmit} className="p-4 sm:p-6 overflow-y-auto flex-1 space-y-4 pb-24">
-          {/* Preview */}
-          <div className="relative h-64 rounded-2xl overflow-hidden bg-neutral-950 border border-neutral-200 dark:border-neutral-800">
+      {stage === 'camera' ? (
+        /* STAGE 1: CAMERA SCREEN */
+        <div className="relative flex-1 flex flex-col justify-between bg-neutral-900">
+          {/* Top Bar */}
+          <div className="absolute top-0 inset-x-0 z-20 p-4 flex items-center justify-between bg-gradient-to-b from-black/80 to-transparent">
+            <span className="text-xs font-bold text-amber-400">Nueva Historia</span>
+            <button
+              onClick={() => {
+                setIsCreateStoryOpen(false);
+                setStage('camera');
+              }}
+              className="p-2.5 bg-black/50 hover:bg-black/80 text-white rounded-full transition-colors cursor-pointer shadow-lg"
+              title="Salir"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          {/* Viewfinder Center */}
+          <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
+            <div className="w-20 h-20 rounded-full bg-amber-400/20 border-2 border-amber-400 flex items-center justify-center mb-4 animate-pulse">
+              <Camera className="w-10 h-10 text-amber-400" />
+            </div>
+            <p className="text-sm font-bold text-white">Cámara de La Tierrita</p>
+            <p className="text-xs text-white/60 max-w-xs mt-1">
+              Toma una foto o selecciona una imagen de tu galería personal.
+            </p>
+
+            {devicePhotos.length > 0 && (
+              <div className="mt-6">
+                <p className="text-[10px] text-white/70 mb-2 font-bold uppercase tracking-wider">Tus fotos recientes del dispositivo</p>
+                <div className="flex flex-wrap gap-2 justify-center max-w-xs max-h-32 overflow-y-auto p-1">
+                  {devicePhotos.slice(0, 6).map((url, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => {
+                        setMediaUrl(url);
+                        setStage('preview');
+                      }}
+                      className="w-12 h-12 rounded-xl overflow-hidden border border-white/30 hover:border-amber-400 transition-all shadow cursor-pointer"
+                    >
+                      <img src={url} alt="device photo" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Bottom Bar: Gallery circle left, Shutter center */}
+          <div className="p-8 pb-12 flex items-center justify-between bg-gradient-to-t from-black via-black/80 to-transparent relative">
+            {/* Lado izquierdo inferior circulo con icono de galería */}
+            <label className="w-14 h-14 rounded-full bg-white/20 hover:bg-white/30 border-2 border-white flex items-center justify-center cursor-pointer transition-all active:scale-95 shadow-lg">
+              <Image className="w-6 h-6 text-white" />
+              <input
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                onChange={handleFileChange}
+              />
+            </label>
+
+            {/* Lado centro inferior botón para tomar foto */}
+            <label className="absolute left-1/2 -translate-x-1/2 w-20 h-20 rounded-full bg-white p-1 flex items-center justify-center cursor-pointer shadow-2xl active:scale-95 transition-all">
+              <div className="w-16 h-16 rounded-full bg-amber-400 border-4 border-white flex items-center justify-center">
+                <Camera className="w-7 h-7 text-neutral-950" />
+              </div>
+              <input
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="hidden"
+                onChange={handleFileChange}
+              />
+            </label>
+
+            <div className="w-14" />
+          </div>
+        </div>
+      ) : (
+        /* STAGE 2: PREVIEW & PUBLISH SCREEN */
+        <div className="relative flex-1 flex flex-col justify-between bg-black">
+          {/* Top Bar */}
+          <div className="absolute top-0 inset-x-0 z-20 p-4 flex items-center justify-between bg-gradient-to-b from-black/80 to-transparent">
+            <button
+              onClick={() => setStage('camera')}
+              className="text-xs font-bold text-white/90 bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-xl backdrop-blur-md cursor-pointer"
+            >
+              Volver
+            </button>
+            <button
+              onClick={() => {
+                setIsCreateStoryOpen(false);
+                setStage('camera');
+              }}
+              className="p-2.5 bg-black/50 hover:bg-black/80 text-white rounded-full transition-colors cursor-pointer shadow-lg"
+              title="Salir"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          {/* Full Screen Photo Preview */}
+          <div className="flex-1 relative flex items-center justify-center overflow-hidden">
             <img
-              src={customUrl || selectedUrl || undefined}
-              alt="Preview"
-              className="w-full h-full object-cover"
+              src={mediaUrl}
+              alt="Story preview"
+              className="w-full h-full object-contain"
               referrerPolicy="no-referrer"
             />
-            {sticker && (
-              <div className="absolute top-3 left-3 bg-black/60 backdrop-blur-md text-amber-300 px-3 py-1 rounded-full text-xs font-bold border border-white/20">
-                {sticker}
-              </div>
-            )}
-            {caption && (
-              <div className="absolute bottom-3 left-3 right-3 bg-black/70 backdrop-blur-md text-white p-2 rounded-xl text-xs text-center font-medium">
-                {caption}
-              </div>
-            )}
           </div>
 
-          {/* Presets */}
-          <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-neutral-500 dark:text-neutral-400 mb-2">
-              Fotos sugeridas de la comunidad
-            </label>
-            <div className="grid grid-cols-5 gap-2">
-              {PRESET_STORY_IMAGES.map((img, i) => (
-                <button
-                  key={i}
-                  type="button"
-                  onClick={() => {
-                    setSelectedUrl(img.url);
-                    setCustomUrl('');
-                  }}
-                  className={`h-14 rounded-xl overflow-hidden border-2 transition-all ${
-                    selectedUrl === img.url && !customUrl
-                      ? 'border-amber-500 ring-2 ring-amber-500/30'
-                      : 'border-transparent opacity-70 hover:opacity-100'
-                  }`}
-                >
-                  <img src={img.url} alt={img.label} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Device Camera & Device Gallery Capture */}
-          <div className="space-y-2">
-            <label className="block text-xs font-semibold text-neutral-600 dark:text-neutral-300 mb-1">
-              Subir imagen desde tu dispositivo
-            </label>
-            <div className="grid grid-cols-2 gap-2">
-              <label className="cursor-pointer flex items-center justify-center gap-2 py-2.5 px-3 bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 rounded-xl text-xs font-bold text-amber-700 dark:text-amber-300 transition-all">
-                <Camera className="w-4 h-4" />
-                <span>Tomar foto</span>
-                <input
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  className="hidden"
-                  onChange={e => {
-                    const file = e.target.files?.[0];
-                    if (file) {
-                      const reader = new FileReader();
-                      reader.onload = () => {
-                        if (reader.result) setCustomUrl(reader.result as string);
-                      };
-                      reader.readAsDataURL(file);
-                    }
-                  }}
-                />
-              </label>
-
-              <label className="cursor-pointer flex items-center justify-center gap-2 py-2.5 px-3 bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/30 rounded-xl text-xs font-bold text-sky-400 transition-all">
-                <Image className="w-4 h-4" />
-                <span>Elegir galería</span>
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={e => {
-                    const file = e.target.files?.[0];
-                    if (file) {
-                      const reader = new FileReader();
-                      reader.onload = () => {
-                        if (reader.result) setCustomUrl(reader.result as string);
-                      };
-                      reader.readAsDataURL(file);
-                    }
-                  }}
-                />
-              </label>
-            </div>
-          </div>
-
-          {/* Sticker choices */}
-          <div>
-            <label className="block text-xs font-semibold text-neutral-600 dark:text-neutral-300 mb-1">
-              Sticker comunitario
-            </label>
-            <div className="flex flex-wrap gap-1.5">
-              {[
-                '🇨🇴 Paisas en España',
-                '🫓 Arepa time',
-                '☕ Café Quindío',
-                '📍 Madrid',
-                '📍 Barcelona',
-                '⚽ Selección Colombia'
-              ].map(stk => (
-                <button
-                  key={stk}
-                  type="button"
-                  onClick={() => setSticker(stk === sticker ? '' : stk)}
-                  className={`text-xs px-2.5 py-1 rounded-full font-medium transition-colors ${
-                    sticker === stk
-                      ? 'bg-amber-500 text-neutral-950 font-bold'
-                      : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-200 dark:hover:bg-neutral-700'
-                  }`}
-                >
-                  {stk}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Caption */}
-          <div>
-            <label className="block text-xs font-semibold text-neutral-600 dark:text-neutral-300 mb-1">
-              Texto o pie de foto
-            </label>
+          {/* Bottom Bar: Barra para escribir pie de foto y botón Subir */}
+          <form onSubmit={handlePublish} className="p-4 bg-black/95 backdrop-blur-md border-t border-white/10 flex items-center gap-3">
             <input
               type="text"
               value={caption}
               onChange={e => setCaption(e.target.value)}
-              placeholder="¿Qué estás haciendo hoy parcero?"
-              maxLength={80}
-              className="w-full bg-neutral-100 dark:bg-neutral-800 text-neutral-900 dark:text-white px-3 py-2 text-xs rounded-xl border border-neutral-200 dark:border-neutral-700 focus:outline-none focus:ring-1 focus:ring-amber-500"
+              placeholder="Escribe un pie de foto..."
+              maxLength={100}
+              className="flex-1 bg-white/10 text-white placeholder-white/50 px-4 py-3 rounded-2xl border border-white/20 text-xs focus:outline-none focus:ring-2 focus:ring-amber-400"
             />
-          </div>
-
-          {/* Submit */}
-          <div className="pt-2 flex justify-end gap-2">
-            <button
-              type="button"
-              onClick={() => setIsCreateStoryOpen(false)}
-              className="px-4 py-2 text-xs font-bold text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white"
-            >
-              Cancelar
-            </button>
             <button
               type="submit"
-              className="flex items-center gap-1.5 px-5 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-neutral-950 text-xs font-extrabold rounded-xl shadow-md transition-all"
+              className="px-6 py-3 bg-amber-400 hover:bg-amber-300 text-neutral-950 font-black text-xs rounded-2xl shadow-lg transition-all active:scale-95 shrink-0 cursor-pointer"
             >
-              <span>Publicar en mi historia</span>
-              <Send className="w-3.5 h-3.5" />
+              Subir
             </button>
-          </div>
-        </form>
-      </div>
+          </form>
+        </div>
+      )}
     </div>
   );
 };

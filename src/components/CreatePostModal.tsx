@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
-import { X, Image, MapPin, Sparkles, Megaphone, Check, ChevronRight, ArrowLeft, Users, EyeOff, MessageSquareOff, Camera, Search, ChevronDown, ChevronUp, Navigation, Plus } from 'lucide-react';
+import { X, Image, MapPin, ChevronRight, ArrowLeft, EyeOff, MessageSquareOff, Camera, Search, ChevronDown, ChevronUp, Navigation, Check } from 'lucide-react';
 
 const COMMON_WORLD_CITIES = [
   'Madrid, España',
@@ -38,10 +38,37 @@ export const CreatePostModal: React.FC = () => {
   } = useApp();
 
   const [step, setStep] = useState<'selector' | 'form'>('selector');
-  const [mediaUrl, setMediaUrl] = useState('https://images.unsplash.com/photo-1543783207-ec64e4d95325?w=900&auto=format&fit=crop&q=80');
+  const [mediaUrl, setMediaUrl] = useState('');
   const [caption, setCaption] = useState('');
   const [location, setLocation] = useState('Madrid, España');
   const [showLocationSuggestions, setShowLocationSuggestions] = useState(false);
+
+  // Gallery Permission & Device Photos
+  const [galleryPermission, setGalleryPermission] = useState<'prompt' | 'granted' | 'denied'>(() => {
+    return (localStorage.getItem('latierrita_gallery_permission') as any) || 'prompt';
+  });
+  const [devicePhotos, setDevicePhotos] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('latierrita_device_photos');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    localStorage.setItem('latierrita_gallery_permission', galleryPermission);
+  }, [galleryPermission]);
+
+  useEffect(() => {
+    localStorage.setItem('latierrita_device_photos', JSON.stringify(devicePhotos));
+  }, [devicePhotos]);
+
+  useEffect(() => {
+    if (!mediaUrl && devicePhotos.length > 0) {
+      setMediaUrl(devicePhotos[0]);
+    }
+  }, [devicePhotos, mediaUrl]);
 
   // Tagging state
   const [taggedUsernames, setTaggedUsernames] = useState<string[]>([]);
@@ -61,6 +88,36 @@ export const CreatePostModal: React.FC = () => {
   const [adCtaUrl, setAdCtaUrl] = useState('https://latierrita.es/anuncios');
 
   if (!isCreatePostOpen) return null;
+
+  const handleRequestPermissionAndSelect = () => {
+    setGalleryPermission('granted');
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.multiple = true;
+    input.onchange = (e: any) => {
+      const files = e.target.files;
+      if (files && files.length > 0) {
+        const newUrls: string[] = [];
+        let loadedCount = 0;
+        Array.from(files).forEach((file: any) => {
+          const reader = new FileReader();
+          reader.onload = () => {
+            if (reader.result) {
+              newUrls.push(reader.result as string);
+              loadedCount++;
+              if (loadedCount === files.length) {
+                setDevicePhotos(prev => [...newUrls, ...prev]);
+                setMediaUrl(newUrls[0]);
+              }
+            }
+          };
+          reader.readAsDataURL(file);
+        });
+      }
+    };
+    input.click();
+  };
 
   const handleClose = () => {
     setIsCreatePostOpen(false);
@@ -104,16 +161,14 @@ export const CreatePostModal: React.FC = () => {
   const handleGetGeolocation = () => {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
-        position => {
+        () => {
           setLocation(`${currentUser.city || 'Mi ubicación actual'}, España`);
           setShowLocationSuggestions(false);
         },
         () => {
-          alert('No se pudo obtener la ubicación automáticamente. Por favor escribe la ciudad.');
+          alert('No se pudo obtener la ubicación automáticamente.');
         }
       );
-    } else {
-      alert('Geolocalización no soportada en tu navegador.');
     }
   };
 
@@ -131,18 +186,53 @@ export const CreatePostModal: React.FC = () => {
       id="create-post-backdrop"
       className="fixed inset-0 z-50 bg-[#001845] text-white flex flex-col w-full h-full overflow-hidden animate-fade-in"
     >
+      {/* Instagram-style permission dialog if not granted */}
+      {galleryPermission !== 'granted' && (
+        <div className="absolute inset-0 z-40 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-[#002466] border border-white/20 rounded-3xl p-6 max-w-sm w-full text-center space-y-4 shadow-2xl">
+            <div className="w-14 h-14 bg-amber-400/20 border-2 border-amber-400 rounded-2xl mx-auto flex items-center justify-center text-amber-400">
+              <Image className="w-7 h-7" />
+            </div>
+            <div className="space-y-1">
+              <h4 className="text-sm font-black text-white">
+                "La Tierrita" quiere acceder a tus fotos
+              </h4>
+              <p className="text-xs text-white/70 leading-relaxed">
+                Permite el acceso a tu galería para seleccionar tus imágenes personales del dispositivo y publicarlas en tu perfil.
+              </p>
+            </div>
+            <div className="space-y-2 pt-2">
+              <button
+                type="button"
+                onClick={handleRequestPermissionAndSelect}
+                className="w-full py-3 bg-amber-400 hover:bg-amber-300 text-neutral-950 font-black text-xs rounded-xl shadow-lg transition-all cursor-pointer active:scale-95"
+              >
+                Permitir acceso a la galería
+              </button>
+              <button
+                type="button"
+                onClick={() => setGalleryPermission('denied')}
+                className="w-full py-2.5 bg-white/10 hover:bg-white/15 text-white/80 font-bold text-xs rounded-xl transition-all cursor-pointer"
+              >
+                No permitir
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div
         id="create-post-card"
-        className="w-full max-w-2xl mx-auto bg-[#001845] border-x border-white/10 flex flex-col h-full shadow-2xl"
+        className="w-full max-w-2xl mx-auto bg-[#001845] border-x border-white/10 flex flex-col h-full shadow-2xl relative"
       >
-        {/* STEP 1: IMAGE SELECTOR (NO SCROLL) */}
+        {/* STEP 1: IMAGE SELECTOR (INSTAGRAM STYLE) */}
         {step === 'selector' ? (
-          <div className="flex flex-col h-full overflow-hidden">
+          <div className="flex flex-col h-full overflow-hidden bg-neutral-950">
             <div className="sticky top-0 z-20 px-4 py-3.5 bg-[#002466]/95 backdrop-blur-md border-b border-white/15 flex items-center justify-between text-white shadow-md">
               <button
                 type="button"
                 onClick={handleClose}
-                className="text-xs font-semibold text-white/70 hover:text-white"
+                className="text-xs font-semibold text-white/70 hover:text-white cursor-pointer"
               >
                 Cancelar
               </button>
@@ -153,33 +243,52 @@ export const CreatePostModal: React.FC = () => {
                 type="button"
                 onClick={() => setStep('form')}
                 disabled={!mediaUrl.trim()}
-                className="flex items-center gap-1 px-3 py-1.5 bg-amber-400 hover:bg-amber-300 text-neutral-950 font-black text-xs rounded-xl shadow transition-all disabled:opacity-40"
+                className="flex items-center gap-1 px-3.5 py-1.5 bg-amber-400 hover:bg-amber-300 text-neutral-950 font-black text-xs rounded-xl shadow transition-all disabled:opacity-40 cursor-pointer"
               >
                 <span>Siguiente</span>
                 <ChevronRight className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="flex-1 flex flex-col p-4 overflow-hidden space-y-4 justify-center items-center">
-              {/* Large Active Preview */}
-              <div className="relative w-full max-w-md aspect-square rounded-3xl overflow-hidden bg-neutral-950 border border-white/15 shadow-2xl flex items-center justify-center">
+            {/* Upper Section: Active Preview */}
+            <div className="w-full aspect-square max-h-[42vh] bg-neutral-900 relative flex items-center justify-center overflow-hidden border-b border-white/10">
+              {mediaUrl ? (
                 <img
-                  src={mediaUrl || undefined}
+                  src={mediaUrl}
                   alt="Vista previa"
                   className="w-full h-full object-cover"
                   referrerPolicy="no-referrer"
                 />
+              ) : (
+                <div className="text-center p-6 text-white/60 text-xs">
+                  Selecciona una foto de tu galería o usa la cámara para comenzar
+                </div>
+              )}
+              <span className="absolute bottom-2 left-2 bg-black/70 backdrop-blur-md px-2.5 py-1 rounded-lg text-[10px] text-amber-300 font-bold">
+                Foto seleccionada
+              </span>
+            </div>
+
+            {/* Lower Section: Grid where 1st casilla has camera icon and rest are device photos */}
+            <div className="flex-1 p-2 overflow-y-auto bg-[#001845]">
+              <div className="flex items-center justify-between px-2 py-1 mb-1">
+                <p className="text-[10px] uppercase font-bold text-white/60">
+                  Galería del dispositivo ({devicePhotos.length})
+                </p>
+                <button
+                  type="button"
+                  onClick={handleRequestPermissionAndSelect}
+                  className="text-[10px] font-bold text-amber-300 hover:underline cursor-pointer"
+                >
+                  + Agregar fotos
+                </button>
               </div>
 
-              <p className="text-xs text-white/70 text-center max-w-xs">
-                Selecciona una foto con la cámara de tu dispositivo o desde tu galería para compartir en La Tierrita.
-              </p>
-
-              {/* Action buttons: Device Camera & Gallery picker */}
-              <div className="flex flex-col sm:flex-row gap-3 w-full max-w-md">
-                <label className="cursor-pointer flex-1 flex items-center justify-center gap-2 py-3 px-4 bg-amber-400 hover:bg-amber-300 text-neutral-950 font-black rounded-2xl shadow-lg transition-all active:scale-95 text-xs">
-                  <Camera className="w-4 h-4" />
-                  <span>Tomar foto con la cámara</span>
+              <div className="grid grid-cols-4 gap-1.5">
+                {/* 1st casilla: Camera icon (opens camera) */}
+                <label className="aspect-square bg-white/10 hover:bg-amber-400/20 border-2 border-dashed border-amber-400/50 rounded-xl flex flex-col items-center justify-center cursor-pointer transition-all active:scale-95 group shadow">
+                  <Camera className="w-6 h-6 text-amber-400 group-hover:scale-110 transition-transform" />
+                  <span className="text-[9px] font-bold text-amber-300 mt-1">Cámara</span>
                   <input
                     type="file"
                     accept="image/*"
@@ -190,7 +299,11 @@ export const CreatePostModal: React.FC = () => {
                       if (file) {
                         const reader = new FileReader();
                         reader.onload = () => {
-                          if (reader.result) setMediaUrl(reader.result as string);
+                          if (reader.result) {
+                            const res = reader.result as string;
+                            setDevicePhotos(prev => [res, ...prev]);
+                            setMediaUrl(res);
+                          }
                         };
                         reader.readAsDataURL(file);
                       }
@@ -198,26 +311,33 @@ export const CreatePostModal: React.FC = () => {
                   />
                 </label>
 
-                <label className="cursor-pointer flex-1 flex items-center justify-center gap-2 py-3 px-4 bg-white/10 hover:bg-white/15 border border-white/20 text-white font-bold rounded-2xl shadow-lg transition-all active:scale-95 text-xs">
-                  <Image className="w-4 h-4 text-sky-400" />
-                  <span>Elegir de la galería</span>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={e => {
-                      const file = e.target.files?.[0];
-                      if (file) {
-                        const reader = new FileReader();
-                        reader.onload = () => {
-                          if (reader.result) setMediaUrl(reader.result as string);
-                        };
-                        reader.readAsDataURL(file);
-                      }
-                    }}
-                  />
-                </label>
+                {/* Rest: User Device Photos */}
+                {devicePhotos.map((imgUrl, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => setMediaUrl(imgUrl)}
+                    className={`aspect-square rounded-xl overflow-hidden relative border-2 transition-all cursor-pointer ${
+                      mediaUrl === imgUrl ? 'border-amber-400 ring-2 ring-amber-400/40 scale-95' : 'border-transparent opacity-80 hover:opacity-100'
+                    }`}
+                  >
+                    <img src={imgUrl} alt="Device photo" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                  </button>
+                ))}
               </div>
+
+              {devicePhotos.length === 0 && (
+                <div className="text-center py-8 px-4 text-white/50 text-xs space-y-2">
+                  <p>No hay fotos en tu galería todavía.</p>
+                  <button
+                    type="button"
+                    onClick={handleRequestPermissionAndSelect}
+                    className="px-4 py-2 bg-amber-400 text-neutral-950 font-black rounded-xl text-xs shadow cursor-pointer"
+                  >
+                    Seleccionar fotos del dispositivo
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         ) : (
@@ -227,7 +347,7 @@ export const CreatePostModal: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setStep('selector')}
-                className="flex items-center gap-1 px-2.5 py-1 text-xs font-bold text-white/90 hover:text-white rounded-xl bg-white/10 hover:bg-white/20 transition-all"
+                className="flex items-center gap-1 px-2.5 py-1 text-xs font-bold text-white/90 hover:text-white rounded-xl bg-white/10 hover:bg-white/20 transition-all cursor-pointer"
               >
                 <ArrowLeft className="w-4 h-4" />
                 <span>Atrás</span>
@@ -239,135 +359,71 @@ export const CreatePostModal: React.FC = () => {
                 type="button"
                 onClick={handleSubmit}
                 disabled={!mediaUrl.trim()}
-                className="px-3.5 py-1.5 bg-amber-400 hover:bg-amber-300 text-neutral-950 font-black text-xs rounded-xl shadow transition-all disabled:opacity-40"
+                className="px-3.5 py-1.5 bg-amber-400 hover:bg-amber-300 text-neutral-950 font-black text-xs rounded-xl shadow transition-all disabled:opacity-40 cursor-pointer"
               >
                 Compartir
               </button>
             </div>
 
             <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1 text-xs pb-24">
-              {/* Imagen arriba (Top image preview) */}
+              {/* Imagen arriba */}
               <div className="flex items-center gap-3 p-3 bg-white/10 rounded-2xl border border-white/15">
-                <img
-                  src={mediaUrl || undefined}
-                  alt="Preview"
-                  className="w-16 h-16 rounded-xl object-cover shrink-0 shadow"
-                  referrerPolicy="no-referrer"
-                />
-                <div className="flex-1 min-w-0">
-                  <p className="font-extrabold text-white truncate">Foto seleccionada</p>
-                  <p className="text-[11px] text-white/70">Lista para publicar en La Tierrita</p>
-                  <button
-                    type="button"
-                    onClick={() => setStep('selector')}
-                    className="text-[11px] font-bold text-amber-400 hover:underline mt-0.5 inline-block"
-                  >
-                    Cambiar foto
-                  </button>
+                <div className="w-16 h-16 rounded-xl overflow-hidden bg-neutral-900 shrink-0 border border-white/20">
+                  <img src={mediaUrl} alt="Selected" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                </div>
+                <div className="flex-1 space-y-1">
+                  <p className="font-bold text-white">Foto lista para publicar</p>
+                  <p className="text-[10px] text-white/60">Añade un pie de foto, ubicación y etiquetas para tu comunidad.</p>
                 </div>
               </div>
 
-              {/* Pie de foto (Optional - NOT required) */}
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="font-bold text-white">
-                    Pie de foto (Opcional)
-                  </label>
-                  <span className={`text-[11px] font-bold ${caption.length > 300 ? 'text-rose-400' : 'text-white/60'}`}>
-                    {caption.length}/300
-                  </span>
-                </div>
+              {/* Caption */}
+              <div className="space-y-1">
+                <label className="block text-xs font-bold text-white/90">
+                  Escribe un pie de foto...
+                </label>
                 <textarea
-                  rows={3}
-                  maxLength={300}
                   value={caption}
                   onChange={e => setCaption(e.target.value)}
-                  placeholder="Escribe algo chévere... Ej. ¡Un saludo desde Madrid parceros! #ColombianosEnEspaña"
-                  className="w-full bg-white/10 text-white placeholder-white/40 px-3.5 py-2.5 rounded-xl border border-white/20 focus:outline-none focus:ring-1 focus:ring-amber-400 resize-none"
+                  rows={3}
+                  placeholder="¿Qué estás pensando parcero? Usa hashtags y emojis..."
+                  className="w-full bg-white/10 text-white placeholder-white/40 p-3 rounded-2xl border border-white/20 focus:outline-none focus:ring-1 focus:ring-amber-400 resize-none text-xs"
                 />
               </div>
 
-              {/* Etiquetar */}
-              <div>
-                <label className="font-bold text-white mb-1.5 block">
-                  Etiquetar
+              {/* Location */}
+              <div className="space-y-1 relative">
+                <label className="block text-xs font-bold text-white/90">
+                  Agregar ubicación
                 </label>
-                
-                {taggedUsernames.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 mb-2">
-                    {taggedUsernames.map(username => {
-                      return (
-                        <span key={username} className="flex items-center gap-1 bg-amber-400 text-neutral-950 font-bold px-2.5 py-1 rounded-full text-xs">
-                          <span>@{username}</span>
-                          <button
-                            type="button"
-                            onClick={() => toggleTagUser(username)}
-                            className="hover:text-rose-700 font-extrabold ml-1"
-                          >
-                            ×
-                          </button>
-                        </span>
-                      );
-                    })}
+                <div className="flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-amber-400" />
+                    <input
+                      type="text"
+                      value={location}
+                      onChange={e => {
+                        setLocation(e.target.value);
+                        setShowLocationSuggestions(true);
+                      }}
+                      onFocus={() => setShowLocationSuggestions(true)}
+                      placeholder="Ej. Madrid, España"
+                      className="w-full bg-white/10 text-white placeholder-white/40 pl-9 pr-3 py-2.5 rounded-xl border border-white/20 focus:outline-none focus:ring-1 focus:ring-amber-400 text-xs"
+                    />
                   </div>
-                )}
-
-                <button
-                  type="button"
-                  onClick={() => setIsTagModalOpen(true)}
-                  className="w-full flex items-center justify-between px-3.5 py-2.5 bg-white/10 hover:bg-white/15 rounded-xl border border-white/20 text-white font-medium transition-all"
-                >
-                  <div className="flex items-center gap-2">
-                    <Users className="w-4 h-4 text-amber-400" />
-                    <span>{taggedUsernames.length > 0 ? `${taggedUsernames.length} personas etiquetadas` : 'Etiquetar personas...'}</span>
-                  </div>
-                  <Plus className="w-4 h-4 text-amber-400" />
-                </button>
-              </div>
-
-              {/* Añadir ubicación (Any world place freely typed with autocomplete suggestions) */}
-              <div className="relative">
-                <label className="font-bold text-white mb-1.5 block">
-                  Añadir ubicación (Cualquier lugar del mundo)
-                </label>
-                <div className="relative">
-                  <MapPin className="w-4 h-4 text-rose-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="text"
-                    value={location}
-                    onChange={e => {
-                      setLocation(e.target.value);
-                      setShowLocationSuggestions(true);
-                    }}
-                    onFocus={() => setShowLocationSuggestions(true)}
-                    placeholder="Escribe cualquier ciudad, país o lugar del mundo..."
-                    className="w-full pl-9 pr-24 py-2.5 bg-white/10 text-white placeholder-white/40 rounded-xl border border-white/20 text-xs focus:outline-none focus:ring-1 focus:ring-amber-400"
-                  />
                   <button
                     type="button"
                     onClick={handleGetGeolocation}
-                    className="absolute right-1.5 top-1/2 -translate-y-1/2 px-2.5 py-1 bg-amber-400/20 hover:bg-amber-400/30 text-amber-300 rounded-lg text-[10px] font-bold transition-all flex items-center gap-1"
+                    className="px-3 py-2.5 bg-white/10 hover:bg-white/15 border border-white/20 text-white font-bold rounded-xl flex items-center gap-1 shrink-0 transition-all cursor-pointer"
+                    title="Usar GPS actual"
                   >
-                    <Navigation className="w-3 h-3" />
-                    <span>Mi GPS</span>
+                    <Navigation className="w-3.5 h-3.5 text-amber-400" />
+                    <span>GPS</span>
                   </button>
                 </div>
 
-                {/* Autocomplete Suggestions Dropdown (Including custom typed text option) */}
-                {showLocationSuggestions && (
-                  <div className="absolute left-0 right-0 top-full mt-1 z-30 bg-[#002466] border border-white/20 rounded-xl shadow-2xl max-h-48 overflow-y-auto">
-                    {location.trim() && !filteredLocations.includes(location.trim()) && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowLocationSuggestions(false);
-                        }}
-                        className="w-full text-left px-3.5 py-2.5 bg-amber-400/20 hover:bg-amber-400/30 text-xs text-amber-300 font-bold flex items-center gap-2 border-b border-white/15"
-                      >
-                        <MapPin className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                        <span>Usar ubicación personalizada: "{location}"</span>
-                      </button>
-                    )}
+                {showLocationSuggestions && filteredLocations.length > 0 && (
+                  <div className="absolute top-full left-0 right-0 z-30 mt-1 bg-[#001f52] border border-white/20 rounded-xl shadow-xl max-h-40 overflow-y-auto">
                     {filteredLocations.map(city => (
                       <button
                         key={city}
@@ -376,9 +432,9 @@ export const CreatePostModal: React.FC = () => {
                           setLocation(city);
                           setShowLocationSuggestions(false);
                         }}
-                        className="w-full text-left px-3.5 py-2 hover:bg-white/15 text-xs text-white flex items-center gap-2 border-b border-white/10 last:border-0"
+                        className="w-full text-left px-3 py-2 hover:bg-white/10 text-xs text-white flex items-center gap-2 transition-colors cursor-pointer"
                       >
-                        <MapPin className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+                        <MapPin className="w-3.5 h-3.5 text-amber-400" />
                         <span>{city}</span>
                       </button>
                     ))}
@@ -386,27 +442,90 @@ export const CreatePostModal: React.FC = () => {
                 )}
               </div>
 
-              {/* Más Opciones (Cerrado por defecto, al hacer clic se expande) */}
-              <div className="pt-2 border-t border-white/15 rounded-2xl overflow-hidden">
+              {/* Tagging */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-bold text-white/90">
+                    Etiquetar personas ({taggedUsernames.length})
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setIsTagModalOpen(!isTagModalOpen)}
+                    className="text-[10px] font-bold text-amber-300 hover:underline cursor-pointer"
+                  >
+                    {isTagModalOpen ? 'Cerrar' : '+ Añadir etiqueta'}
+                  </button>
+                </div>
+
+                {taggedUsernames.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    {taggedUsernames.map(username => (
+                      <span key={username} className="inline-flex items-center gap-1 bg-amber-400/20 border border-amber-400/40 text-amber-300 px-2.5 py-1 rounded-full text-[10px] font-bold">
+                        <span>@{username}</span>
+                        <button type="button" onClick={() => toggleTagUser(username)} className="hover:text-white cursor-pointer">
+                          <X className="w-3 h-3" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                {isTagModalOpen && (
+                  <div className="p-3 bg-white/5 border border-white/15 rounded-2xl space-y-2">
+                    <div className="relative">
+                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white/50" />
+                      <input
+                        type="text"
+                        value={userSearchQuery}
+                        onChange={e => setUserSearchQuery(e.target.value)}
+                        placeholder="Buscar parceros por nombre o usuario..."
+                        className="w-full bg-white/10 text-white placeholder-white/40 pl-8 pr-3 py-1.5 rounded-xl border border-white/20 text-xs focus:outline-none focus:ring-1 focus:ring-amber-400"
+                      />
+                    </div>
+                    <div className="max-h-36 overflow-y-auto space-y-1">
+                      {filteredUsersForTagging.map(u => {
+                        const isSelected = taggedUsernames.includes(u.username);
+                        return (
+                          <div
+                            key={u.id}
+                            onClick={() => toggleTagUser(u.username)}
+                            className={`flex items-center justify-between p-2 rounded-xl cursor-pointer transition-all ${
+                              isSelected ? 'bg-amber-400/20 border border-amber-400/40' : 'hover:bg-white/10'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2">
+                              <img src={u.avatar} alt={u.name} className="w-7 h-7 rounded-full object-cover" referrerPolicy="no-referrer" />
+                              <div>
+                                <p className="font-bold text-white text-[11px]">{u.name}</p>
+                                <p className="text-[9px] text-white/60">@{u.username}</p>
+                              </div>
+                            </div>
+                            {isSelected && <Check className="w-4 h-4 text-amber-400" />}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* More advanced options toggle */}
+              <div className="pt-2 border-t border-white/10 space-y-3">
                 <button
                   type="button"
-                  onClick={() => setIsMoreOptionsOpen(prev => !prev)}
-                  className="w-full flex items-center justify-between p-3 bg-white/10 hover:bg-white/15 rounded-2xl transition-colors text-white font-black uppercase tracking-wider text-[11px]"
+                  onClick={() => setIsMoreOptionsOpen(!isMoreOptionsOpen)}
+                  className="w-full flex items-center justify-between py-2 text-xs font-bold text-white/80 hover:text-white cursor-pointer"
                 >
-                  <span>Más Opciones</span>
+                  <span>Configuración avanzada</span>
                   {isMoreOptionsOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                 </button>
 
                 {isMoreOptionsOpen && (
-                  <div className="pt-3 space-y-3 animate-fade-in">
-                    {/* Desactivar comentarios */}
-                    <div className="flex items-center justify-between p-2.5 bg-white/5 rounded-xl border border-white/10">
+                  <div className="space-y-3 p-3 bg-white/5 border border-white/15 rounded-2xl">
+                    <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <MessageSquareOff className="w-4 h-4 text-white/60" />
-                        <div>
-                          <p className="font-bold text-white">Desactivar comentarios</p>
-                          <p className="text-[10px] text-white/60">Nadie podrá comentar en esta publicación</p>
-                        </div>
+                        <span>Desactivar comentarios en esta publicación</span>
                       </div>
                       <label className="relative inline-flex items-center cursor-pointer">
                         <input
@@ -415,18 +534,14 @@ export const CreatePostModal: React.FC = () => {
                           onChange={e => setDisableComments(e.target.checked)}
                           className="sr-only peer"
                         />
-                        <div className="w-8 h-4 bg-white/20 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-white/30 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-amber-400"></div>
+                        <div className="w-9 h-5 bg-white/20 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-400"></div>
                       </label>
                     </div>
 
-                    {/* Ocultar recuento de like */}
-                    <div className="flex items-center justify-between p-2.5 bg-white/5 rounded-xl border border-white/10">
+                    <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <EyeOff className="w-4 h-4 text-white/60" />
-                        <div>
-                          <p className="font-bold text-white">Ocultar recuento de likes</p>
-                          <p className="text-[10px] text-white/60">Nadie verá el número total de me gusta</p>
-                        </div>
+                        <span>Ocultar recuento de Me gusta y Reproducciones</span>
                       </div>
                       <label className="relative inline-flex items-center cursor-pointer">
                         <input
@@ -435,125 +550,45 @@ export const CreatePostModal: React.FC = () => {
                           onChange={e => setHideLikes(e.target.checked)}
                           className="sr-only peer"
                         />
-                        <div className="w-8 h-4 bg-white/20 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-white/30 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-amber-400"></div>
+                        <div className="w-9 h-5 bg-white/20 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-400"></div>
                       </label>
                     </div>
+
+                    {isStaffMode && (
+                      <div className="pt-2 border-t border-white/10 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-amber-300">Marcar como Anuncio Oficial STAFF</span>
+                          <input
+                            type="checkbox"
+                            checked={isStaffAd}
+                            onChange={e => setIsStaffAd(e.target.checked)}
+                            className="w-4 h-4 accent-amber-400 rounded cursor-pointer"
+                          />
+                        </div>
+                        {isStaffAd && (
+                          <div className="space-y-2 pt-1">
+                            <input
+                              type="text"
+                              value={sponsorName}
+                              onChange={e => setSponsorName(e.target.value)}
+                              placeholder="Nombre del patrocinador (ej. Embajada de Colombia)"
+                              className="w-full bg-white/10 text-white placeholder-white/40 px-3 py-2 rounded-xl text-xs border border-white/20"
+                            />
+                            <input
+                              type="text"
+                              value={adTitle}
+                              onChange={e => setAdTitle(e.target.value)}
+                              placeholder="Título del anuncio"
+                              className="w-full bg-white/10 text-white placeholder-white/40 px-3 py-2 rounded-xl text-xs border border-white/20"
+                            />
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
-
-              {/* STAFF Mode ad creator (if active) */}
-              {isStaffMode && (
-                <div className="p-3 bg-amber-500/15 border border-amber-500/40 rounded-xl space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="font-extrabold text-amber-300 flex items-center gap-1">
-                      <Megaphone className="w-3.5 h-3.5" />
-                      Publicar Anuncio STAFF
-                    </span>
-                    <input
-                      type="checkbox"
-                      checked={isStaffAd}
-                      onChange={e => setIsStaffAd(e.target.checked)}
-                    />
-                  </div>
-                  {isStaffAd && (
-                    <div className="space-y-1.5 text-[11px]">
-                      <input
-                        type="text"
-                        placeholder="Patrocinador (ej. Rincón Paisa)"
-                        value={sponsorName}
-                        onChange={e => setSponsorName(e.target.value)}
-                        className="w-full bg-white/10 text-white px-2 py-1 rounded border border-white/20"
-                      />
-                      <input
-                        type="text"
-                        placeholder="Título de oferta"
-                        value={adTitle}
-                        onChange={e => setAdTitle(e.target.value)}
-                        className="w-full bg-white/10 text-white px-2 py-1 rounded border border-white/20"
-                      />
-                    </div>
-                  )}
-                </div>
-              )}
-
-              <div className="pt-3">
-                <button
-                  type="submit"
-                  disabled={!mediaUrl.trim()}
-                  className="w-full py-3 bg-amber-400 hover:bg-amber-300 text-neutral-950 font-black rounded-2xl shadow-md transition-all active:scale-95 disabled:opacity-40"
-                >
-                  Compartir en La Tierrita
-                </button>
-              </div>
             </form>
-          </div>
-        )}
-
-        {/* TAGGING MODAL / OVERLAY */}
-        {isTagModalOpen && (
-          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-            <div className="w-full max-w-sm bg-[#002466] border border-white/20 rounded-3xl p-5 shadow-2xl text-white space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-black text-white flex items-center gap-2">
-                  <Users className="w-4 h-4 text-amber-400" />
-                  <span>Etiquetar personas</span>
-                </h3>
-                <button
-                  type="button"
-                  onClick={() => setIsTagModalOpen(false)}
-                  className="p-1.5 text-white/70 hover:text-white rounded-full bg-white/10"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              <div className="relative">
-                <Search className="w-4 h-4 text-white/50 absolute left-3 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  value={userSearchQuery}
-                  onChange={e => setUserSearchQuery(e.target.value)}
-                  placeholder="Buscar parcero..."
-                  className="w-full pl-9 pr-3 py-2 bg-white/10 text-white placeholder-white/40 rounded-xl border border-white/20 text-xs focus:outline-none focus:ring-1 focus:ring-amber-400"
-                />
-              </div>
-
-              <div className="max-h-60 overflow-y-auto space-y-1.5 pr-1">
-                {filteredUsersForTagging.map(user => {
-                  const isSelected = taggedUsernames.includes(user.username);
-                  return (
-                    <button
-                      key={user.id}
-                      type="button"
-                      onClick={() => toggleTagUser(user.username)}
-                      className={`w-full flex items-center justify-between p-2.5 rounded-xl transition-all ${
-                        isSelected ? 'bg-amber-400 text-neutral-950 font-bold' : 'bg-white/5 hover:bg-white/10 text-white'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2.5">
-                        <img src={user.avatar || undefined} alt={user.username} className="w-7 h-7 rounded-full object-cover" />
-                        <div className="text-left">
-                          <p className="text-xs font-bold">@{user.username}</p>
-                          <p className={`text-[10px] ${isSelected ? 'text-neutral-800' : 'text-white/60'}`}>{user.name}</p>
-                        </div>
-                      </div>
-                      <div className={`w-5 h-5 rounded-full flex items-center justify-center text-xs ${isSelected ? 'bg-neutral-950 text-amber-400 font-bold' : 'border border-white/30'}`}>
-                        {isSelected ? '✓' : ''}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setIsTagModalOpen(false)}
-                className="w-full py-2.5 bg-amber-400 hover:bg-amber-300 text-neutral-950 font-black rounded-xl text-xs"
-              >
-                Listo ({taggedUsernames.length} etiquetados)
-              </button>
-            </div>
           </div>
         )}
       </div>
