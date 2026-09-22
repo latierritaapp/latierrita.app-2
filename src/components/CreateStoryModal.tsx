@@ -120,15 +120,15 @@ export const CreateStoryModal: React.FC = () => {
             </div>
           </div>
 
-          {/* Device Camera Capture & Custom URL */}
+          {/* Device Camera & Device Gallery Capture */}
           <div className="space-y-2">
             <label className="block text-xs font-semibold text-neutral-600 dark:text-neutral-300 mb-1">
-              Tomar foto con la cámara o ingresar enlace
+              Subir imagen desde tu dispositivo
             </label>
-            <div className="flex items-center gap-2">
-              <label className="cursor-pointer flex-1 flex items-center justify-center gap-2 py-2 px-3 bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 rounded-xl text-xs font-bold text-amber-700 dark:text-amber-300 transition-all">
+            <div className="grid grid-cols-2 gap-2">
+              <label className="cursor-pointer flex items-center justify-center gap-2 py-2.5 px-3 bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 rounded-xl text-xs font-bold text-amber-700 dark:text-amber-300 transition-all">
                 <Camera className="w-4 h-4" />
-                <span>Abrir cámara del dispositivo</span>
+                <span>Tomar foto</span>
                 <input
                   type="file"
                   accept="image/*"
@@ -146,16 +146,26 @@ export const CreateStoryModal: React.FC = () => {
                   }}
                 />
               </label>
-            </div>
-            <div className="flex items-center gap-2">
-              <Image className="w-4 h-4 text-neutral-400 shrink-0" />
-              <input
-                type="url"
-                value={customUrl}
-                onChange={e => setCustomUrl(e.target.value)}
-                placeholder="O pega una URL de imagen..."
-                className="flex-1 bg-neutral-100 dark:bg-neutral-800 text-neutral-900 dark:text-white px-3 py-2 text-xs rounded-xl border border-neutral-200 dark:border-neutral-700 focus:outline-none focus:ring-1 focus:ring-amber-500"
-              />
+
+              <label className="cursor-pointer flex items-center justify-center gap-2 py-2.5 px-3 bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/30 rounded-xl text-xs font-bold text-sky-400 transition-all">
+                <Image className="w-4 h-4" />
+                <span>Elegir galería</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={e => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      const reader = new FileReader();
+                      reader.onload = () => {
+                        if (reader.result) setCustomUrl(reader.result as string);
+                      };
+                      reader.readAsDataURL(file);
+                    }
+                  }}
+                />
+              </label>
             </div>
           </div>
 

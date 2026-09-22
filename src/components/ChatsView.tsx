@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useApp } from '../context/AppContext';
 import { DEFAULT_SILHOUETTE_AVATAR } from '../context/AuthContext';
 import {
@@ -31,7 +31,14 @@ import {
   MessageCircle,
   BadgeCheck,
   Reply,
-  Copy
+  Copy,
+  Mic,
+  MicOff,
+  Play,
+  Pause,
+  AtSign,
+  Square,
+  Volume2
 } from 'lucide-react';
 import { SPANISH_CITIES } from '../data/mockData';
 import { FlagColombia, FlagSpain, CountryFlag } from './CountryFlag';
@@ -66,6 +73,107 @@ const UserBadges: React.FC<{
         </span>
       )}
     </span>
+  );
+};
+
+// WhatsApp-style Voice Note Player component for rendering audio notes in chat bubbles
+const VoiceNotePlayer: React.FC<{
+  audioUrl: string;
+  duration?: number;
+  isMe?: boolean;
+}> = ({ audioUrl, duration = 0, isMe }) => {
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [maxDuration, setMaxDuration] = useState(duration);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    const audio = new Audio(audioUrl);
+    audioRef.current = audio;
+
+    const updateProgress = () => {
+      setCurrentTime(audio.currentTime);
+      if (audio.duration && !isNaN(audio.duration) && isFinite(audio.duration)) {
+        setMaxDuration(Math.round(audio.duration));
+      }
+    };
+
+    const handleEnded = () => {
+      setIsPlaying(false);
+      setCurrentTime(0);
+    };
+
+    audio.addEventListener('timeupdate', updateProgress);
+    audio.addEventListener('ended', handleEnded);
+
+    return () => {
+      audio.pause();
+      audio.removeEventListener('timeupdate', updateProgress);
+      audio.removeEventListener('ended', handleEnded);
+    };
+  }, [audioUrl]);
+
+  const togglePlay = () => {
+    if (!audioRef.current) return;
+    if (isPlaying) {
+      audioRef.current.pause();
+      setIsPlaying(false);
+    } else {
+      audioRef.current.play().then(() => setIsPlaying(true)).catch(() => setIsPlaying(false));
+    }
+  };
+
+  const formatSecs = (s: number) => {
+    const mins = Math.floor(s / 60);
+    const secs = Math.floor(s % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const progressPercent = maxDuration > 0 ? Math.min(100, (currentTime / maxDuration) * 100) : 0;
+
+  return (
+    <div className={`flex items-center gap-2.5 p-2 rounded-2xl min-w-[210px] sm:min-w-[250px] max-w-[280px] my-1 ${
+      isMe
+        ? 'bg-black/10 text-neutral-950 border border-neutral-950/20'
+        : 'bg-black/30 dark:bg-white/10 text-white border border-white/15'
+    }`}>
+      <button
+        type="button"
+        onClick={togglePlay}
+        className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition-transform active:scale-90 shadow-md cursor-pointer ${
+          isMe
+            ? 'bg-neutral-950 text-amber-400 hover:bg-neutral-900'
+            : 'bg-amber-500 text-neutral-950 hover:bg-amber-400'
+        }`}
+        title={isPlaying ? 'Pausar nota de voz' : 'Reproducir nota de voz'}
+      >
+        {isPlaying ? (
+          <Pause className="w-4 h-4 fill-current" />
+        ) : (
+          <Play className="w-4 h-4 fill-current ml-0.5" />
+        )}
+      </button>
+
+      <div className="flex-1 min-w-0 flex flex-col gap-1">
+        <div className="flex items-center justify-between text-[10px] font-bold opacity-85">
+          <span className="flex items-center gap-1 truncate">
+            <Mic className={`w-3 h-3 shrink-0 ${isMe ? 'text-neutral-950' : 'text-amber-400'}`} />
+            <span>Nota de voz</span>
+          </span>
+          <span className="shrink-0">{formatSecs(isPlaying ? currentTime : (maxDuration || duration))}</span>
+        </div>
+
+        {/* Waveform / Progress bar */}
+        <div className="relative w-full h-2 bg-black/20 dark:bg-white/20 rounded-full overflow-hidden">
+          <div
+            className={`absolute top-0 left-0 h-full transition-all duration-100 ${
+              isMe ? 'bg-neutral-950' : 'bg-amber-400'
+            }`}
+            style={{ width: `${progressPercent}%` }}
+          />
+        </div>
+      </div>
+    </div>
   );
 };
 
@@ -287,6 +395,163 @@ export const ChatsView: React.FC = () => {
   const chatInputRef = useRef<HTMLInputElement>(null);
   const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Voice Recording State
+  const [isRecordingAudio, setIsRecordingAudio] = useState(false);
+  const [audioRecordingTime, setAudioRecordingTime] = useState(0);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const recordingTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Cooldown State for General and City chats (3 seconds)
+  const [cooldownTimeLeft, setCooldownTimeLeft] = useState<number>(0);
+
+  // Highlight message on click / scroll
+  const [highlightedMsgId, setHighlightedMsgId] = useState<string | null>(null);
+
+  const scrollToMessage = (msgId: string) => {
+    const el = document.getElementById(`msg-${msgId}`);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      setHighlightedMsgId(msgId);
+      setTimeout(() => {
+        setHighlightedMsgId(prev => prev === msgId ? null : prev);
+      }, 2000);
+    }
+  };
+
+  // Count replies / mentions directed to the current user in a room
+  const getRoomRepliesToMeCount = useCallback((room: ChatRoom) => {
+    if (!room || !currentUser) return 0;
+    const myNameLower = (currentUser.name || '').toLowerCase();
+    const myUsernameLower = (currentUser.username || '').toLowerCase();
+
+    return (room.messages || []).filter(m => {
+      if (m.senderId === currentUser.id) return false;
+      if (m.replyTo) {
+        const replyAuthorLower = (m.replyTo.senderName || '').toLowerCase();
+        if (replyAuthorLower === myNameLower || replyAuthorLower === myUsernameLower) return true;
+      }
+      if (m.text && (m.text.toLowerCase().includes(`@${myUsernameLower}`) || m.text.toLowerCase().includes(`@${myNameLower}`))) {
+        return true;
+      }
+      return false;
+    }).length;
+  }, [currentUser]);
+
+  // Start Voice Recording
+  const startVoiceRecording = async () => {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      triggerPlushNotification({
+        type: 'system',
+        title: 'Grabación no soportada',
+        message: 'Tu navegador no permite la grabación de audio.'
+      });
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) {
+          audioChunksRef.current.push(e.data);
+        }
+      };
+
+      mediaRecorder.start(100);
+      setIsRecordingAudio(true);
+      setAudioRecordingTime(0);
+
+      if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = setInterval(() => {
+        setAudioRecordingTime(prev => {
+          if (prev >= 59) {
+            stopAndSendVoiceRecording();
+            return 60;
+          }
+          return prev + 1;
+        });
+      }, 1000);
+    } catch (err) {
+      console.warn('Microphone permission denied:', err);
+      triggerPlushNotification({
+        type: 'system',
+        title: 'Micrófono no disponible',
+        message: 'Por favor concede permiso de micrófono en tu navegador.'
+      });
+    }
+  };
+
+  // Stop & Send Voice Recording
+  const stopAndSendVoiceRecording = () => {
+    if (recordingTimerRef.current) {
+      clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = null;
+    }
+
+    const recorder = mediaRecorderRef.current;
+    if (recorder && recorder.state !== 'inactive') {
+      recorder.onstop = () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const reader = new FileReader();
+        reader.readAsDataURL(audioBlob);
+        reader.onloadend = () => {
+          const base64Audio = reader.result as string;
+          if (activeChat && base64Audio) {
+            const finalDuration = audioRecordingTime || 1;
+            sendMessage(
+              activeChat.id,
+              '🎤 Nota de voz',
+              replyingToMessage || undefined,
+              { url: base64Audio, duration: finalDuration }
+            );
+            setReplyingToMessage(null);
+
+            if (activeChat.type === 'general' || activeChat.type === 'city') {
+              setCooldownTimeLeft(3);
+            }
+          }
+        };
+
+        recorder.stream.getTracks().forEach(track => track.stop());
+      };
+      recorder.stop();
+    }
+    setIsRecordingAudio(false);
+    setAudioRecordingTime(0);
+  };
+
+  // Cancel Voice Recording
+  const cancelVoiceRecording = () => {
+    if (recordingTimerRef.current) {
+      clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = null;
+    }
+
+    const recorder = mediaRecorderRef.current;
+    if (recorder && recorder.state !== 'inactive') {
+      recorder.onstop = () => {
+        recorder.stream.getTracks().forEach(track => track.stop());
+      };
+      recorder.stop();
+    }
+    audioChunksRef.current = [];
+    setIsRecordingAudio(false);
+    setAudioRecordingTime(0);
+  };
+
+  // Decrement anti-spam cooldown every second
+  useEffect(() => {
+    if (cooldownTimeLeft <= 0) return;
+    const timer = setInterval(() => {
+      setCooldownTimeLeft(prev => Math.max(0, prev - 1));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [cooldownTimeLeft]);
+
   const handleTouchStartMessage = (msg: ChatMessage, e: React.TouchEvent<HTMLDivElement>) => {
     if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
     const target = e.currentTarget;
@@ -392,6 +657,24 @@ export const ChatsView: React.FC = () => {
     return null;
   }, [chatTypeTab, selectedPrivateOrGroupId, generalChat, currentCityChat, chatRooms]);
 
+  const activeRepliesToMe = useMemo(() => {
+    if (!activeChat || !currentUser) return [];
+    const myNameLower = (currentUser.name || '').toLowerCase();
+    const myUsernameLower = (currentUser.username || '').toLowerCase();
+
+    return (activeChat.messages || []).filter(m => {
+      if (m.senderId === currentUser.id) return false;
+      if (m.replyTo) {
+        const replyAuthorLower = (m.replyTo.senderName || '').toLowerCase();
+        if (replyAuthorLower === myNameLower || replyAuthorLower === myUsernameLower) return true;
+      }
+      if (m.text && (m.text.toLowerCase().includes(`@${myUsernameLower}`) || m.text.toLowerCase().includes(`@${myNameLower}`))) {
+        return true;
+      }
+      return false;
+    });
+  }, [activeChat, currentUser]);
+
   // Scroll to bottom when messages change or chat is switched
   useEffect(() => {
     if (activeChat) {
@@ -489,9 +772,23 @@ export const ChatsView: React.FC = () => {
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault();
     if (!inputMessage.trim() || !activeChat) return;
+
+    if ((activeChat.type === 'general' || activeChat.type === 'city') && cooldownTimeLeft > 0) {
+      triggerPlushNotification({
+        type: 'system',
+        title: 'Modo Antispam',
+        message: `Por favor espera ${cooldownTimeLeft}s antes de enviar otro mensaje.`
+      });
+      return;
+    }
+
     sendMessage(activeChat.id, inputMessage, replyingToMessage || undefined);
     setInputMessage('');
     setReplyingToMessage(null);
+
+    if (activeChat.type === 'general' || activeChat.type === 'city') {
+      setCooldownTimeLeft(3);
+    }
   };
 
   // Handle Group Creation (from same session as private chats)
@@ -684,6 +981,15 @@ export const ChatsView: React.FC = () => {
                           <span className="text-sm font-bold text-neutral-900 dark:text-white truncate">
                             {displayName}
                           </span>
+                          {getRoomRepliesToMeCount(room) > 0 && (
+                            <span
+                              className="px-1.5 py-0.5 bg-amber-500 text-neutral-950 font-black text-[10px] rounded-full flex items-center gap-0.5 shadow-sm animate-bounce shrink-0"
+                              title="Tienes respuestas dirigidas a ti"
+                            >
+                              <AtSign className="w-3 h-3 shrink-0" />
+                              <span>{getRoomRepliesToMeCount(room)}</span>
+                            </span>
+                          )}
                           {room.type === 'private' && (
                             <UserBadges isVerified={otherUser?.isVerified} staffRole={otherUser?.staffRole} />
                           )}
@@ -1174,6 +1480,30 @@ export const ChatsView: React.FC = () => {
                 };
               })()}
             >
+              {/* Floating @ Mentions / Replies Counter Badge */}
+              {activeRepliesToMe.length > 0 && (
+                <div className="sticky top-2 z-20 flex justify-center my-1 pointer-events-none">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const lastReply = activeRepliesToMe[activeRepliesToMe.length - 1];
+                      if (lastReply) {
+                        if (lastReply.replyTo?.id) {
+                          scrollToMessage(lastReply.replyTo.id);
+                        } else {
+                          scrollToMessage(lastReply.id);
+                        }
+                      }
+                    }}
+                    className="pointer-events-auto bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-neutral-950 font-black text-xs px-3.5 py-1.5 rounded-full shadow-2xl border border-amber-300/80 flex items-center gap-1.5 transition-transform active:scale-95 animate-bounce cursor-pointer"
+                    title="Te han respondido un mensaje. Haz clic para ir al mensaje."
+                  >
+                    <AtSign className="w-4 h-4 shrink-0 fill-neutral-950/20" />
+                    <span>{activeRepliesToMe.length} {activeRepliesToMe.length === 1 ? 'respuesta para ti' : 'respuestas para ti'}</span>
+                  </button>
+                </div>
+              )}
+
               {activeChat.messages
                 .map(msg => {
                   const isMe = msg.senderId === currentUser.id;
@@ -1196,7 +1526,10 @@ export const ChatsView: React.FC = () => {
                   return (
                     <div
                       key={msg.id}
-                      className={`flex gap-2 items-end group ${isMe ? 'justify-end' : 'justify-start'}`}
+                      id={`msg-${msg.id}`}
+                      className={`flex gap-2 items-end group transition-colors duration-300 rounded-2xl ${
+                        highlightedMsgId === msg.id ? 'p-1 bg-amber-500/20 ring-2 ring-amber-400 rounded-2xl' : ''
+                      } ${isMe ? 'justify-end' : 'justify-start'}`}
                     >
                                       {!isMe && (() => {
                         const senderUser = otherUsers.find(u => u.id === msg.senderId || u.username === msg.senderName) || null;
@@ -1291,11 +1624,20 @@ export const ChatsView: React.FC = () => {
                             ) : (
                               <>
                                 {msg.replyTo && (
-                                  <div className={`mb-1.5 p-1.5 px-2.5 rounded-xl text-[11px] border-l-2 ${
-                                    isMe
-                                      ? 'border-neutral-950 bg-black/10 text-neutral-950 font-medium'
-                                      : 'border-amber-500 bg-black/20 dark:bg-white/10 text-neutral-800 dark:text-neutral-200 font-medium'
-                                  }`}>
+                                  <div
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (msg.replyTo?.id) {
+                                        scrollToMessage(msg.replyTo.id);
+                                      }
+                                    }}
+                                    className={`mb-1.5 p-1.5 px-2.5 rounded-xl text-[11px] border-l-2 cursor-pointer hover:opacity-90 transition-opacity ${
+                                      isMe
+                                        ? 'border-neutral-950 bg-black/10 text-neutral-950 font-medium'
+                                        : 'border-amber-500 bg-black/20 dark:bg-white/10 text-neutral-800 dark:text-neutral-200 font-medium'
+                                    }`}
+                                    title="Haz clic para ver el mensaje original"
+                                  >
                                     <div className="font-bold text-[10px] opacity-90 truncate flex items-center gap-1">
                                       <Reply className="w-2.5 h-2.5 shrink-0" />
                                       <span>{msg.replyTo.senderName}</span>
@@ -1305,7 +1647,11 @@ export const ChatsView: React.FC = () => {
                                     </div>
                                   </div>
                                 )}
-                                <p className="whitespace-pre-wrap break-words">{msg.text}</p>
+                                {msg.audioUrl ? (
+                                  <VoiceNotePlayer audioUrl={msg.audioUrl} duration={msg.audioDuration} isMe={isMe} />
+                                ) : (
+                                  <p className="whitespace-pre-wrap break-words">{msg.text}</p>
+                                )}
                               </>
                             )}
 
@@ -1421,43 +1767,117 @@ export const ChatsView: React.FC = () => {
                 </>
               )}
 
-              <form
-                onSubmit={handleSendMessage}
-                className="flex items-center gap-2 max-w-2xl mx-auto"
-              >
-                <button
-                  type="button"
-                  onClick={() => setShowQuickEmojis(prev => !prev)}
-                  className={`p-2 rounded-full transition-colors shrink-0 ${
-                    showQuickEmojis
-                      ? 'text-amber-400 bg-amber-400/15'
-                      : 'text-white/60 hover:text-amber-400 hover:bg-white/10'
-                  }`}
-                  title="Emojis colombianos rápidos"
-                >
-                  <Smile className="w-5 h-5" />
-                </button>
+              {isRecordingAudio ? (
+                /* Voice Recording Mode (WhatsApp style) */
+                <div className="flex items-center justify-between gap-3 max-w-2xl mx-auto py-1 px-2 animate-in fade-in duration-150">
+                  <div className="flex items-center gap-3 overflow-hidden">
+                    <div className="relative flex items-center justify-center">
+                      <span className="w-3 h-3 bg-rose-500 rounded-full animate-ping absolute" />
+                      <span className="w-3 h-3 bg-rose-500 rounded-full relative z-10" />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-mono font-bold text-rose-400">
+                        {Math.floor(audioRecordingTime / 60)}:{(audioRecordingTime % 60).toString().padStart(2, '0')}
+                      </span>
+                      <span className="text-[10px] text-white/50 uppercase tracking-wider font-semibold">
+                        (Máx 1:00)
+                      </span>
+                    </div>
 
-                <div className="flex-1 relative flex items-center">
-                  <input
-                    ref={chatInputRef}
-                    type="text"
-                    value={inputMessage}
-                    onChange={e => setInputMessage(e.target.value)}
-                    placeholder={`Escribe un mensaje en ${activeChat.name}...`}
-                    className="w-full bg-white/[0.08] hover:bg-white/[0.12] focus:bg-white/[0.15] text-white placeholder-white/45 px-4 py-2 text-xs sm:text-sm rounded-full border border-white/15 focus:outline-none focus:border-amber-400/80 focus:ring-1 focus:ring-amber-400/40 transition-all shadow-inner"
-                  />
+                    {/* Animated soundwave bars */}
+                    <div className="flex items-center gap-0.5 h-4">
+                      <span className="w-0.5 h-2 bg-amber-400 rounded-full animate-pulse" style={{ animationDelay: '0ms' }} />
+                      <span className="w-0.5 h-4 bg-amber-400 rounded-full animate-pulse" style={{ animationDelay: '150ms' }} />
+                      <span className="w-0.5 h-3 bg-amber-400 rounded-full animate-pulse" style={{ animationDelay: '300ms' }} />
+                      <span className="w-0.5 h-4 bg-amber-400 rounded-full animate-pulse" style={{ animationDelay: '450ms' }} />
+                      <span className="w-0.5 h-2 bg-amber-400 rounded-full animate-pulse" style={{ animationDelay: '600ms' }} />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      type="button"
+                      onClick={cancelVoiceRecording}
+                      className="p-2 rounded-full text-rose-400 hover:bg-rose-500/20 transition-colors cursor-pointer"
+                      title="Descartar nota de voz"
+                    >
+                      <Trash2 className="w-5 h-5" />
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={stopAndSendVoiceRecording}
+                      className="w-10 h-10 rounded-full bg-emerald-500 hover:bg-emerald-400 text-neutral-950 flex items-center justify-center shadow-lg shadow-emerald-500/30 transition-transform active:scale-90 font-bold cursor-pointer"
+                      title="Enviar nota de voz"
+                    >
+                      <Send className="w-4 h-4 ml-0.5" />
+                    </button>
+                  </div>
                 </div>
-
-                <button
-                  type="submit"
-                  disabled={!inputMessage.trim()}
-                  className="w-9 sm:w-10 h-9 sm:h-10 rounded-full bg-gradient-to-tr from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-neutral-950 flex items-center justify-center disabled:opacity-30 disabled:scale-95 transition-all active:scale-90 shadow-md shadow-amber-500/25 shrink-0 font-bold"
-                  title="Enviar mensaje"
+              ) : (
+                /* Standard Message Input Form */
+                <form
+                  onSubmit={handleSendMessage}
+                  className="flex items-center gap-2 max-w-2xl mx-auto"
                 >
-                  <Send className="w-4 h-4 ml-0.5" />
-                </button>
-              </form>
+                  <button
+                    type="button"
+                    onClick={() => setShowQuickEmojis(prev => !prev)}
+                    className={`p-2 rounded-full transition-colors shrink-0 cursor-pointer ${
+                      showQuickEmojis
+                        ? 'text-amber-400 bg-amber-400/15'
+                        : 'text-white/60 hover:text-amber-400 hover:bg-white/10'
+                    }`}
+                    title="Emojis colombianos rápidos"
+                  >
+                    <Smile className="w-5 h-5" />
+                  </button>
+
+                  <div className="flex-1 relative flex items-center">
+                    <input
+                      ref={chatInputRef}
+                      type="text"
+                      value={inputMessage}
+                      onChange={e => setInputMessage(e.target.value)}
+                      placeholder={
+                        cooldownTimeLeft > 0
+                          ? `Antispam activo: espera ${cooldownTimeLeft}s...`
+                          : `Escribe un mensaje en ${activeChat.name}...`
+                      }
+                      className="w-full bg-white/[0.08] hover:bg-white/[0.12] focus:bg-white/[0.15] text-white placeholder-white/45 px-4 py-2 text-xs sm:text-sm rounded-full border border-white/15 focus:outline-none focus:border-amber-400/80 focus:ring-1 focus:ring-amber-400/40 transition-all shadow-inner"
+                    />
+                  </div>
+
+                  {inputMessage.trim() ? (
+                    <button
+                      type="submit"
+                      disabled={cooldownTimeLeft > 0}
+                      className="w-9 sm:w-10 h-9 sm:h-10 rounded-full bg-gradient-to-tr from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-neutral-950 flex items-center justify-center disabled:opacity-40 disabled:scale-95 transition-all active:scale-90 shadow-md shadow-amber-500/25 shrink-0 font-bold cursor-pointer"
+                      title={cooldownTimeLeft > 0 ? `Espera ${cooldownTimeLeft}s` : "Enviar mensaje"}
+                    >
+                      {cooldownTimeLeft > 0 ? (
+                        <span className="text-xs font-black">{cooldownTimeLeft}s</span>
+                      ) : (
+                        <Send className="w-4 h-4 ml-0.5" />
+                      )}
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={startVoiceRecording}
+                      disabled={cooldownTimeLeft > 0}
+                      className="w-9 sm:w-10 h-9 sm:h-10 rounded-full bg-emerald-500 hover:bg-emerald-400 text-neutral-950 flex items-center justify-center disabled:opacity-40 disabled:scale-95 transition-all active:scale-90 shadow-md shadow-emerald-500/25 shrink-0 font-bold cursor-pointer"
+                      title={cooldownTimeLeft > 0 ? `Espera ${cooldownTimeLeft}s` : "Grabar nota de voz (máx 60s)"}
+                    >
+                      {cooldownTimeLeft > 0 ? (
+                        <span className="text-xs font-black">{cooldownTimeLeft}s</span>
+                      ) : (
+                        <Mic className="w-5 h-5" />
+                      )}
+                    </button>
+                  )}
+                </form>
+              )}
             </div>
           </div>
         )

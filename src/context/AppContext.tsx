@@ -120,7 +120,7 @@ interface AppContextType {
   chatRooms: ChatRoom[];
   activeChatId: string | null;
   setActiveChatId: (id: string | null) => void;
-  sendMessage: (chatId: string, text: string, replyTo?: { id: string; senderName: string; text: string }) => Promise<void>;
+  sendMessage: (chatId: string, text: string, replyTo?: { id: string; senderName: string; text: string }, audioData?: { url: string; duration: number }) => Promise<void>;
   createGroupChat: (name: string, description: string, invitedUserIds: string[], avatar?: string) => Promise<void>;
   startPrivateChat: (targetUserId: string, targetUserName?: string, targetUserAvatar?: string) => string;
   groupInvites: GroupInvite[];
@@ -2255,12 +2255,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Chats
-  const sendMessage = async (chatId: string, text: string, replyTo?: { id: string; senderName: string; text: string }) => {
-    if (!text.trim()) return;
+  const sendMessage = async (
+    chatId: string,
+    text: string,
+    replyTo?: { id: string; senderName: string; text: string },
+    audioData?: { url: string; duration: number }
+  ) => {
+    if (!text.trim() && !audioData) return;
 
     // Simulated SHA-256 E2E Encryption fingerprint
     const simulatedHash = 'SHA256:' + Array.from(crypto.getRandomValues(new Uint8Array(8)))
       .map(b => b.toString(16).padStart(2, '0')).join('');
+
+    const msgText = text.trim() || (audioData ? '🎤 Nota de voz' : '');
 
     const newMsg: ChatMessage = {
       id: `msg-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`,
@@ -2268,7 +2275,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       senderName: currentUser.name,
       senderAvatar: currentUser.avatar,
       senderCity: currentUser.city,
-      text: text.trim(),
+      text: msgText,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       createdAt: Date.now(),
       isEncrypted: true,
@@ -2277,7 +2284,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         id: replyTo.id,
         senderName: replyTo.senderName,
         text: replyTo.text
-      } : undefined
+      } : undefined,
+      audioUrl: audioData?.url,
+      audioDuration: audioData?.duration
     };
 
     const targetRoom = chatRooms.find(r => r.id === chatId);

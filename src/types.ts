@@ -223,6 +223,8 @@ export interface ChatMessage {
     senderName: string;
     text: string;
   };
+  audioUrl?: string;
+  audioDuration?: number; // duration in seconds
 }
 
 export type ChatType = 'general' | 'city' | 'private' | 'group';
