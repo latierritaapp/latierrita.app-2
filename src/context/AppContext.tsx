@@ -587,7 +587,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isCreateMenuOpen, setIsCreateMenuOpen] = useState(false);
 
   // Ads & Staff
-  const [adBanners, setAdBanners] = useState<AdBanner[]>([]);
+  const [adBanners, setAdBanners] = useState<AdBanner[]>(() => {
+    const saved = localStorage.getItem('latierrita_ad_banners');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      } catch {}
+    }
+    return INITIAL_AD_BANNERS;
+  });
+
+  useEffect(() => {
+    if (adBanners && adBanners.length > 0) {
+      localStorage.setItem('latierrita_ad_banners', JSON.stringify(adBanners));
+    }
+  }, [adBanners]);
   const [isStaffMode, setIsStaffMode] = useState<boolean>(false);
   const [isStaffAdminOpen, setIsStaffAdminOpen] = useState<boolean>(false);
 
@@ -661,7 +676,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [plushToast, setPlushToast] = useState<AppNotification | null>(null);
 
   // Navigation
-  const [activeTab, setActiveTab] = useState<'feed' | 'explore' | 'chats' | 'notifications' | 'profile' | 'places'>('feed');
+  const [activeTab, setActiveTab] = useState<'feed' | 'explore' | 'chats' | 'notifications' | 'profile' | 'places'>(() => {
+    const saved = localStorage.getItem('latierrita_active_tab');
+    if (saved && ['feed', 'explore', 'chats', 'notifications', 'profile', 'places'].includes(saved)) {
+      return saved as any;
+    }
+    return 'feed';
+  });
+
+  useEffect(() => {
+    localStorage.setItem('latierrita_active_tab', activeTab);
+  }, [activeTab]);
   const [exploreSearchQuery, setExploreSearchQuery] = useState('');
   const [placesSubTab, setPlacesSubTab] = useState<'places' | 'ads'>('places');
   const [chatTypeTab, setChatTypeTab] = useState<'general' | 'city' | 'messages'>('general');

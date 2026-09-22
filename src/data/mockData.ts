@@ -35,7 +35,36 @@ export const OTHER_USERS: UserProfile[] = [];
 
 export const INITIAL_STORIES: StoryItem[] = [];
 
-export const INITIAL_AD_BANNERS: AdBanner[] = [];
+export const INITIAL_AD_BANNERS: AdBanner[] = [
+  {
+    id: 'banner-init-1',
+    title: 'Festival Gastronómico y Cultural Colombia 2026',
+    subtitle: 'Sabor, música y tradición paisa en Madrid',
+    imageUrl: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=1000&auto=format&fit=crop&q=80',
+    sponsorName: 'Asociación Parceros España',
+    sponsorCity: 'Madrid',
+    ctaText: 'Ver Entradas',
+    ctaLink: 'https://latierrita.es',
+    category: 'Evento',
+    carouselType: 'inicio',
+    discountBadge: '15% Dcto',
+    active: true
+  },
+  {
+    id: 'banner-init-2',
+    title: 'Envíos Urgentes de Dinero y Paquetes a Colombia',
+    subtitle: 'La tasa más baja del mercado con entrega garantizada',
+    imageUrl: 'https://images.unsplash.com/photo-1526304640581-d334cdbbf45e?w=1000&auto=format&fit=crop&q=80',
+    sponsorName: 'Giros Latinos Express',
+    sponsorCity: 'Toda España',
+    ctaText: 'Cotizar Giro',
+    ctaLink: 'https://latierrita.es',
+    category: 'Servicio',
+    carouselType: 'explorar',
+    discountBadge: 'Sin Comisión',
+    active: true
+  }
+];
 
 export const INITIAL_POSTS: PostItem[] = [];
 

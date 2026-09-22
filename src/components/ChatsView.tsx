@@ -1513,11 +1513,7 @@ export const ChatsView: React.FC = () => {
                     onClick={() => {
                       const lastReply = activeRepliesToMe[activeRepliesToMe.length - 1];
                       if (lastReply) {
-                        if (lastReply.replyTo?.id) {
-                          scrollToMessage(lastReply.replyTo.id);
-                        } else {
-                          scrollToMessage(lastReply.id);
-                        }
+                        scrollToMessage(lastReply.id);
                       }
                       setDismissedReplyIds(prev => Array.from(new Set([...prev, ...activeRepliesToMe.map(m => m.id)])));
                     }}
