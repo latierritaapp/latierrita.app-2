@@ -325,6 +325,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const currentUserRef = useRef<UserProfile | null>(currentUser);
   currentUserRef.current = currentUser;
   const chatChannelRef = useRef<any>(null);
+  const seenMessageIdsRef = useRef<Set<string>>(new Set());
+  const isInitialChatSyncRef = useRef<boolean>(true);
+
+  // Sound synthesizer for real-time notification alerts
+  const playNotificationSound = () => {
+    try {
+      const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      if (!AudioContextClass) return;
+      const ctx = new AudioContextClass();
+      const freqs = [587.33, 880]; // D5, A5 pleasant alert chime
+      freqs.forEach((freq, idx) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, ctx.currentTime + idx * 0.1);
+        gain.gain.setValueAtTime(0.12, ctx.currentTime + idx * 0.1);
+        gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + idx * 0.1 + 0.25);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(ctx.currentTime + idx * 0.1);
+        osc.stop(ctx.currentTime + idx * 0.1 + 0.3);
+      });
+    } catch {
+      // Audio context might be restricted before user interaction
+    }
+  };
 
   const [followingIds, setFollowingIds] = useState<string[]>(() => {
     const saved = localStorage.getItem('latierrita_following');
@@ -733,7 +759,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Sync Chat Rooms with dual-engine Supabase and Firestore real-time fallbacks
   useEffect(() => {
     let isMounted = true;
-    let fetchedFromSupabase = false;
 
     const hasSupabaseUrl = !!(import.meta.env.VITE_SUPABASE_URL || 'https://api.latierrita.tech');
     const hasSupabaseKey = !!import.meta.env.VITE_SUPABASE_ANON_KEY && import.meta.env.VITE_SUPABASE_ANON_KEY !== 'tu_anon_key_aqui';
@@ -770,7 +795,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             };
             await supabase.from('chat_rooms').upsert([safeRoom], { onConflict: 'id' });
           }
-        } catch (err) {
+        } catch {
           // Ignore offline/connection errors
         }
       }
@@ -779,9 +804,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     seedDefaultRooms();
 
     const fetchRooms = async () => {
-      let roomsData: any[] = [];
+      const roomsDataMap = new Map<string, any>();
 
-      // Try fetching from Supabase if configured
+      // 1. Fetch from Supabase
       if (hasSupabaseUrl && hasSupabaseKey) {
         try {
           const { data, error } = await supabase
@@ -789,63 +814,71 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             .select('*');
 
           if (!error && data && Array.isArray(data)) {
-            roomsData = data.map((row: any) => ({
-              id: row.id,
-              type: inferRoomType(row.id, row.type),
-              name: row.name || 'Chat',
-              avatar: row.avatar || '',
-              city: row.city || undefined,
-              targetUserId: row.target_user_id || row.targetUserId || undefined,
-              description: row.description || '',
-              members: Array.isArray(row.members) ? row.members : [],
-              admins: Array.isArray(row.admins) ? row.admins : [],
-              createdBy: row.created_by || row.createdBy || undefined,
-              createdAt: row.created_at || row.createdAt || '2026-01-01',
-              messages: Array.isArray(row.messages)
-                ? row.messages
-                : (typeof row.messages === 'string' ? JSON.parse(row.messages) : [])
-            }));
-            fetchedFromSupabase = true;
-          } else if (error) {
-            console.warn('Supabase fetchRooms returned error, falling back to Firestore:', error);
-          }
-        } catch (e) {
-          console.warn('Supabase fetchRooms exception, falling back to Firestore:', e);
-        }
-      }
-
-      // If Supabase not configured or failed, fetch from Firestore
-      if (!fetchedFromSupabase) {
-        try {
-          const querySnapshot = await getDocs(collection(db, 'chat_rooms'));
-          if (!querySnapshot.empty) {
-            querySnapshot.forEach((docSnap: any) => {
-              const rdata = docSnap.data();
-              roomsData.push({
-                id: docSnap.id,
-                type: inferRoomType(docSnap.id, rdata.type),
-                name: rdata.name || 'Chat',
-                avatar: rdata.avatar || '',
-                city: rdata.city,
-                targetUserId: rdata.targetUserId,
-                targetUser: rdata.targetUser,
-                description: rdata.description || '',
-                members: Array.isArray(rdata.members) ? rdata.members : [],
-                admins: Array.isArray(rdata.admins) ? rdata.admins : [],
-                createdBy: rdata.createdBy,
-                createdAt: rdata.createdAt || '2026-01-01',
-                messages: Array.isArray(rdata.messages) ? rdata.messages : []
+            data.forEach((row: any) => {
+              roomsDataMap.set(row.id, {
+                id: row.id,
+                type: inferRoomType(row.id, row.type),
+                name: row.name || 'Chat',
+                avatar: row.avatar || '',
+                city: row.city || undefined,
+                targetUserId: row.target_user_id || row.targetUserId || undefined,
+                description: row.description || '',
+                members: Array.isArray(row.members) ? row.members : [],
+                admins: Array.isArray(row.admins) ? row.admins : [],
+                createdBy: row.created_by || row.createdBy || undefined,
+                createdAt: row.created_at || row.createdAt || '2026-01-01',
+                messages: Array.isArray(row.messages)
+                  ? row.messages
+                  : (typeof row.messages === 'string' ? JSON.parse(row.messages) : [])
               });
             });
           }
         } catch (e) {
-          console.warn('Firestore fetchRooms error:', e);
+          console.warn('Supabase fetchRooms exception:', e);
         }
+      }
+
+      // 2. Also fetch from Firestore to merge any rooms created across engines
+      try {
+        const querySnapshot = await getDocs(collection(db, 'chat_rooms'));
+        if (!querySnapshot.empty) {
+          querySnapshot.forEach((docSnap: any) => {
+            const rdata = docSnap.data();
+            const existing = roomsDataMap.get(docSnap.id);
+            const firestoreMsgs = Array.isArray(rdata.messages) ? rdata.messages : [];
+            const existingMsgs = existing && Array.isArray(existing.messages) ? existing.messages : [];
+
+            // Merge messages from both sources
+            const msgMap = new Map<string, any>();
+            existingMsgs.forEach((m: any) => { if (m && m.id) msgMap.set(m.id, m); });
+            firestoreMsgs.forEach((m: any) => { if (m && m.id) msgMap.set(m.id, m); });
+
+            roomsDataMap.set(docSnap.id, {
+              id: docSnap.id,
+              type: inferRoomType(docSnap.id, rdata.type),
+              name: rdata.name || existing?.name || 'Chat',
+              avatar: rdata.avatar || existing?.avatar || '',
+              city: rdata.city || existing?.city,
+              targetUserId: rdata.targetUserId || existing?.targetUserId,
+              targetUser: rdata.targetUser || existing?.targetUser,
+              description: rdata.description || existing?.description || '',
+              members: Array.isArray(rdata.members) && rdata.members.length > 0 ? rdata.members : (existing?.members || []),
+              admins: Array.isArray(rdata.admins) && rdata.admins.length > 0 ? rdata.admins : (existing?.admins || []),
+              createdBy: rdata.createdBy || existing?.createdBy,
+              createdAt: rdata.createdAt || existing?.createdAt || '2026-01-01',
+              messages: Array.from(msgMap.values())
+            });
+          });
+        }
+      } catch (e) {
+        console.warn('Firestore fetchRooms error:', e);
       }
 
       if (!isMounted) return;
 
-      // Update state, merging with INITIAL_CHAT_ROOMS and deduplicating 1:1 private chats
+      const currentUserId = currentUserRef.current?.id || '';
+
+      // Update state, consolidating 1:1 private chats deterministically
       setChatRooms(prevRooms => {
         const roomsMap = new Map<string, ChatRoom>();
         prevRooms.forEach(r => roomsMap.set(r.id, r));
@@ -856,7 +889,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           }
         });
 
-        const allRawRooms = [...Array.from(roomsMap.values()), ...roomsData];
+        const allRawRooms = [...Array.from(roomsMap.values()), ...Array.from(roomsDataMap.values())];
         const finalMap = new Map<string, ChatRoom>();
 
         // Consolidate private rooms between identical pairs of users into one single deterministic room
@@ -901,9 +934,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               } else if (senders.length === 1 && rawRoom.targetUserId && rawRoom.targetUserId !== senders[0]) {
                 p1 = senders[0];
                 p2 = rawRoom.targetUserId;
-              } else if (senders.length === 1 && currentUser?.id && currentUser.id !== senders[0]) {
+              } else if (senders.length === 1 && currentUserId && currentUserId !== senders[0]) {
                 p1 = senders[0];
-                p2 = currentUser.id;
+                p2 = currentUserId;
               } else if (rawRoom.targetUserId && rawRoom.createdBy && rawRoom.targetUserId !== rawRoom.createdBy) {
                 p1 = rawRoom.createdBy;
                 p2 = rawRoom.targetUserId;
@@ -981,37 +1014,80 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           // Sort messages chronologically
           msgs.sort((a, b) => (a.timestamp || a.id || '').localeCompare(b.timestamp || b.id || ''));
 
+          // Check if there is an incoming message for current user that hasn't been seen
+          if (!isInitialChatSyncRef.current && currentUserId && (group.participants.includes(currentUserId) || group.canonicalId.includes(currentUserId))) {
+            const lastMessage = msgs[msgs.length - 1];
+            if (lastMessage && lastMessage.senderId !== currentUserId && lastMessage.senderId !== 'system') {
+              if (!seenMessageIdsRef.current.has(lastMessage.id)) {
+                seenMessageIdsRef.current.add(lastMessage.id);
+                triggerPlushNotification({
+                  type: 'chat_private',
+                  title: lastMessage.senderName ? `Mensaje de ${lastMessage.senderName}` : 'Nuevo mensaje privado',
+                  message: lastMessage.text || 'Te ha enviado un mensaje',
+                  avatar: lastMessage.senderAvatar || DEFAULT_SILHOUETTE_AVATAR,
+                  data: { chatId: group.canonicalId }
+                });
+              }
+            }
+          }
+
           finalMap.set(group.canonicalId, {
             id: group.canonicalId,
             type: 'private',
             name: group.name || 'Chat Privado',
             avatar: group.avatar || '',
-            targetUserId: group.participants.find(id => id !== currentUser?.id) || group.targetUserId,
+            targetUserId: group.participants.find(id => id !== currentUserId) || group.targetUserId,
             members: [group.participants[0], group.participants[1]],
             createdAt: group.createdAt || '2026-01-01',
             messages: msgs
           });
         });
 
+        // Add all message IDs to seen set on initial load to prevent false notification spam
+        if (isInitialChatSyncRef.current) {
+          finalMap.forEach(r => {
+            r.messages.forEach(m => {
+              if (m && m.id) seenMessageIdsRef.current.add(m.id);
+            });
+          });
+          isInitialChatSyncRef.current = false;
+        }
+
         return Array.from(finalMap.values());
       });
     };
 
     fetchRooms();
-    // Fast polling every 2 seconds to ensure messages sync rapidly across all browsers and devices
+    // Rapid polling every 2 seconds for guaranteed synchronization across any browser
     const interval = setInterval(fetchRooms, 2000);
 
-    // Supabase Realtime channel
+    // Supabase Realtime channel for sub-second instant message delivery
     let chatChannel: any = null;
     if (hasSupabaseUrl && hasSupabaseKey) {
       chatChannel = supabase
         .channel('tierrita_community_chat_sync')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_rooms' }, (payload) => {
-          console.log('Realtime chat_rooms table change:', payload);
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_rooms' }, () => {
           fetchRooms();
         })
         .on('broadcast', { event: 'new_chat_message' }, ({ payload }) => {
           if (payload && payload.chatId && payload.message) {
+            const currentId = currentUserRef.current?.id || '';
+            const msg = payload.message;
+
+            // Trigger instant notification if message is from another user and relevant to current user
+            if (msg.senderId !== currentId && msg.senderId !== 'system') {
+              if (!seenMessageIdsRef.current.has(msg.id)) {
+                seenMessageIdsRef.current.add(msg.id);
+                triggerPlushNotification({
+                  type: 'chat_private',
+                  title: msg.senderName ? `Mensaje de ${msg.senderName}` : 'Nuevo mensaje',
+                  message: msg.text || 'Te ha enviado un mensaje',
+                  avatar: msg.senderAvatar || DEFAULT_SILHOUETTE_AVATAR,
+                  data: { chatId: payload.chatId }
+                });
+              }
+            }
+
             setChatRooms(prevRooms => {
               const roomExists = prevRooms.some(r => r.id === payload.chatId);
               if (!roomExists) {
@@ -1046,9 +1122,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             }));
           }
         })
-        .subscribe((status) => {
-          console.log('Supabase community chat channel status:', status);
-        });
+        .subscribe();
 
       chatChannelRef.current = chatChannel;
     }
@@ -1056,74 +1130,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // Firestore Real-Time sync
     let unsubFirestore: any;
     try {
-      unsubFirestore = onSnapshot(collection(db, 'chat_rooms'), (snapshot) => {
-        if (!fetchedFromSupabase) {
-          const roomsData: any[] = [];
-          snapshot.forEach((docSnap: any) => {
-            const rdata = docSnap.data();
-            roomsData.push({
-              id: docSnap.id,
-              type: rdata.type || 'general',
-              name: rdata.name || 'Chat',
-              avatar: rdata.avatar || '',
-              city: rdata.city,
-              targetUserId: rdata.targetUserId,
-              targetUser: rdata.targetUser,
-              description: rdata.description || '',
-              members: Array.isArray(rdata.members) ? rdata.members : [],
-              admins: Array.isArray(rdata.admins) ? rdata.admins : [],
-              createdBy: rdata.createdBy,
-              createdAt: rdata.createdAt || '2026-01-01',
-              messages: Array.isArray(rdata.messages) ? rdata.messages : []
-            });
-          });
-
-          setChatRooms(prevRooms => {
-            const roomsMap = new Map<string, ChatRoom>();
-            prevRooms.forEach(r => roomsMap.set(r.id, r));
-
-            INITIAL_CHAT_ROOMS.forEach(r => {
-              if (!roomsMap.has(r.id)) {
-                roomsMap.set(r.id, { ...r, messages: Array.isArray(r.messages) ? r.messages : [] });
-              }
-            });
-
-            roomsData.forEach((dbRoom: any) => {
-              const existing = roomsMap.get(dbRoom.id);
-              const msgMap = new Map<string, any>();
-              
-              if (existing && Array.isArray(existing.messages)) {
-                existing.messages.forEach(m => msgMap.set(m.id, m));
-              }
-              if (Array.isArray(dbRoom.messages)) {
-                dbRoom.messages.forEach((m: any) => msgMap.set(m.id, m));
-              }
-
-              const mergedRoom: ChatRoom = {
-                id: dbRoom.id,
-                type: dbRoom.type,
-                name: dbRoom.name,
-                avatar: dbRoom.avatar,
-                city: dbRoom.city,
-                targetUserId: dbRoom.targetUserId,
-                targetUser: dbRoom.targetUser || existing?.targetUser,
-                description: dbRoom.description,
-                members: dbRoom.members,
-                admins: dbRoom.admins,
-                createdBy: dbRoom.createdBy,
-                createdAt: dbRoom.createdAt,
-                messages: Array.from(msgMap.values())
-              };
-
-              roomsMap.set(dbRoom.id, mergedRoom);
-            });
-
-            return Array.from(roomsMap.values());
-          });
-        } else {
-          // If fetchedFromSupabase is true, we still trigger fetchRooms to sync the latest Supabase data
-          fetchRooms();
-        }
+      unsubFirestore = onSnapshot(collection(db, 'chat_rooms'), () => {
+        fetchRooms();
       }, (err) => {
         console.warn('Firestore chat_rooms snapshot listener error:', err);
       });
@@ -1811,6 +1819,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     setNotifications(prev => [newNotif, ...prev]);
     setPlushToast(newNotif);
+    playNotificationSound();
   };
 
   const dismissPlushToast = () => {
@@ -2120,6 +2129,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const targetRoom = chatRooms.find(r => r.id === chatId);
     if (!targetRoom) return;
 
+    // Track seen message id so sender doesn't receive a notification
+    seenMessageIdsRef.current.add(newMsg.id);
+
     // 1. Optimistic update in local state for zero latency UI
     const optimisticMessages = [...targetRoom.messages, newMsg];
     const updatedRoom = {
@@ -2147,120 +2159,86 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     }
 
-    // 3. Persist into Database
-    let persisted = false;
-
+    // 3. Persist into Supabase
+    let finalMessages = optimisticMessages;
     if (hasSupabaseUrl && hasSupabaseKey) {
       try {
-        console.log('DEBUG: sendMessage persist attempt for chatId:', chatId, 'newMsg:', newMsg);
-        // Fetch latest messages from Supabase to prevent overwriting messages sent by other accounts
         const { data: dbRoom, error: fetchErr } = await supabase
           .from('chat_rooms')
           .select('id, messages')
           .eq('id', chatId)
           .maybeSingle();
 
-        if (fetchErr) {
-            console.error('DEBUG: sendMessage fetchErr:', fetchErr);
-        }
-
-        if (!fetchErr) {
-          let dbMessages: any[] = [];
-          if (dbRoom) {
-            if (Array.isArray(dbRoom.messages)) {
-              dbMessages = dbRoom.messages;
-            } else if (typeof dbRoom.messages === 'string') {
-              try {
-                const parsed = JSON.parse(dbRoom.messages);
-                if (Array.isArray(parsed)) dbMessages = parsed;
-              } catch {}
-            }
-          }
-
-          const msgMap = new Map<string, any>();
-          dbMessages.forEach(m => msgMap.set(m.id, m));
-          targetRoom.messages.forEach(m => msgMap.set(m.id, m));
-          msgMap.set(newMsg.id, newMsg);
-
-          const finalMessages = Array.from(msgMap.values());
-
-          if (dbRoom) {
-            const { error: updateErr } = await supabase
-              .from('chat_rooms')
-              .update({ messages: finalMessages })
-              .eq('id', chatId);
-            
-            if (updateErr) {
-                console.error('DEBUG: sendMessage updateErr:', updateErr);
-            }
-
-            if (!updateErr) {
-              persisted = true;
-            } else {
-              console.error('Error updating chat_rooms in Supabase:', updateErr);
-            }
-          } else {
-            console.log('DEBUG: sendMessage upsert attempt');
-            const { error: upsertErr } = await supabase
-              .from('chat_rooms')
-              .upsert([{
-                id: targetRoom.id,
-                name: targetRoom.name,
-                description: targetRoom.description || '',
-                created_at: targetRoom.createdAt || new Date().toISOString().split('T')[0],
-                messages: finalMessages
-              }], { onConflict: 'id' });
-            
-            if (upsertErr) {
-                console.error('DEBUG: sendMessage upsertErr:', upsertErr);
-            } else {
-                persisted = true;
-            }
-          }
-        } else {
-          console.error('Error fetching chat_rooms from Supabase before update:', fetchErr);
-        }
-      } catch (e) {
-        console.error('DEBUG: sendMessage exception:', e);
-      }
-    }
-
-    // If Supabase is not configured or failed to write, persist to Firestore
-    if (!persisted) {
-      try {
-        // Fetch latest messages from Firestore to prevent overwriting
-        const roomRef = doc(db, 'chat_rooms', chatId);
-        const docSnap = await getDoc(roomRef);
         let dbMessages: any[] = [];
-        
-        if (docSnap.exists()) {
-          const roomData = docSnap.data();
-          if (Array.isArray(roomData.messages)) {
-            dbMessages = roomData.messages;
+        if (!fetchErr && dbRoom) {
+          if (Array.isArray(dbRoom.messages)) {
+            dbMessages = dbRoom.messages;
+          } else if (typeof dbRoom.messages === 'string') {
+            try {
+              const parsed = JSON.parse(dbRoom.messages);
+              if (Array.isArray(parsed)) dbMessages = parsed;
+            } catch {}
           }
         }
 
         const msgMap = new Map<string, any>();
-        dbMessages.forEach(m => msgMap.set(m.id, m));
-        targetRoom.messages.forEach(m => msgMap.set(m.id, m));
+        dbMessages.forEach(m => { if (m && m.id) msgMap.set(m.id, m); });
+        targetRoom.messages.forEach(m => { if (m && m.id) msgMap.set(m.id, m); });
         msgMap.set(newMsg.id, newMsg);
 
-        const finalMessages = Array.from(msgMap.values());
+        finalMessages = Array.from(msgMap.values());
 
-        await setDoc(roomRef, { 
-          id: targetRoom.id,
-          type: targetRoom.type,
-          name: targetRoom.name,
-          description: targetRoom.description,
-          messages: finalMessages,
-          createdAt: targetRoom.createdAt || new Date().toISOString().split('T')[0]
-        }, { merge: true });
-        
-        console.log('Successfully saved chat message to Firestore');
-      } catch (error) {
-        console.error('Database write error in sendMessage (Firestore):', error);
-        handleFirestoreError(error, OperationType.UPDATE, `chat_rooms/${chatId}`);
+        if (dbRoom) {
+          await supabase
+            .from('chat_rooms')
+            .update({ messages: finalMessages })
+            .eq('id', chatId);
+        } else {
+          await supabase
+            .from('chat_rooms')
+            .upsert([{
+              id: targetRoom.id,
+              name: targetRoom.name,
+              description: targetRoom.description || '',
+              created_at: targetRoom.createdAt || new Date().toISOString().split('T')[0],
+              messages: finalMessages
+            }], { onConflict: 'id' });
+        }
+      } catch (e) {
+        console.warn('Supabase sendMessage write error:', e);
       }
+    }
+
+    // 4. Always dual-persist to Firestore for guaranteed cross-device reliability
+    try {
+      const roomRef = doc(db, 'chat_rooms', chatId);
+      const docSnap = await getDoc(roomRef);
+      let firestoreMessages: any[] = [];
+      
+      if (docSnap.exists()) {
+        const roomData = docSnap.data();
+        if (Array.isArray(roomData.messages)) {
+          firestoreMessages = roomData.messages;
+        }
+      }
+
+      const msgMap = new Map<string, any>();
+      firestoreMessages.forEach(m => { if (m && m.id) msgMap.set(m.id, m); });
+      finalMessages.forEach(m => { if (m && m.id) msgMap.set(m.id, m); });
+
+      const mergedMessages = Array.from(msgMap.values());
+
+      await setDoc(roomRef, { 
+        id: targetRoom.id,
+        type: targetRoom.type,
+        name: targetRoom.name,
+        description: targetRoom.description || '',
+        messages: mergedMessages,
+        members: targetRoom.members || [],
+        createdAt: targetRoom.createdAt || new Date().toISOString().split('T')[0]
+      }, { merge: true });
+    } catch (error) {
+      console.warn('Firestore sendMessage write error:', error);
     }
   };
 
