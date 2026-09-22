@@ -404,11 +404,20 @@ export const ChatsView: React.FC = () => {
 
   // Cooldown State for General and City chats (3 seconds)
   const [cooldownTimeLeft, setCooldownTimeLeft] = useState<number>(0);
-  const [dismissedReplyIds, setDismissedReplyIds] = useState<string[]>([]);
+  const [dismissedReplyIds, setDismissedReplyIds] = useState<string[]>(() => {
+    const saved = localStorage.getItem('latierrita_dismissed_reply_ids');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      } catch {}
+    }
+    return [];
+  });
 
   useEffect(() => {
-    setDismissedReplyIds([]);
-  }, [chatTypeTab, selectedPrivateOrGroupId]);
+    localStorage.setItem('latierrita_dismissed_reply_ids', JSON.stringify(dismissedReplyIds));
+  }, [dismissedReplyIds]);
 
   // Highlight message on click / scroll
   const [highlightedMsgId, setHighlightedMsgId] = useState<string | null>(null);

@@ -112,7 +112,7 @@ export const StaffAdminModal: React.FC = () => {
   }, [currentUser?.staffRole]);
 
   // Main navigation tab for ADMIN perspective
-  const [adminMainTab, setAdminMainTab] = useState<'feed_post' | 'carrusel_01' | 'carrusel_02' | 'administracion' | 'soporte'>('feed_post');
+  const [adminMainTab, setAdminMainTab] = useState<'feed_post' | 'carrusel_01' | 'carrusel_02' | 'administracion' | 'soporte' | 'popup_emergente'>('feed_post');
 
   // Subtabs for Administracion
   const [adminSubTab, setAdminSubTab] = useState<'usuarios' | 'verificacion' | 'staff' | 'popup_emergente' | 'documentacion'>('usuarios');
@@ -565,6 +565,18 @@ export const StaffAdminModal: React.FC = () => {
                 <span className="ml-auto text-[9px] px-1.5 py-0.2 bg-black/30 rounded-full">
                   {bannersC2.length}
                 </span>
+              </button>
+
+              <button
+                onClick={() => setAdminMainTab('popup_emergente')}
+                className={`flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold text-left transition-all shrink-0 ${
+                  adminMainTab === 'popup_emergente'
+                    ? 'bg-amber-400 text-neutral-950 font-black shadow-md'
+                    : 'text-white/80 hover:bg-white/10 hover:text-white'
+                }`}
+              >
+                <Sparkles className="w-4 h-4 shrink-0" />
+                <span>Publicidad Emergente</span>
               </button>
 
               <button
@@ -1449,6 +1461,222 @@ export const StaffAdminModal: React.FC = () => {
                       >
                         <Plus className="w-4 h-4 stroke-[3]" />
                         <span>Añadir a Carrusel 02 (Explorar)</span>
+                      </button>
+                    </form>
+                  </div>
+                )}
+
+                {/* TAB: PUBLICIDAD EMERGENTE */}
+                {adminMainTab === 'popup_emergente' && (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h4 className="text-xs font-bold text-amber-300">
+                          Configuración de Publicidad Flotante al Iniciar
+                        </h4>
+                        <p className="text-[10px] text-white/50">
+                          Este anuncio emergente se le abre a todos los parceros la primera vez que abren la app.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          simulateAppRestart();
+                        }}
+                        className="px-3 py-1.5 bg-neutral-800 hover:bg-neutral-700 text-white border border-neutral-600 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all shadow-md active:scale-95 cursor-pointer"
+                      >
+                        <span>Probar / Forzar Apertura</span>
+                      </button>
+                    </div>
+
+                    <form onSubmit={handleSavePopupConfig} className="space-y-3 bg-white/5 border border-white/10 p-4 rounded-2xl">
+                      <div className="flex items-center justify-between p-3 bg-[#002466]/40 border border-white/10 rounded-xl">
+                        <span className="text-xs font-bold text-white">¿Mostrar publicidad al iniciar la app?</span>
+                        <label className="relative inline-flex items-center cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={popupActive}
+                            onChange={e => setPopupActive(e.target.checked)}
+                            className="sr-only peer"
+                          />
+                          <div className="w-11 h-6 bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-400"></div>
+                        </label>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[10px] font-bold text-white/70 mb-1">
+                            Título del Anuncio *
+                          </label>
+                          <input
+                            type="text"
+                            value={popupTitle}
+                            onChange={e => setPopupTitle(e.target.value)}
+                            placeholder="ej. Gran Festival Tricolor 2026"
+                            required
+                            className="w-full bg-white/10 text-white placeholder-white/40 px-3 py-2 rounded-xl border border-white/20 focus:outline-none focus:ring-1 focus:ring-amber-400 text-xs"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[10px] font-bold text-white/70 mb-1">
+                            Subtítulo / Ubicaciones
+                          </label>
+                          <input
+                            type="text"
+                            value={popupSubtitle}
+                            onChange={e => setPopupSubtitle(e.target.value)}
+                            placeholder="ej. 🇨🇴 Madrid & Barcelona"
+                            className="w-full bg-white/10 text-white placeholder-white/40 px-3 py-2 rounded-xl border border-white/20 focus:outline-none focus:ring-1 focus:ring-amber-400 text-xs"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[10px] font-bold text-white/70 mb-1">
+                            Badge Superior de Esquina (Texto)
+                          </label>
+                          <input
+                            type="text"
+                            value={popupBadgeText}
+                            onChange={e => setPopupBadgeText(e.target.value)}
+                            placeholder="ej. Publicidad Oficial STAFF"
+                            className="w-full bg-white/10 text-white placeholder-white/40 px-3 py-2 rounded-xl border border-white/20 focus:outline-none focus:ring-1 focus:ring-amber-400 text-xs"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[10px] font-bold text-white/70 mb-1">
+                            Badge de Descuento
+                          </label>
+                          <input
+                            type="text"
+                            value={popupDiscountBadge}
+                            onChange={e => setPopupDiscountBadge(e.target.value)}
+                            placeholder="ej. 20% Dcto Exclusivo"
+                            className="w-full bg-white/10 text-white placeholder-white/40 px-3 py-2 rounded-xl border border-white/20 focus:outline-none focus:ring-1 focus:ring-amber-400 text-xs"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold text-white/70 mb-1">
+                          Imagen del Anuncio Emergente *
+                        </label>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            value={popupImageUrl}
+                            onChange={e => setPopupImageUrl(e.target.value)}
+                            placeholder="Pega la URL o elige de tu galería..."
+                            required
+                            className="flex-1 bg-white/10 text-white placeholder-white/40 px-3 py-2 rounded-xl border border-white/20 focus:outline-none focus:ring-1 focus:ring-amber-400 text-xs"
+                          />
+                          <label className="px-3 py-2 bg-amber-400 hover:bg-amber-300 text-neutral-950 font-black rounded-xl flex items-center gap-1.5 shrink-0 cursor-pointer shadow-md transition-all active:scale-95 text-xs">
+                            <Upload className="w-3.5 h-3.5" />
+                            <span>Galería</span>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              onChange={e => handleFileSelect(e, setPopupImageUrl)}
+                            />
+                          </label>
+                        </div>
+                      </div>
+
+                      {popupImageUrl && (
+                        <div className="relative w-full h-32 rounded-xl overflow-hidden border border-white/20 group">
+                          <img src={popupImageUrl} alt="Preview Popup" className="w-full h-full object-cover" />
+                          <span className="absolute bottom-2 left-2 bg-black/70 px-2 py-0.5 rounded text-[10px] text-amber-300 font-bold">
+                            Vista Previa Anuncio Emergente
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setPopupImageUrl('')}
+                            className="absolute top-2 right-2 p-1 bg-rose-600 hover:bg-rose-500 text-white rounded-lg transition-colors"
+                            title="Quitar imagen"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      )}
+
+                      <div>
+                        <label className="block text-[10px] font-bold text-white/70 mb-1">
+                          Descripción Completa
+                        </label>
+                        <textarea
+                          value={popupDescription}
+                          onChange={e => setPopupDescription(e.target.value)}
+                          rows={3}
+                          placeholder="¡El mayor encuentro cultural y musical de colombianos en España!..."
+                          className="w-full bg-white/10 text-white placeholder-white/40 px-3 py-2 rounded-xl border border-white/20 focus:outline-none focus:ring-1 focus:ring-amber-400 text-xs resize-none"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[10px] font-bold text-white/70 mb-1">
+                            Código de Descuento
+                          </label>
+                          <input
+                            type="text"
+                            value={popupDiscountCode}
+                            onChange={e => setPopupDiscountCode(e.target.value)}
+                            placeholder="ej. LATIE2026"
+                            className="w-full bg-white/10 text-white placeholder-white/40 px-3 py-2 rounded-xl border border-white/20 focus:outline-none focus:ring-1 focus:ring-amber-400 text-xs"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[10px] font-bold text-white/70 mb-1">
+                            Validez / Duración
+                          </label>
+                          <input
+                            type="text"
+                            value={popupDiscountValidity}
+                            onChange={e => setPopupDiscountValidity(e.target.value)}
+                            placeholder="ej. Válido 48h"
+                            className="w-full bg-white/10 text-white placeholder-white/40 px-3 py-2 rounded-xl border border-white/20 focus:outline-none focus:ring-1 focus:ring-amber-400 text-xs"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[10px] font-bold text-white/70 mb-1">
+                            Texto del Botón (CTA)
+                          </label>
+                          <input
+                            type="text"
+                            value={popupCtaText}
+                            onChange={e => setPopupCtaText(e.target.value)}
+                            placeholder="ej. Ver Boletos y Reservar"
+                            className="w-full bg-white/10 text-white placeholder-white/40 px-3 py-2 rounded-xl border border-white/20 focus:outline-none focus:ring-1 focus:ring-amber-400 text-xs"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[10px] font-bold text-white/70 mb-1">
+                            Enlace del Botón (CTA)
+                          </label>
+                          <input
+                            type="url"
+                            value={popupCtaUrl}
+                            onChange={e => setPopupCtaUrl(e.target.value)}
+                            placeholder="https://..."
+                            className="w-full bg-white/10 text-white placeholder-white/40 px-3 py-2 rounded-xl border border-white/20 focus:outline-none focus:ring-1 focus:ring-amber-400 text-xs"
+                          />
+                        </div>
+                      </div>
+
+                      <button
+                        type="submit"
+                        className="w-full mt-2 py-3 bg-amber-400 hover:bg-amber-300 text-neutral-950 font-black text-xs rounded-xl shadow-lg transition-all active:scale-95 flex items-center justify-center gap-1.5 cursor-pointer"
+                      >
+                        <span>Guardar Configuración de Publicidad de Inicio</span>
                       </button>
                     </form>
                   </div>
