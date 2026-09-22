@@ -722,6 +722,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const hasSupabaseUrl = !!(import.meta.env.VITE_SUPABASE_URL || 'https://api.latierrita.tech');
     const hasSupabaseKey = !!import.meta.env.VITE_SUPABASE_ANON_KEY && import.meta.env.VITE_SUPABASE_ANON_KEY !== 'tu_anon_key_aqui';
 
+    const inferRoomType = (id: string, explicitType?: string): 'general' | 'city' | 'private' | 'group' => {
+      if (explicitType === 'private' || explicitType === 'group' || explicitType === 'city' || explicitType === 'general') {
+        return explicitType;
+      }
+      if (id.startsWith('chat-priv-')) return 'private';
+      if (id.startsWith('chat-group-')) return 'group';
+      if (id.startsWith('chat-city-')) return 'city';
+      return 'general';
+    };
+
     // Seed default rooms once on mount ONLY if they don't exist in Supabase (NEVER overwrite existing messages)
     const seedDefaultRooms = async () => {
       if (!hasSupabaseUrl || !hasSupabaseKey) return;
@@ -764,16 +774,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           if (!error && data && Array.isArray(data)) {
             roomsData = data.map((row: any) => ({
               id: row.id,
-              type: row.type || 'general',
+              type: inferRoomType(row.id, row.type),
               name: row.name || 'Chat',
               avatar: row.avatar || '',
               city: row.city || undefined,
-              targetUserId: row.target_user_id || undefined,
+              targetUserId: row.target_user_id || row.targetUserId || undefined,
               description: row.description || '',
               members: Array.isArray(row.members) ? row.members : [],
               admins: Array.isArray(row.admins) ? row.admins : [],
-              createdBy: row.created_by || undefined,
-              createdAt: row.created_at || '2026-01-01',
+              createdBy: row.created_by || row.createdBy || undefined,
+              createdAt: row.created_at || row.createdAt || '2026-01-01',
               messages: Array.isArray(row.messages)
                 ? row.messages
                 : (typeof row.messages === 'string' ? JSON.parse(row.messages) : [])
@@ -796,7 +806,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               const rdata = docSnap.data();
               roomsData.push({
                 id: docSnap.id,
-                type: rdata.type || 'general',
+                type: inferRoomType(docSnap.id, rdata.type),
                 name: rdata.name || 'Chat',
                 avatar: rdata.avatar || '',
                 city: rdata.city,
@@ -840,19 +850,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             dbRoom.messages.forEach((m: any) => msgMap.set(m.id, m));
           }
 
+          const resolvedType = inferRoomType(dbRoom.id, dbRoom.type || existing?.type);
+
           const mergedRoom: ChatRoom = {
             id: dbRoom.id,
-            type: dbRoom.type,
-            name: dbRoom.name,
-            avatar: dbRoom.avatar,
-            city: dbRoom.city,
-            targetUserId: dbRoom.targetUserId,
+            type: resolvedType,
+            name: (dbRoom.name && dbRoom.name !== 'Chat') ? dbRoom.name : (existing?.name || dbRoom.name || 'Chat'),
+            avatar: dbRoom.avatar || existing?.avatar || '',
+            city: dbRoom.city || existing?.city,
+            targetUserId: dbRoom.targetUserId || existing?.targetUserId,
             targetUser: dbRoom.targetUser || existing?.targetUser,
-            description: dbRoom.description,
-            members: dbRoom.members,
-            admins: dbRoom.admins,
-            createdBy: dbRoom.createdBy,
-            createdAt: dbRoom.createdAt,
+            description: dbRoom.description || existing?.description || '',
+            members: (Array.isArray(dbRoom.members) && dbRoom.members.length > 0)
+              ? dbRoom.members
+              : (existing?.members || []),
+            admins: (Array.isArray(dbRoom.admins) && dbRoom.admins.length > 0)
+              ? dbRoom.admins
+              : (existing?.admins || []),
+            createdBy: dbRoom.createdBy || existing?.createdBy,
+            createdAt: dbRoom.createdAt || existing?.createdAt || '2026-01-01',
             messages: Array.from(msgMap.values())
           };
 
@@ -2150,8 +2166,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ]
     };
 
-    setChatRooms(prev => [...prev, newRoom]);
+    setChatRooms(prev => {
+      const filtered = prev.filter(r => r.id !== newGroupId);
+      return [...filtered, newRoom];
+    });
+    setSelectedUserProfile(null);
     setActiveChatId(newGroupId);
+    setActiveTab('chats');
 
     try {
       await setDoc(doc(db, 'chat_rooms', newGroupId), newRoom);
@@ -2197,6 +2218,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
 
     if (existing) {
+      setSelectedUserProfile(null);
       setActiveChatId(existing.id);
       setActiveTab('chats');
       return existing.id;
@@ -2246,7 +2268,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ]
     };
 
-    setChatRooms(prev => [...prev, newRoom]);
+    setChatRooms(prev => {
+      const filtered = prev.filter(r => r.id !== newChatId);
+      return [...filtered, newRoom];
+    });
+    setSelectedUserProfile(null);
     setActiveChatId(newChatId);
     setActiveTab('chats');
 
