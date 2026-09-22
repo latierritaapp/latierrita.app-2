@@ -117,6 +117,7 @@ export const ChatsView: React.FC = () => {
     deleteMessageForEveryone,
     deletedMessageIdsForMe,
     setSelectedUserProfile,
+    setActiveTab,
     deleteChatRoom,
     leaveGroupChat,
     toggleGroupAdmin,
@@ -299,25 +300,30 @@ export const ChatsView: React.FC = () => {
   };
 
   const handleOpenUserProfileFromMenu = (userId: string, userName: string, userAvatar?: string, userCity?: string) => {
-    const found = otherUsers.find(u => u.id === userId);
-    if (found) {
-      setSelectedUserProfile(found);
+    if (userId === currentUser.id) {
+      setSelectedUserProfile(currentUser);
     } else {
-      setSelectedUserProfile({
-        id: userId,
-        username: userName.toLowerCase().replace(/\s+/g, '_'),
-        name: userName,
-        avatar: userAvatar || DEFAULT_SILHOUETTE_AVATAR,
-        city: (userCity as SpanishCity) || 'Madrid',
-        originCity: 'Colombia',
-        bio: 'Parcero en España 🇨🇴',
-        website: '',
-        followersCount: 15,
-        followingCount: 10,
-        postsCount: 3,
-        isVerified: false
-      });
+      const found = otherUsers.find(u => u.id === userId || u.username === userName);
+      if (found) {
+        setSelectedUserProfile(found);
+      } else {
+        setSelectedUserProfile({
+          id: userId,
+          username: userName.toLowerCase().replace(/\s+/g, '_'),
+          name: userName,
+          avatar: userAvatar || DEFAULT_SILHOUETTE_AVATAR,
+          city: (userCity as SpanishCity) || 'Madrid',
+          originCity: 'Colombia',
+          bio: 'Parcero en España 🇨🇴',
+          website: '',
+          followersCount: 15,
+          followingCount: 10,
+          postsCount: 3,
+          isVerified: false
+        });
+      }
     }
+    setActiveTab('profile');
     setActiveUserMenu(null);
   };
 
@@ -1182,24 +1188,29 @@ export const ChatsView: React.FC = () => {
                       key={msg.id}
                       className={`flex gap-2 items-end group ${isMe ? 'justify-end' : 'justify-start'}`}
                     >
-                      {!isMe && (
-                        <img
-                          src={msg.senderAvatar || undefined}
-                          alt={msg.senderName}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setActiveUserMenu({
-                              userId: msg.senderId,
-                              userName: msg.senderName,
-                              userAvatar: msg.senderAvatar,
-                              userCity: msg.senderCity
-                            });
-                          }}
-                          className="w-7 h-7 rounded-full object-cover mb-1 border border-neutral-200 dark:border-neutral-700 shrink-0 cursor-pointer hover:scale-110 transition-transform"
-                          referrerPolicy="no-referrer"
-                          title={`Ver opciones de ${msg.senderName}`}
-                        />
-                      )}
+                                      {!isMe && (() => {
+                        const senderUser = otherUsers.find(u => u.id === msg.senderId || u.username === msg.senderName) || null;
+                        const displayAvatar = senderUser?.avatar || msg.senderAvatar || DEFAULT_SILHOUETTE_AVATAR;
+
+                        return (
+                          <img
+                            src={displayAvatar}
+                            alt={msg.senderName}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setActiveUserMenu({
+                                userId: msg.senderId,
+                                userName: msg.senderName,
+                                userAvatar: displayAvatar,
+                                userCity: senderUser?.city || msg.senderCity
+                              });
+                            }}
+                            className="w-7 h-7 rounded-full object-cover mb-1 border border-neutral-200 dark:border-neutral-700 shrink-0 cursor-pointer hover:scale-110 transition-transform"
+                            referrerPolicy="no-referrer"
+                            title={`Ver opciones de ${msg.senderName}`}
+                          />
+                        );
+                      })()}
 
                       <div className={`max-w-[80%] flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
                         {!isMe && (
@@ -1846,12 +1857,21 @@ export const ChatsView: React.FC = () => {
               onClick={() => handleOpenUserProfileFromMenu(activeUserMenu.userId, activeUserMenu.userName, activeUserMenu.userAvatar, activeUserMenu.userCity)}
               className="w-full p-4 bg-gradient-to-br from-amber-500/10 via-amber-500/5 to-transparent border-b border-neutral-100 dark:border-neutral-800 flex items-center gap-3 text-left hover:bg-amber-500/15 transition-colors group cursor-pointer"
             >
-              <img
-                src={activeUserMenu.userAvatar || DEFAULT_SILHOUETTE_AVATAR}
-                alt={activeUserMenu.userName}
-                className="w-12 h-12 rounded-full object-cover border-2 border-amber-500/40 shadow-sm shrink-0 group-hover:scale-105 transition-transform"
-                referrerPolicy="no-referrer"
-              />
+              {(() => {
+                const foundUser = activeUserMenu.userId === currentUser.id
+                  ? currentUser
+                  : otherUsers.find(u => u.id === activeUserMenu.userId || u.username === activeUserMenu.userName);
+                const resolvedAvatar = foundUser?.avatar || activeUserMenu.userAvatar || DEFAULT_SILHOUETTE_AVATAR;
+
+                return (
+                  <img
+                    src={resolvedAvatar}
+                    alt={activeUserMenu.userName}
+                    className="w-12 h-12 rounded-full object-cover border-2 border-amber-500/40 shadow-sm shrink-0 group-hover:scale-105 transition-transform"
+                    referrerPolicy="no-referrer"
+                  />
+                );
+              })()}
               <div className="min-w-0 flex-1">
                 <h4 className="font-extrabold text-neutral-900 dark:text-white text-sm truncate group-hover:text-amber-500 transition-colors flex items-center gap-1.5">
                   <span className="truncate">{activeUserMenu.userName}</span>

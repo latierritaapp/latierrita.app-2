@@ -1778,9 +1778,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     try {
+      if (currentUser?.id) {
+        await setDoc(doc(db, 'users', currentUser.id), {
+          ...updated,
+          avatar: nextUser.avatar,
+          avatar_url: nextUser.avatar,
+          updatedAt: new Date().toISOString()
+        }, { merge: true });
+      }
+    } catch {
+      // Non-fatal Firestore update
+    }
+
+    try {
       await updateUserProfile(updated);
-    } catch (err) {
-      console.warn('Could not sync profile to Supabase:', err);
+    } catch {
+      // Non-fatal Supabase sync
     }
 
     triggerPlushNotification({
@@ -1804,23 +1817,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setCurrentUser(prev => ({ ...prev, followingCount: prev.followingCount + 1 }));
     setOtherUsers(prev => prev.map(u => u.id === userId ? { ...u, followersCount: u.followersCount + 1 } : u));
 
+    // Sync to Firestore users
     try {
-      await supabase.from('profiles').update({
-        following: nextFollowing,
-        following_count: nextFollowing.length
-      }).eq('id', currentUser.id);
+      await setDoc(doc(db, 'users', currentUser.id), { following: nextFollowing }, { merge: true });
+      await setDoc(doc(db, 'follows', `${currentUser.id}_${userId}`), {
+        followerId: currentUser.id,
+        followingId: userId,
+        createdAt: new Date().toISOString()
+      }, { merge: true });
+    } catch {
+      // Non-fatal Firestore sync
+    }
 
-      const { data: targetData } = await supabase.from('profiles').select('followers').eq('id', userId).single();
-      const currentFollowers = Array.isArray(targetData?.followers) ? targetData.followers : [];
-      if (!currentFollowers.includes(currentUser.id)) {
-        const nextFollowers = [...currentFollowers, currentUser.id];
-        await supabase.from('profiles').update({
-          followers: nextFollowers,
-          followers_count: nextFollowers.length
-        }).eq('id', userId);
-      }
-    } catch (e) {
-      console.warn('Error updating follow in Supabase:', e);
+    // Try Supabase sync if schema supports it
+    try {
+      await supabase.from('follows').upsert([{ follower_id: currentUser.id, following_id: userId }]);
+    } catch {
+      // Non-fatal
     }
     
     const target = otherUsers.find(u => u.id === userId);
@@ -1856,21 +1869,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setCurrentUser(prev => ({ ...prev, followingCount: Math.max(0, prev.followingCount - 1) }));
     setOtherUsers(prev => prev.map(u => u.id === userId ? { ...u, followersCount: Math.max(0, u.followersCount - 1) } : u));
 
+    // Sync to Firestore users
     try {
-      await supabase.from('profiles').update({
-        following: nextFollowing,
-        following_count: nextFollowing.length
-      }).eq('id', currentUser.id);
+      await setDoc(doc(db, 'users', currentUser.id), { following: nextFollowing }, { merge: true });
+      await deleteDoc(doc(db, 'follows', `${currentUser.id}_${userId}`));
+    } catch {
+      // Non-fatal Firestore sync
+    }
 
-      const { data: targetData } = await supabase.from('profiles').select('followers').eq('id', userId).single();
-      const currentFollowers = Array.isArray(targetData?.followers) ? targetData.followers : [];
-      const nextFollowers = currentFollowers.filter((id: string) => id !== currentUser.id);
-      await supabase.from('profiles').update({
-        followers: nextFollowers,
-        followers_count: nextFollowers.length
-      }).eq('id', userId);
-    } catch (e) {
-      console.warn('Error updating unfollow in Supabase:', e);
+    // Try Supabase sync if schema supports it
+    try {
+      await supabase.from('follows').delete().eq('follower_id', currentUser.id).eq('following_id', userId);
+    } catch {
+      // Non-fatal
     }
   };
 

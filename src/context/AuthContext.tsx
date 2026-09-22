@@ -163,7 +163,6 @@ const buildDBProfileUpdatePayload = (data: Partial<UserProfile>): Record<string,
   }
   if (data.avatar !== undefined && data.avatar.trim() !== '') {
     payload.avatar_url = data.avatar;
-    payload.avatar = data.avatar;
   }
   
   return payload;
@@ -180,7 +179,6 @@ const mapUserProfileToDBProfile = (profile: Partial<UserProfile>): any => {
     username: cleanUsername,
     name: displayName,
     avatar_url: profile.avatar || DEFAULT_SILHOUETTE_AVATAR,
-    avatar: profile.avatar || DEFAULT_SILHOUETTE_AVATAR,
     bio: profile.bio || '🇨🇴 ¡Orgullo colombiano en España! 🇪🇸',
     city: profile.city || 'Madrid',
     created_at: profile.createdAt || new Date().toISOString()
