@@ -734,18 +734,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             .maybeSingle();
 
           if (!data && !error) {
-            const snake = {
+            const safeRoom = {
               id: defaultRoom.id,
-              type: defaultRoom.type,
               name: defaultRoom.name,
               description: defaultRoom.description || '',
-              avatar: defaultRoom.avatar || '',
-              city: defaultRoom.city || null,
-              members: defaultRoom.members || [],
-              created_at: defaultRoom.createdAt || new Date().toISOString().split('T')[0],
+              created_at: new Date().toISOString(),
               messages: []
             };
-            await supabase.from('chat_rooms').insert([snake]);
+            await supabase.from('chat_rooms').insert([safeRoom]);
           }
         } catch (err) {
           // Ignore offline/connection errors
