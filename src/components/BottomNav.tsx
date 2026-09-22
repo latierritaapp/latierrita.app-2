@@ -11,7 +11,9 @@ export const BottomNav: React.FC = () => {
     chatRooms
   } = useApp();
 
-  const unreadMessagesCount = chatRooms.reduce((acc, r) => acc + (r.unreadCount || 0), 0);
+  const unreadMessagesCount = chatRooms
+    .filter(r => r.type === 'private')
+    .reduce((acc, r) => acc + (r.unreadCount || 0), 0);
 
   return (
     <nav

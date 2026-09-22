@@ -1112,8 +1112,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
             const isFromMe = msg.senderId === currentId || msg.senderId === myUsername || (myEmail && msg.senderId === myEmail);
 
-            // Trigger instant notification if message is from another user and user is NOT inside that chat
-            if (!isFromMe && msg.senderId !== 'system') {
+            // Determine if the incoming chat is strictly a private chat (exclude general, city, and non-private chats)
+            const isGeneralOrCity = payload.roomType === 'general' ||
+              payload.roomType === 'city' ||
+              payload.chatId.startsWith('chat-general') ||
+              payload.chatId.startsWith('chat-city') ||
+              payload.chatId.includes('general') ||
+              payload.chatId.includes('city');
+
+            const isPrivateChat = !isGeneralOrCity && (
+              payload.roomType === 'private' ||
+              payload.chatId.startsWith('chat-priv') ||
+              payload.chatId.startsWith('priv_') ||
+              payload.chatId.startsWith('priv-') ||
+              extractMembersFromPrivateChatId(payload.chatId).length === 2
+            );
+
+            const strippedId = currentId.replace(/^user-/, '');
+            const cleanUsername = myUsername.replace(/^@/, '');
+            const myIdentifiers = [currentId.toLowerCase(), myUsername.toLowerCase(), myEmail.toLowerCase(), strippedId.toLowerCase(), cleanUsername.toLowerCase()].filter(Boolean);
+
+            const isRecipient = myIdentifiers.some(id => payload.chatId.toLowerCase().includes(id)) ||
+              (Array.isArray(payload.members) && payload.members.some((m: any) => myIdentifiers.some(id => String(m).toLowerCase().includes(id)))) ||
+              extractMembersFromPrivateChatId(payload.chatId).some(m => myIdentifiers.some(id => m.toLowerCase() === id));
+
+            // Strictly ONLY trigger notifications for private chats directed to this user when NOT viewing that chat
+            if (isPrivateChat && isRecipient && !isFromMe && msg.senderId !== 'system') {
               if (!seenMessageIdsRef.current.has(msg.id)) {
                 seenMessageIdsRef.current.add(msg.id);
                 if (!isUserViewingChat(payload.chatId)) {
@@ -2204,7 +2228,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           chatChannelRef.current.send({
             type: 'broadcast',
             event: 'new_chat_message',
-            payload: { chatId, message: newMsg }
+            payload: {
+              chatId,
+              roomType: targetRoom.type,
+              members: targetRoom.members || [],
+              message: newMsg
+            }
           });
         }
       } catch (bcErr) {

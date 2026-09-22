@@ -93,7 +93,7 @@ export const NotificationsView: React.FC = () => {
               No tienes notificaciones
             </p>
             <p className="text-xs text-white/60 mt-1">
-              Aquí aparecerán las reacciones a tus historias, nuevos seguidores, mensajes de ciudad e invitaciones a grupos.
+              Aquí aparecerán las reacciones a tus historias, nuevos seguidores, mensajes privados e invitaciones a grupos.
             </p>
           </div>
         ) : (
