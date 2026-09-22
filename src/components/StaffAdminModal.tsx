@@ -239,17 +239,18 @@ export const StaffAdminModal: React.FC = () => {
     t => t.type === ticketTypeFilter && (ticketStatusFilter === 'pendientes' ? t.status === 'pendientes' : ticketStatusFilter === 'en_proceso' ? t.status === 'en_proceso' : t.status === 'resueltos')
   );
 
-  // File upload simulation helpers
-  const handleFileUpload = (setter: (url: string) => void) => {
-    // Generate a beautiful Unsplash placeholder simulating uploaded media
-    const sampleImages = [
-      'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=1000&auto=format&fit=crop&q=80',
-      'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=1000&auto=format&fit=crop&q=80',
-      'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=1000&auto=format&fit=crop&q=80',
-      'https://images.unsplash.com/photo-1528605248644-14dd04022da1?w=1000&auto=format&fit=crop&q=80'
-    ];
-    const randomUrl = sampleImages[Math.floor(Math.random() * sampleImages.length)];
-    setter(randomUrl);
+  // File upload helper from device gallery
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>, setter: (url: string) => void) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        if (typeof reader.result === 'string') {
+          setter(reader.result);
+        }
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
   // Handlers for Forms
@@ -986,30 +987,40 @@ export const StaffAdminModal: React.FC = () => {
                         </label>
                         <div className="flex items-center gap-2">
                           <input
-                            type="url"
+                            type="text"
                             required
                             value={feedImage}
                             onChange={e => setFeedImage(e.target.value)}
-                            placeholder="URL de imagen o sube un archivo..."
-                            className="flex-1 bg-white/10 text-white placeholder-white/40 px-3 py-2 rounded-xl border border-white/20 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                            placeholder="Pega la URL o elige de tu galería..."
+                            className="flex-1 bg-white/10 text-white placeholder-white/40 px-3 py-2 rounded-xl border border-white/20 focus:outline-none focus:ring-1 focus:ring-amber-400 text-xs"
                           />
-                          <button
-                            type="button"
-                            onClick={() => handleFileUpload(setFeedImage)}
-                            className="px-3 py-2 bg-white/10 hover:bg-white/20 text-white font-bold rounded-xl flex items-center gap-1 shrink-0"
-                          >
+                          <label className="px-3 py-2 bg-amber-400 hover:bg-amber-300 text-neutral-950 font-black rounded-xl flex items-center gap-1.5 shrink-0 cursor-pointer shadow-md transition-all active:scale-95 text-xs">
                             <Upload className="w-3.5 h-3.5" />
-                            <span>Subir</span>
-                          </button>
+                            <span>Galería</span>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              onChange={e => handleFileSelect(e, setFeedImage)}
+                            />
+                          </label>
                         </div>
                       </div>
 
                       {feedImage && (
-                        <div className="relative w-full h-36 rounded-xl overflow-hidden border border-white/20">
+                        <div className="relative w-full h-36 rounded-xl overflow-hidden border border-white/20 group">
                           <img src={feedImage} alt="Preview" className="w-full h-full object-cover" />
                           <span className="absolute bottom-2 left-2 bg-black/70 px-2 py-0.5 rounded text-[10px] text-amber-300 font-bold">
                             Vista Previa de Imagen
                           </span>
+                          <button
+                            type="button"
+                            onClick={() => setFeedImage('')}
+                            className="absolute top-2 right-2 p-1 bg-rose-600 hover:bg-rose-500 text-white rounded-lg transition-colors"
+                            title="Quitar imagen"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
                         </div>
                       )}
 
@@ -1092,31 +1103,44 @@ export const StaffAdminModal: React.FC = () => {
 
                       <div>
                         <label className="block text-[10px] font-bold text-white/70 mb-1">
-                          Subir imagen *
+                          Subir imagen para Carrusel 01 *
                         </label>
                         <div className="flex items-center gap-2">
                           <input
-                            type="url"
+                            type="text"
                             required
                             value={c1Image}
                             onChange={e => setC1Image(e.target.value)}
-                            placeholder="URL de la imagen o sube un archivo..."
-                            className="flex-1 bg-white/10 text-white placeholder-white/40 px-3 py-2 rounded-xl border border-white/20 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                            placeholder="Pega la URL o elige de tu galería..."
+                            className="flex-1 bg-white/10 text-white placeholder-white/40 px-3 py-2 rounded-xl border border-white/20 focus:outline-none focus:ring-1 focus:ring-amber-400 text-xs"
                           />
-                          <button
-                            type="button"
-                            onClick={() => handleFileUpload(setC1Image)}
-                            className="px-3 py-2 bg-white/10 hover:bg-white/20 text-white font-bold rounded-xl flex items-center gap-1 shrink-0"
-                          >
+                          <label className="px-3 py-2 bg-amber-400 hover:bg-amber-300 text-neutral-950 font-black rounded-xl flex items-center gap-1.5 shrink-0 cursor-pointer shadow-md transition-all active:scale-95 text-xs">
                             <Upload className="w-3.5 h-3.5" />
-                            <span>Subir</span>
-                          </button>
+                            <span>Galería</span>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              onChange={e => handleFileSelect(e, setC1Image)}
+                            />
+                          </label>
                         </div>
                       </div>
 
                       {c1Image && (
-                        <div className="relative w-full h-32 rounded-xl overflow-hidden border border-white/20">
+                        <div className="relative w-full h-32 rounded-xl overflow-hidden border border-white/20 group">
                           <img src={c1Image} alt="Preview" className="w-full h-full object-cover" />
+                          <span className="absolute bottom-2 left-2 bg-black/70 px-2 py-0.5 rounded text-[10px] text-amber-300 font-bold">
+                            Vista Previa Carrusel 01
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setC1Image('')}
+                            className="absolute top-2 right-2 p-1 bg-rose-600 hover:bg-rose-500 text-white rounded-lg transition-colors"
+                            title="Quitar imagen"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
                         </div>
                       )}
 
@@ -1286,31 +1310,44 @@ export const StaffAdminModal: React.FC = () => {
 
                       <div>
                         <label className="block text-[10px] font-bold text-white/70 mb-1">
-                          Subir imagen *
+                          Subir imagen para Carrusel 02 *
                         </label>
                         <div className="flex items-center gap-2">
                           <input
-                            type="url"
+                            type="text"
                             required
                             value={c2Image}
                             onChange={e => setC2Image(e.target.value)}
-                            placeholder="URL de la imagen o sube un archivo..."
-                            className="flex-1 bg-white/10 text-white placeholder-white/40 px-3 py-2 rounded-xl border border-white/20 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                            placeholder="Pega la URL o elige de tu galería..."
+                            className="flex-1 bg-white/10 text-white placeholder-white/40 px-3 py-2 rounded-xl border border-white/20 focus:outline-none focus:ring-1 focus:ring-amber-400 text-xs"
                           />
-                          <button
-                            type="button"
-                            onClick={() => handleFileUpload(setC2Image)}
-                            className="px-3 py-2 bg-white/10 hover:bg-white/20 text-white font-bold rounded-xl flex items-center gap-1 shrink-0"
-                          >
+                          <label className="px-3 py-2 bg-amber-400 hover:bg-amber-300 text-neutral-950 font-black rounded-xl flex items-center gap-1.5 shrink-0 cursor-pointer shadow-md transition-all active:scale-95 text-xs">
                             <Upload className="w-3.5 h-3.5" />
-                            <span>Subir</span>
-                          </button>
+                            <span>Galería</span>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              onChange={e => handleFileSelect(e, setC2Image)}
+                            />
+                          </label>
                         </div>
                       </div>
 
                       {c2Image && (
-                        <div className="relative w-full h-32 rounded-xl overflow-hidden border border-white/20">
+                        <div className="relative w-full h-32 rounded-xl overflow-hidden border border-white/20 group">
                           <img src={c2Image} alt="Preview" className="w-full h-full object-cover" />
+                          <span className="absolute bottom-2 left-2 bg-black/70 px-2 py-0.5 rounded text-[10px] text-amber-300 font-bold">
+                            Vista Previa Carrusel 02
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setC2Image('')}
+                            className="absolute top-2 right-2 p-1 bg-rose-600 hover:bg-rose-500 text-white rounded-lg transition-colors"
+                            title="Quitar imagen"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
                         </div>
                       )}
 
@@ -1911,17 +1948,46 @@ export const StaffAdminModal: React.FC = () => {
 
                           <div>
                             <label className="block text-[10px] font-bold text-white/70 mb-1">
-                              URL de la Imagen *
+                              Imagen del Anuncio Emergente *
                             </label>
-                            <input
-                              type="url"
-                              value={popupImageUrl}
-                              onChange={e => setPopupImageUrl(e.target.value)}
-                              placeholder="https://images.unsplash.com/photo-..."
-                              required
-                              className="w-full bg-white/10 text-white placeholder-white/40 px-3 py-2 rounded-xl border border-white/20 focus:outline-none focus:ring-1 focus:ring-amber-400 text-xs"
-                            />
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="text"
+                                value={popupImageUrl}
+                                onChange={e => setPopupImageUrl(e.target.value)}
+                                placeholder="Pega la URL o elige de tu galería..."
+                                required
+                                className="flex-1 bg-white/10 text-white placeholder-white/40 px-3 py-2 rounded-xl border border-white/20 focus:outline-none focus:ring-1 focus:ring-amber-400 text-xs"
+                              />
+                              <label className="px-3 py-2 bg-amber-400 hover:bg-amber-300 text-neutral-950 font-black rounded-xl flex items-center gap-1.5 shrink-0 cursor-pointer shadow-md transition-all active:scale-95 text-xs">
+                                <Upload className="w-3.5 h-3.5" />
+                                <span>Galería</span>
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  className="hidden"
+                                  onChange={e => handleFileSelect(e, setPopupImageUrl)}
+                                />
+                              </label>
+                            </div>
                           </div>
+
+                          {popupImageUrl && (
+                            <div className="relative w-full h-32 rounded-xl overflow-hidden border border-white/20 group">
+                              <img src={popupImageUrl} alt="Preview Popup" className="w-full h-full object-cover" />
+                              <span className="absolute bottom-2 left-2 bg-black/70 px-2 py-0.5 rounded text-[10px] text-amber-300 font-bold">
+                                Vista Previa Anuncio Emergente
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => setPopupImageUrl('')}
+                                className="absolute top-2 right-2 p-1 bg-rose-600 hover:bg-rose-500 text-white rounded-lg transition-colors"
+                                title="Quitar imagen"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          )}
 
                           <div>
                             <label className="block text-[10px] font-bold text-white/70 mb-1">
