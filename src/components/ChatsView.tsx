@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import { DEFAULT_SILHOUETTE_AVATAR } from '../context/AuthContext';
 import {
+  UserProfile,
   ChatRoom,
   ChatMessage,
   SpanishCity,
@@ -127,6 +128,50 @@ export const ChatsView: React.FC = () => {
     if (!userId) return undefined;
     if (userId === currentUser.id) return currentUser;
     return otherUsers.find(u => u.id === userId);
+  };
+
+  const getOtherUserInPrivateChat = (room: ChatRoom): UserProfile | undefined => {
+    if (room.type !== 'private') return undefined;
+    let otherId = room.members?.find(id => id && id !== currentUser.id);
+    if (!otherId && room.id.startsWith('chat-priv_')) {
+      const parts = room.id.replace('chat-priv_', '').split('__');
+      if (parts.length === 2) {
+        otherId = parts.find(id => id !== currentUser.id);
+      }
+    }
+    if (!otherId && room.targetUserId && room.targetUserId !== currentUser.id) {
+      otherId = room.targetUserId;
+    }
+    if (!otherId && Array.isArray(room.messages)) {
+      const nonSelfMsg = room.messages.find(m => m.senderId && m.senderId !== 'system' && m.senderId !== currentUser.id);
+      if (nonSelfMsg) {
+        otherId = nonSelfMsg.senderId;
+      }
+    }
+
+    if (!otherId) return undefined;
+    const found = otherUsers.find(u => u.id === otherId);
+    if (found) return found;
+    if (room.targetUser && room.targetUser.id === otherId) return room.targetUser;
+
+    const senderMsg = room.messages?.find(m => m.senderId === otherId);
+    if (senderMsg) {
+      return {
+        id: otherId,
+        username: otherId.replace(/^user-/, ''),
+        name: senderMsg.senderName || otherId.replace(/^user-/, ''),
+        avatar: senderMsg.senderAvatar || DEFAULT_SILHOUETTE_AVATAR,
+        city: 'Madrid',
+        originCity: 'Colombia',
+        bio: 'Usuario de La Tierrita',
+        website: '',
+        followersCount: 1,
+        followingCount: 1,
+        postsCount: 0,
+        isVerified: false
+      };
+    }
+    return undefined;
   };
 
   const [selectedPrivateOrGroupId, setSelectedPrivateOrGroupId] = useState<string | null>(null);
@@ -276,25 +321,50 @@ export const ChatsView: React.FC = () => {
     return chatRooms
       .filter(r => {
         if (r.type !== 'private' && r.type !== 'group') return false;
-        // Filter blocked users in private chats
-        if (r.type === 'private' && r.targetUserId && blockedUserIds.includes(r.targetUserId)) {
-          return false;
+
+        // Private chats: only display if currentUser is one of the participants
+        if (r.type === 'private') {
+          const isParticipant =
+            (Array.isArray(r.members) && r.members.includes(currentUser.id)) ||
+            (r.id.startsWith('chat-priv_') && r.id.includes(currentUser.id)) ||
+            r.targetUserId === currentUser.id ||
+            r.createdBy === currentUser.id ||
+            (Array.isArray(r.messages) && r.messages.some(m => m.senderId === currentUser.id));
+
+          if (!isParticipant) return false;
+
+          const otherUser = getOtherUserInPrivateChat(r);
+          if (otherUser && blockedUserIds.includes(otherUser.id)) {
+            return false;
+          }
+          if (r.targetUserId && blockedUserIds.includes(r.targetUserId)) {
+            return false;
+          }
         }
+
+        // Group chats: only display if currentUser is a member or creator
+        if (r.type === 'group') {
+          const isMember = (Array.isArray(r.members) && r.members.includes(currentUser.id)) || r.createdBy === currentUser.id;
+          if (!isMember) return false;
+        }
+
         if (!searchQuery.trim()) return true;
         const query = searchQuery.toLowerCase();
-        const matchesName = (r.name || '').toLowerCase().includes(query);
-        const matchesDesc = r.description?.toLowerCase().includes(query);
+        const otherUser = r.type === 'private' ? getOtherUserInPrivateChat(r) : undefined;
+        const displayName = otherUser ? otherUser.name : (r.name || '');
+        const matchesName = displayName.toLowerCase().includes(query);
+        const matchesDesc = (r.description || '').toLowerCase().includes(query);
         const matchesMsg = (r.messages || []).some(m => (m.text || '').toLowerCase().includes(query));
         return matchesName || matchesDesc || matchesMsg;
       })
       .sort((a, b) => {
         const lastA = a.messages[a.messages.length - 1];
         const lastB = b.messages[b.messages.length - 1];
-        const timeA = lastA ? lastA.id : a.createdAt;
-        const timeB = lastB ? lastB.id : b.createdAt;
+        const timeA = lastA ? (lastA.timestamp || lastA.id) : a.createdAt;
+        const timeB = lastB ? (lastB.timestamp || lastB.id) : b.createdAt;
         return timeB.localeCompare(timeA);
       });
-  }, [chatRooms, blockedUserIds, searchQuery]);
+  }, [chatRooms, blockedUserIds, searchQuery, currentUser.id, otherUsers]);
 
   // Handle Send Message
   const handleSendMessage = (e: React.FormEvent) => {
@@ -454,6 +524,9 @@ export const ChatsView: React.FC = () => {
               unifiedChatsList.map(room => {
                 const lastMsg = room.messages[room.messages.length - 1];
                 const isGroup = room.type === 'group';
+                const otherUser = room.type === 'private' ? getOtherUserInPrivateChat(room) : undefined;
+                const displayName = isGroup ? room.name : (otherUser ? otherUser.name : (room.name || 'Chat Privado'));
+                const avatarSrc = isGroup ? (room.avatar || DEFAULT_SILHOUETTE_AVATAR) : (otherUser?.avatar || room.avatar || DEFAULT_SILHOUETTE_AVATAR);
 
                 return (
                   <div
@@ -470,18 +543,8 @@ export const ChatsView: React.FC = () => {
                     <div className="flex items-center gap-3 min-w-0">
                       <div className="relative shrink-0">
                         <img
-                          src={
-                            (room.type === 'private'
-                              ? (() => {
-                                  const otherMemberId = room.members.find(id => id !== currentUser.id);
-                                  const otherUser = otherMemberId ? getUserInfo(otherMemberId) : undefined;
-                                  return otherUser?.avatar;
-                                })()
-                              : undefined) ||
-                            room.avatar ||
-                            DEFAULT_SILHOUETTE_AVATAR
-                          }
-                          alt={room.name}
+                          src={avatarSrc}
+                          alt={displayName}
                           className={`w-12 h-12 object-cover border border-neutral-200 dark:border-neutral-700 ${
                             isGroup ? 'rounded-2xl' : 'rounded-full'
                           }`}
@@ -499,20 +562,11 @@ export const ChatsView: React.FC = () => {
                       <div className="min-w-0">
                         <div className="flex items-center gap-1.5">
                           <span className="text-sm font-bold text-neutral-900 dark:text-white truncate">
-                            {room.type === 'private'
-                              ? (() => {
-                                  const otherMemberId = room.members.find(id => id !== currentUser.id);
-                                  const otherUser = otherMemberId ? getUserInfo(otherMemberId) : undefined;
-                                  return otherUser ? otherUser.name : (room.name || 'Chat Privado');
-                                })()
-                              : room.name}
+                            {displayName}
                           </span>
-                          {room.type === 'private' && (() => {
-                            const otherMemberId = room.members.find(id => id !== currentUser.id);
-                            const otherUser = otherMemberId ? getUserInfo(otherMemberId) : undefined;
-                            const targetUser = otherUser || (room.targetUserId ? getUserInfo(room.targetUserId) : room.targetUser);
-                            return <UserBadges isVerified={targetUser?.isVerified} staffRole={targetUser?.staffRole} />;
-                          })()}
+                          {room.type === 'private' && (
+                            <UserBadges isVerified={otherUser?.isVerified} staffRole={otherUser?.staffRole} />
+                          )}
                           {isGroup ? (
                             <span className="text-[10px] text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40 px-1.5 py-0.2 rounded font-bold shrink-0">
                               Grupo · {room.members.length}
@@ -732,33 +786,33 @@ export const ChatsView: React.FC = () => {
                 )}
 
                 {/* Hide avatar image for General Chat and City Chats */}
-                {activeChat.type !== 'general' && activeChat.type !== 'city' && (
-                  <div className="relative shrink-0">
-                    <img
-                      src={
-                        (activeChat.type === 'private'
-                          ? (() => {
-                              const otherMemberId = activeChat.members.find(id => id !== currentUser.id);
-                              const otherUser = otherMemberId ? getUserInfo(otherMemberId) : undefined;
-                              return otherUser?.avatar;
-                            })()
-                          : undefined) ||
-                        activeChat.avatar ||
-                        DEFAULT_SILHOUETTE_AVATAR
-                      }
-                      alt={activeChat.name}
-                      className={`w-9 h-9 object-cover border border-neutral-200 dark:border-neutral-700 ${
-                        activeChat.type === 'group' ? 'rounded-xl' : 'rounded-full'
-                      }`}
-                      referrerPolicy="no-referrer"
-                    />
-                    {activeChat.type === 'private' && (
-                      <div className="absolute -bottom-1 -right-1 bg-emerald-500 rounded-full p-0.5 text-white">
-                        <Lock className="w-2.5 h-2.5" />
-                      </div>
-                    )}
-                  </div>
-                )}
+                {activeChat.type !== 'general' && activeChat.type !== 'city' && (() => {
+                  const otherUser = activeChat.type === 'private' ? getOtherUserInPrivateChat(activeChat) : undefined;
+                  const avatarSrc = activeChat.type === 'group'
+                    ? (activeChat.avatar || DEFAULT_SILHOUETTE_AVATAR)
+                    : (otherUser?.avatar || activeChat.avatar || DEFAULT_SILHOUETTE_AVATAR);
+                  const headerTitle = activeChat.type === 'group'
+                    ? activeChat.name
+                    : (otherUser ? otherUser.name : (activeChat.name || 'Chat Privado'));
+
+                  return (
+                    <div className="relative shrink-0">
+                      <img
+                        src={avatarSrc}
+                        alt={headerTitle}
+                        className={`w-9 h-9 object-cover border border-neutral-200 dark:border-neutral-700 ${
+                          activeChat.type === 'group' ? 'rounded-xl' : 'rounded-full'
+                        }`}
+                        referrerPolicy="no-referrer"
+                      />
+                      {activeChat.type === 'private' && (
+                        <div className="absolute -bottom-1 -right-1 bg-emerald-500 rounded-full p-0.5 text-white">
+                          <Lock className="w-2.5 h-2.5" />
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
 
                 <div className="min-w-0">
                   <h3 className="text-xs sm:text-sm font-extrabold text-white truncate max-w-[200px] sm:max-w-sm flex items-center gap-1.5">
@@ -767,17 +821,14 @@ export const ChatsView: React.FC = () => {
                         ? 'Parceros en España.'
                         : activeChat.type === 'private'
                         ? (() => {
-                            const otherMemberId = activeChat.members.find(id => id !== currentUser.id);
-                            const otherUser = otherMemberId ? getUserInfo(otherMemberId) : undefined;
+                            const otherUser = getOtherUserInPrivateChat(activeChat);
                             return otherUser ? otherUser.name : (activeChat.name || 'Chat Privado');
                           })()
                         : activeChat.name}
                     </span>
                     {activeChat.type === 'private' && (() => {
-                      const otherMemberId = activeChat.members.find(id => id !== currentUser.id);
-                      const otherUser = otherMemberId ? getUserInfo(otherMemberId) : undefined;
-                      const targetUser = otherUser || (activeChat.targetUserId ? getUserInfo(activeChat.targetUserId) : activeChat.targetUser);
-                      return <UserBadges isVerified={targetUser?.isVerified} staffRole={targetUser?.staffRole} />;
+                      const otherUser = getOtherUserInPrivateChat(activeChat);
+                      return <UserBadges isVerified={otherUser?.isVerified} staffRole={otherUser?.staffRole} />;
                     })()}
                   </h3>
                   <div className="flex items-center gap-1.5 text-[11px] text-white/80">

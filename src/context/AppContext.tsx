@@ -254,6 +254,22 @@ export const isFictitiousUser = (id?: string, username?: string): boolean => {
   return false;
 };
 
+export const getDeterministicPrivateChatId = (userAId: string, userBId: string): string => {
+  const sorted = [userAId, userBId].sort();
+  return `chat-priv_${sorted[0]}__${sorted[1]}`;
+};
+
+export const extractMembersFromPrivateChatId = (chatId: string): string[] => {
+  if (chatId.startsWith('chat-priv_')) {
+    const raw = chatId.replace('chat-priv_', '');
+    const parts = raw.split('__');
+    if (parts.length === 2 && parts[0] && parts[1]) {
+      return [parts[0], parts[1]];
+    }
+  }
+  return [];
+};
+
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { userProfile, updateUserProfile } = useAuth();
 
@@ -751,7 +767,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               created_at: new Date().toISOString(),
               messages: []
             };
-            await supabase.from('chat_rooms').insert([safeRoom]);
+            await supabase.from('chat_rooms').upsert([safeRoom], { onConflict: 'id' });
           }
         } catch (err) {
           // Ignore offline/connection errors
@@ -828,7 +844,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       if (!isMounted) return;
 
-      // Update state, merging with INITIAL_CHAT_ROOMS
+      // Update state, merging with INITIAL_CHAT_ROOMS and deduplicating 1:1 private chats
       setChatRooms(prevRooms => {
         const roomsMap = new Map<string, ChatRoom>();
         prevRooms.forEach(r => roomsMap.set(r.id, r));
@@ -839,43 +855,144 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           }
         });
 
-        roomsData.forEach((dbRoom: any) => {
-          const existing = roomsMap.get(dbRoom.id);
+        const allRawRooms = [...Array.from(roomsMap.values()), ...roomsData];
+        const finalMap = new Map<string, ChatRoom>();
+
+        // Consolidate private rooms between identical pairs of users into one single deterministic room
+        const privatePairGroups = new Map<string, {
+          canonicalId: string;
+          participants: [string, string];
+          messagesMap: Map<string, any>;
+          name?: string;
+          avatar?: string;
+          targetUserId?: string;
+          createdAt?: string;
+        }>();
+
+        allRawRooms.forEach((rawRoom: any) => {
+          const resolvedType = inferRoomType(rawRoom.id, rawRoom.type);
+
+          if (resolvedType === 'private') {
+            let p1 = '';
+            let p2 = '';
+            if (rawRoom.id.startsWith('chat-priv_')) {
+              const extracted = extractMembersFromPrivateChatId(rawRoom.id);
+              if (extracted.length === 2) {
+                p1 = extracted[0];
+                p2 = extracted[1];
+              }
+            }
+            if (!p1 || !p2) {
+              if (Array.isArray(rawRoom.members) && rawRoom.members.length >= 2) {
+                p1 = rawRoom.members[0];
+                p2 = rawRoom.members[1];
+              }
+            }
+            if (!p1 || !p2) {
+              const senders = Array.from(new Set(
+                (Array.isArray(rawRoom.messages) ? rawRoom.messages : [])
+                  .map((m: any) => m?.senderId)
+                  .filter((id: any) => id && id !== 'system')
+              )) as string[];
+              if (senders.length >= 2) {
+                p1 = senders[0];
+                p2 = senders[1];
+              } else if (senders.length === 1 && rawRoom.targetUserId && rawRoom.targetUserId !== senders[0]) {
+                p1 = senders[0];
+                p2 = rawRoom.targetUserId;
+              } else if (senders.length === 1 && currentUser?.id && currentUser.id !== senders[0]) {
+                p1 = senders[0];
+                p2 = currentUser.id;
+              } else if (rawRoom.targetUserId && rawRoom.createdBy && rawRoom.targetUserId !== rawRoom.createdBy) {
+                p1 = rawRoom.createdBy;
+                p2 = rawRoom.targetUserId;
+              }
+            }
+
+            if (p1 && p2 && p1 !== p2) {
+              const sorted = [p1, p2].sort();
+              const pairKey = `${sorted[0]}__${sorted[1]}`;
+              const canonicalId = `chat-priv_${pairKey}`;
+
+              if (!privatePairGroups.has(pairKey)) {
+                privatePairGroups.set(pairKey, {
+                  canonicalId,
+                  participants: [sorted[0], sorted[1]],
+                  messagesMap: new Map<string, any>(),
+                  name: rawRoom.name,
+                  avatar: rawRoom.avatar,
+                  targetUserId: rawRoom.targetUserId,
+                  createdAt: rawRoom.createdAt
+                });
+              }
+
+              const group = privatePairGroups.get(pairKey)!;
+              if (Array.isArray(rawRoom.messages)) {
+                rawRoom.messages.forEach((m: any) => {
+                  if (m && m.id) {
+                    group.messagesMap.set(m.id, m);
+                  }
+                });
+              }
+              return; // Successfully consolidated
+            }
+          }
+
+          // Non-private rooms (general, city, group) or fallback
+          const existing = finalMap.get(rawRoom.id);
           const msgMap = new Map<string, any>();
-          
           if (existing && Array.isArray(existing.messages)) {
             existing.messages.forEach(m => msgMap.set(m.id, m));
           }
-          if (Array.isArray(dbRoom.messages)) {
-            dbRoom.messages.forEach((m: any) => msgMap.set(m.id, m));
+          if (Array.isArray(rawRoom.messages)) {
+            rawRoom.messages.forEach((m: any) => msgMap.set(m.id, m));
           }
 
-          const resolvedType = inferRoomType(dbRoom.id, dbRoom.type || existing?.type);
-
-          const mergedRoom: ChatRoom = {
-            id: dbRoom.id,
+          finalMap.set(rawRoom.id, {
+            id: rawRoom.id,
             type: resolvedType,
-            name: (dbRoom.name && dbRoom.name !== 'Chat') ? dbRoom.name : (existing?.name || dbRoom.name || 'Chat'),
-            avatar: dbRoom.avatar || existing?.avatar || '',
-            city: dbRoom.city || existing?.city,
-            targetUserId: dbRoom.targetUserId || existing?.targetUserId,
-            targetUser: dbRoom.targetUser || existing?.targetUser,
-            description: dbRoom.description || existing?.description || '',
-            members: (Array.isArray(dbRoom.members) && dbRoom.members.length > 0)
-              ? dbRoom.members
+            name: (rawRoom.name && rawRoom.name !== 'Chat') ? rawRoom.name : (existing?.name || rawRoom.name || 'Chat'),
+            avatar: rawRoom.avatar || existing?.avatar || '',
+            city: rawRoom.city || existing?.city,
+            targetUserId: rawRoom.targetUserId || existing?.targetUserId,
+            targetUser: rawRoom.targetUser || existing?.targetUser,
+            description: rawRoom.description || existing?.description || '',
+            members: (Array.isArray(rawRoom.members) && rawRoom.members.length > 0)
+              ? rawRoom.members
               : (existing?.members || []),
-            admins: (Array.isArray(dbRoom.admins) && dbRoom.admins.length > 0)
-              ? dbRoom.admins
+            admins: (Array.isArray(rawRoom.admins) && rawRoom.admins.length > 0)
+              ? rawRoom.admins
               : (existing?.admins || []),
-            createdBy: dbRoom.createdBy || existing?.createdBy,
-            createdAt: dbRoom.createdAt || existing?.createdAt || '2026-01-01',
+            createdBy: rawRoom.createdBy || existing?.createdBy,
+            createdAt: rawRoom.createdAt || existing?.createdAt || '2026-01-01',
             messages: Array.from(msgMap.values())
-          };
-
-          roomsMap.set(dbRoom.id, mergedRoom);
+          });
         });
 
-        return Array.from(roomsMap.values());
+        // Add consolidated canonical private rooms
+        privatePairGroups.forEach((group) => {
+          const existing = finalMap.get(group.canonicalId);
+          if (existing && Array.isArray(existing.messages)) {
+            existing.messages.forEach(m => group.messagesMap.set(m.id, m));
+          }
+
+          const msgs = Array.from(group.messagesMap.values());
+          // Sort messages chronologically
+          msgs.sort((a, b) => (a.timestamp || a.id || '').localeCompare(b.timestamp || b.id || ''));
+
+          finalMap.set(group.canonicalId, {
+            id: group.canonicalId,
+            type: 'private',
+            name: group.name || 'Chat Privado',
+            avatar: group.avatar || '',
+            targetUserId: group.participants.find(id => id !== currentUser?.id) || group.targetUserId,
+            members: [group.participants[0], group.participants[1]],
+            createdAt: group.createdAt || '2026-01-01',
+            messages: msgs
+          });
+        });
+
+        return Array.from(finalMap.values());
       });
     };
 
@@ -894,18 +1011,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         })
         .on('broadcast', { event: 'new_chat_message' }, ({ payload }) => {
           if (payload && payload.chatId && payload.message) {
-            setChatRooms(prevRooms => prevRooms.map(room => {
-              if (room.id === payload.chatId) {
-                const alreadyExists = room.messages.some(m => m.id === payload.message.id);
-                if (!alreadyExists) {
-                  return {
-                    ...room,
-                    messages: [...room.messages, payload.message]
-                  };
-                }
+            setChatRooms(prevRooms => {
+              const roomExists = prevRooms.some(r => r.id === payload.chatId);
+              if (!roomExists) {
+                fetchRooms();
+                return prevRooms;
               }
-              return room;
-            }));
+              return prevRooms.map(room => {
+                if (room.id === payload.chatId) {
+                  const alreadyExists = room.messages.some(m => m.id === payload.message.id);
+                  if (!alreadyExists) {
+                    return {
+                      ...room,
+                      messages: [...room.messages, payload.message]
+                    };
+                  }
+                }
+                return room;
+              });
+            });
           }
         })
         .on('broadcast', { event: 'update_chat_messages' }, ({ payload }) => {
@@ -2186,13 +2310,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     if (hasSupabaseUrl && hasSupabaseKey) {
       try {
-        await supabase.from('chat_rooms').insert([{
+        await supabase.from('chat_rooms').upsert([{
           id: newRoom.id,
           name: newRoom.name,
           description: newRoom.description || '',
           created_at: newRoom.createdAt || new Date().toISOString().split('T')[0],
           messages: newRoom.messages
-        }]);
+        }], { onConflict: 'id' });
       } catch (err) {
         console.warn('Non-blocking Supabase group creation error:', err);
       }
@@ -2212,16 +2336,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const startPrivateChat = (targetUserId: string, targetUserName?: string, targetUserAvatar?: string): string => {
+    const canonicalChatId = getDeterministicPrivateChatId(currentUser.id, targetUserId);
+
     // Check if private chat already exists
     const existing = chatRooms.find(
-      r => r.type === 'private' && (r.targetUserId === targetUserId || (r.members.includes(targetUserId) && r.members.includes(currentUser.id)))
+      r => r.id === canonicalChatId || (r.type === 'private' && (
+        (r.members.includes(targetUserId) && r.members.includes(currentUser.id)) ||
+        (r.id.includes(targetUserId) && r.id.includes(currentUser.id)) ||
+        r.targetUserId === targetUserId
+      ))
     );
+
+    const activeId = existing ? existing.id : canonicalChatId;
 
     if (existing) {
       setSelectedUserProfile(null);
-      setActiveChatId(existing.id);
+      setActiveChatId(activeId);
       setActiveTab('chats');
-      return existing.id;
+      return activeId;
     }
 
     const existingUser = otherUsers.find(u => u.id === targetUserId);
@@ -2244,9 +2376,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setOtherUsers(prev => [...prev, targetUser]);
     }
 
-    const newChatId = `chat-priv-${Date.now()}`;
     const newRoom: ChatRoom = {
-      id: newChatId,
+      id: canonicalChatId,
       type: 'private',
       name: targetUser.name,
       targetUserId: targetUser.id,
@@ -2269,14 +2400,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     setChatRooms(prev => {
-      const filtered = prev.filter(r => r.id !== newChatId);
+      const filtered = prev.filter(r => r.id !== canonicalChatId);
       return [...filtered, newRoom];
     });
     setSelectedUserProfile(null);
-    setActiveChatId(newChatId);
+    setActiveChatId(canonicalChatId);
     setActiveTab('chats');
 
-    setDoc(doc(db, 'chat_rooms', newChatId), newRoom).catch(error => {
+    setDoc(doc(db, 'chat_rooms', canonicalChatId), newRoom).catch(error => {
       handleFirestoreError(error, OperationType.CREATE, 'chat_rooms');
     });
 
@@ -2286,20 +2417,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (hasSupabaseUrl && hasSupabaseKey) {
       (async () => {
         try {
-          await supabase.from('chat_rooms').insert([{
+          await supabase.from('chat_rooms').upsert([{
             id: newRoom.id,
             name: newRoom.name,
             description: newRoom.description || '',
             created_at: newRoom.createdAt || new Date().toISOString().split('T')[0],
             messages: newRoom.messages
-          }]);
+          }], { onConflict: 'id' });
         } catch (err) {
           console.warn('Non-blocking Supabase private chat creation error:', err);
         }
       })();
     }
 
-    return newChatId;
+    return canonicalChatId;
   };
 
   const inviteUserToGroup = (groupId: string, targetUserId: string) => {
