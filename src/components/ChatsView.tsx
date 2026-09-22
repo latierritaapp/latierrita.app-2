@@ -132,35 +132,79 @@ export const ChatsView: React.FC = () => {
 
   const getOtherUserInPrivateChat = (room: ChatRoom): UserProfile | undefined => {
     if (room.type !== 'private') return undefined;
-    let otherId = room.members?.find(id => id && id !== currentUser.id);
-    if (!otherId && (room.id.startsWith('chat-priv_') || room.id.startsWith('chat-priv-') || room.id.startsWith('chat-priv'))) {
-      const parts = room.id.replace(/^chat-priv[_-]|^chat-priv/, '').split('__');
+    const myId = currentUser?.id || '';
+    const myUsername = currentUser?.username || '';
+    const myEmail = currentUser?.email || '';
+    const strippedId = myId.replace(/^user-/, '');
+    const myIdentifiers = [myId, myUsername, myEmail, strippedId].filter(Boolean);
+
+    let otherId: string | undefined = undefined;
+
+    // 1. Check room.members for an id that is NOT me
+    if (Array.isArray(room.members)) {
+      otherId = room.members.find(id => id && !myIdentifiers.some(my => id === my || id.includes(my) || my.includes(id)));
+    }
+
+    // 2. Extract from canonical room id: chat-priv_{p1}__{p2}
+    if (!otherId && (room.id.startsWith('chat-priv') || room.id.startsWith('priv-'))) {
+      const raw = room.id.replace(/^chat-priv[_-]|^priv[_-]|^chat-priv/, '');
+      const parts = raw.split('__');
       if (parts.length === 2) {
-        otherId = parts.find(id => id !== currentUser.id);
+        otherId = parts.find(id => !myIdentifiers.some(my => id === my || id.includes(my) || my.includes(id)));
       }
     }
-    if (!otherId && room.targetUserId && room.targetUserId !== currentUser.id) {
+
+    // 3. From targetUserId if not me
+    if (!otherId && room.targetUserId && !myIdentifiers.some(my => room.targetUserId === my || room.targetUserId?.includes(my))) {
       otherId = room.targetUserId;
     }
+
+    // 4. From non-self sender in messages
     if (!otherId && Array.isArray(room.messages)) {
-      const nonSelfMsg = room.messages.find(m => m.senderId && m.senderId !== 'system' && m.senderId !== currentUser.id);
+      const nonSelfMsg = room.messages.find(m => m.senderId && m.senderId !== 'system' && !myIdentifiers.some(my => m.senderId === my));
       if (nonSelfMsg) {
         otherId = nonSelfMsg.senderId;
       }
     }
 
-    if (!otherId) return undefined;
-    const found = otherUsers.find(u => u.id === otherId);
-    if (found) return found;
-    if (room.targetUser && room.targetUser.id === otherId) return room.targetUser;
+    // Look up in otherUsers
+    if (otherId) {
+      const found = otherUsers.find(u => u.id === otherId || u.username === otherId || (u.email && u.email === otherId));
+      if (found) return found;
+      if (room.targetUser && (room.targetUser.id === otherId || room.targetUser.username === otherId)) return room.targetUser;
+    }
 
-    const senderMsg = room.messages?.find(m => m.senderId === otherId);
-    if (senderMsg) {
+    // Extract other user profile from messages if sender information exists
+    if (Array.isArray(room.messages)) {
+      const senderMsg = room.messages.find(m => m.senderId && m.senderId !== 'system' && !myIdentifiers.some(my => m.senderId === my));
+      if (senderMsg) {
+        return {
+          id: senderMsg.senderId,
+          username: (senderMsg.senderName || senderMsg.senderId).toLowerCase().replace(/[^a-z0-9_]/g, '_'),
+          name: senderMsg.senderName || 'Parcero',
+          avatar: senderMsg.senderAvatar || DEFAULT_SILHOUETTE_AVATAR,
+          city: 'Madrid',
+          originCity: 'Colombia',
+          bio: 'Usuario de La Tierrita',
+          website: '',
+          followersCount: 1,
+          followingCount: 1,
+          postsCount: 0,
+          isVerified: false
+        };
+      }
+    }
+
+    // If otherId was found (e.g. from canonical ID) create a fallback user profile
+    if (otherId) {
+      const cleanName = otherId.replace(/^user-/, '').replace(/_/g, ' ');
       return {
         id: otherId,
         username: otherId.replace(/^user-/, ''),
-        name: senderMsg.senderName || otherId.replace(/^user-/, ''),
-        avatar: senderMsg.senderAvatar || DEFAULT_SILHOUETTE_AVATAR,
+        name: (room.name && room.name !== 'Chat' && room.name !== 'Chat Privado' && !myIdentifiers.includes(room.name))
+          ? room.name
+          : cleanName,
+        avatar: room.avatar || DEFAULT_SILHOUETTE_AVATAR,
         city: 'Madrid',
         originCity: 'Colombia',
         bio: 'Usuario de La Tierrita',
@@ -171,6 +215,7 @@ export const ChatsView: React.FC = () => {
         isVerified: false
       };
     }
+
     return undefined;
   };
 
@@ -267,7 +312,7 @@ export const ChatsView: React.FC = () => {
   // Synchronize if external code set activeChatId (e.g., from push notifications or places)
   useEffect(() => {
     if (activeChatId) {
-      const room = chatRooms.find(r => r.id === activeChatId);
+      const room = chatRooms.find(r => r.id === activeChatId || (r.type === 'private' && (r.id.includes(activeChatId) || activeChatId.includes(r.id.replace(/^chat-priv_/, '')))));
       if (room) {
         if (room.type === 'general') {
           setChatTypeTab('general');
@@ -278,8 +323,12 @@ export const ChatsView: React.FC = () => {
           setSelectedPrivateOrGroupId(room.id);
         }
       }
+    } else {
+      if (chatTypeTab === 'messages') {
+        setSelectedPrivateOrGroupId(null);
+      }
     }
-  }, [activeChatId, chatRooms]);
+  }, [activeChatId, chatRooms, chatTypeTab]);
 
   // 1. General chat: public for all
   const generalChat = useMemo(() => {
@@ -318,18 +367,24 @@ export const ChatsView: React.FC = () => {
 
   // Unified list of private and group chats for the "messages" session
   const unifiedChatsList = useMemo(() => {
+    const myId = currentUser?.id || '';
+    const myUsername = currentUser?.username || '';
+    const myEmail = currentUser?.email || '';
+    const strippedId = myId.replace(/^user-/, '');
+    const myIdentifiers = [myId, myUsername, myEmail, strippedId].filter(Boolean);
+
     return chatRooms
       .filter(r => {
         if (r.type !== 'private' && r.type !== 'group') return false;
 
-        // Private chats: only display if currentUser is one of the participants
+        // Private chats: display if currentUser is one of the participants
         if (r.type === 'private') {
           const isParticipant =
-            (Array.isArray(r.members) && r.members.includes(currentUser.id)) ||
-            (r.id.startsWith('chat-priv') && r.id.includes(currentUser.id)) ||
-            r.targetUserId === currentUser.id ||
-            r.createdBy === currentUser.id ||
-            (Array.isArray(r.messages) && r.messages.some(m => m.senderId === currentUser.id));
+            (Array.isArray(r.members) && r.members.some(m => m && myIdentifiers.some(id => m === id || m.includes(id) || id.includes(m)))) ||
+            (r.id.startsWith('chat-priv') && myIdentifiers.some(id => r.id.includes(id))) ||
+            (r.targetUserId && myIdentifiers.some(id => r.targetUserId === id || r.targetUserId?.includes(id))) ||
+            (r.createdBy && myIdentifiers.some(id => r.createdBy === id || r.createdBy?.includes(id))) ||
+            (Array.isArray(r.messages) && r.messages.some(m => m && myIdentifiers.some(id => m.senderId === id)));
 
           if (!isParticipant) return false;
 
@@ -344,7 +399,7 @@ export const ChatsView: React.FC = () => {
 
         // Group chats: only display if currentUser is a member or creator
         if (r.type === 'group') {
-          const isMember = (Array.isArray(r.members) && r.members.includes(currentUser.id)) || r.createdBy === currentUser.id;
+          const isMember = (Array.isArray(r.members) && r.members.some(m => myIdentifiers.includes(m))) || (r.createdBy && myIdentifiers.includes(r.createdBy));
           if (!isMember) return false;
         }
 
@@ -362,9 +417,9 @@ export const ChatsView: React.FC = () => {
         const lastB = b.messages[b.messages.length - 1];
         const timeA = lastA ? (lastA.timestamp || lastA.id) : a.createdAt;
         const timeB = lastB ? (lastB.timestamp || lastB.id) : b.createdAt;
-        return timeB.localeCompare(timeA);
+        return (timeB || '').localeCompare(timeA || '');
       });
-  }, [chatRooms, blockedUserIds, searchQuery, currentUser.id, otherUsers]);
+  }, [chatRooms, blockedUserIds, searchQuery, currentUser, otherUsers]);
 
   // Handle Send Message
   const handleSendMessage = (e: React.FormEvent) => {

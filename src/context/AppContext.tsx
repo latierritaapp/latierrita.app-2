@@ -622,6 +622,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
+  // Synchronized refs to check user's current view in real-time listeners and polling
+  const activeTabRef = useRef<string>(activeTab);
+  activeTabRef.current = activeTab;
+
+  const activeChatIdRef = useRef<string | null>(activeChatId);
+  activeChatIdRef.current = activeChatId;
+
+  const chatTypeTabRef = useRef<string>(chatTypeTab);
+  chatTypeTabRef.current = chatTypeTab;
+
+  // Helper: check if current user is actively looking at this specific chat room
+  const isUserViewingChat = (targetChatId: string): boolean => {
+    if (activeTabRef.current !== 'chats') return false;
+    const currentActive = activeChatIdRef.current;
+    if (!currentActive) return false;
+    if (currentActive === targetChatId) return true;
+    const cleanActive = currentActive.replace(/^chat-priv[_-]|^priv[_-]|^chat-priv/, '');
+    const cleanTarget = targetChatId.replace(/^chat-priv[_-]|^priv[_-]|^chat-priv/, '');
+    return cleanActive === cleanTarget;
+  };
+
   // Support, Verification, Staff & Deleted Accounts state
   const [supportTickets, setSupportTickets] = useState<SupportTicket[]>([]);
   const [verificationRequests, setVerificationRequests] = useState<VerificationRequest[]>([]);
@@ -1020,13 +1041,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             if (lastMessage && lastMessage.senderId !== currentUserId && lastMessage.senderId !== 'system') {
               if (!seenMessageIdsRef.current.has(lastMessage.id)) {
                 seenMessageIdsRef.current.add(lastMessage.id);
-                triggerPlushNotification({
-                  type: 'chat_private',
-                  title: lastMessage.senderName ? `Mensaje de ${lastMessage.senderName}` : 'Nuevo mensaje privado',
-                  message: lastMessage.text || 'Te ha enviado un mensaje',
-                  avatar: lastMessage.senderAvatar || DEFAULT_SILHOUETTE_AVATAR,
-                  data: { chatId: group.canonicalId }
-                });
+                // Only notify if user is NOT currently looking at this specific chat room
+                if (!isUserViewingChat(group.canonicalId)) {
+                  triggerPlushNotification({
+                    type: 'chat_private',
+                    title: lastMessage.senderName ? `Mensaje de ${lastMessage.senderName}` : 'Nuevo mensaje privado',
+                    message: lastMessage.text || 'Te ha enviado un mensaje',
+                    avatar: lastMessage.senderAvatar || DEFAULT_SILHOUETTE_AVATAR,
+                    data: { chatId: group.canonicalId }
+                  });
+                }
               }
             }
           }
@@ -1072,41 +1096,60 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         .on('broadcast', { event: 'new_chat_message' }, ({ payload }) => {
           if (payload && payload.chatId && payload.message) {
             const currentId = currentUserRef.current?.id || '';
+            const myUsername = currentUserRef.current?.username || '';
+            const myEmail = currentUserRef.current?.email || '';
             const msg = payload.message;
 
-            // Trigger instant notification if message is from another user and relevant to current user
-            if (msg.senderId !== currentId && msg.senderId !== 'system') {
+            const isFromMe = msg.senderId === currentId || msg.senderId === myUsername || (myEmail && msg.senderId === myEmail);
+
+            // Trigger instant notification if message is from another user and user is NOT inside that chat
+            if (!isFromMe && msg.senderId !== 'system') {
               if (!seenMessageIdsRef.current.has(msg.id)) {
                 seenMessageIdsRef.current.add(msg.id);
-                triggerPlushNotification({
-                  type: 'chat_private',
-                  title: msg.senderName ? `Mensaje de ${msg.senderName}` : 'Nuevo mensaje',
-                  message: msg.text || 'Te ha enviado un mensaje',
-                  avatar: msg.senderAvatar || DEFAULT_SILHOUETTE_AVATAR,
-                  data: { chatId: payload.chatId }
-                });
+                if (!isUserViewingChat(payload.chatId)) {
+                  triggerPlushNotification({
+                    type: 'chat_private',
+                    title: msg.senderName ? `Mensaje de ${msg.senderName}` : 'Nuevo mensaje privado',
+                    message: msg.text || 'Te ha enviado un mensaje',
+                    avatar: msg.senderAvatar || DEFAULT_SILHOUETTE_AVATAR,
+                    data: { chatId: payload.chatId }
+                  });
+                }
               }
             }
 
             setChatRooms(prevRooms => {
-              const roomExists = prevRooms.some(r => r.id === payload.chatId);
-              if (!roomExists) {
-                fetchRooms();
-                return prevRooms;
+              const roomIndex = prevRooms.findIndex(r => r.id === payload.chatId || (r.type === 'private' && (r.id.includes(payload.chatId) || payload.chatId.includes(r.id.replace(/^chat-priv_/, '')))));
+              if (roomIndex >= 0) {
+                const existingRoom = prevRooms[roomIndex];
+                const alreadyExists = existingRoom.messages.some(m => m.id === payload.message.id);
+                if (alreadyExists) return prevRooms;
+                const updated = {
+                  ...existingRoom,
+                  messages: [...existingRoom.messages, payload.message]
+                };
+                const copy = [...prevRooms];
+                copy[roomIndex] = updated;
+                return copy;
+              } else {
+                // Instantly inject new private room so it appears in the recipient's inbox immediately
+                const extracted = extractMembersFromPrivateChatId(payload.chatId);
+                const participants = extracted.length === 2 ? extracted : [msg.senderId, currentId];
+                const newRoom: ChatRoom = {
+                  id: payload.chatId,
+                  type: 'private',
+                  name: msg.senderName || 'Chat Privado',
+                  avatar: msg.senderAvatar || DEFAULT_SILHOUETTE_AVATAR,
+                  targetUserId: msg.senderId,
+                  members: participants,
+                  createdAt: new Date().toISOString().split('T')[0],
+                  messages: [payload.message]
+                };
+                return [newRoom, ...prevRooms];
               }
-              return prevRooms.map(room => {
-                if (room.id === payload.chatId) {
-                  const alreadyExists = room.messages.some(m => m.id === payload.message.id);
-                  if (!alreadyExists) {
-                    return {
-                      ...room,
-                      messages: [...room.messages, payload.message]
-                    };
-                  }
-                }
-                return room;
-              });
             });
+
+            fetchRooms();
           }
         })
         .on('broadcast', { event: 'update_chat_messages' }, ({ payload }) => {
