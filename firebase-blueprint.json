@@ -73,6 +73,24 @@
         "reason": { "type": "string", "description": "Reason for deletion/suspension" },
         "canRestore": { "type": "boolean", "description": "Whether account is restorable" }
       }
+    },
+    "SupportTicket": {
+      "collection": "support_tickets",
+      "description": "Sequential auto-numbered customer support and moderation reports",
+      "fields": {
+        "id": { "type": "string", "description": "Ticket unique document ID" },
+        "code": { "type": "string", "description": "Sequential assigned code (e.g. TS-0001)" },
+        "type": { "type": "string", "description": "Category: TS, TRU, TRP, TRH, TRM, TRG" },
+        "userName": { "type": "string", "description": "Ticket submitter name" },
+        "userUsername": { "type": "string", "description": "Ticket submitter username" },
+        "userAvatar": { "type": "string", "description": "Ticket submitter avatar url" },
+        "subject": { "type": "string", "description": "Ticket title or subject" },
+        "description": { "type": "string", "description": "Ticket content and report details" },
+        "status": { "type": "string", "description": "Status: pendientes, en_proceso, resueltos" },
+        "priority": { "type": "string", "description": "Priority: Baja, Media, Alta" },
+        "date": { "type": "string", "description": "Submission ISO date" },
+        "response": { "type": "string", "description": "Staff feedback/response" }
+      }
     }
   }
 }

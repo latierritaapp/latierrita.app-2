@@ -47,7 +47,8 @@ export const SettingsModal: React.FC = () => {
     setIsStaffMode,
     setIsStaffAdminOpen,
     triggerPlushNotification,
-    openReportModal
+    openReportModal,
+    createSupportTicket
   } = useApp();
   const { logout, deleteAccount } = useAuth();
 
@@ -162,26 +163,36 @@ export const SettingsModal: React.FC = () => {
     });
   };
 
-  const handleSendSupport = (e: React.FormEvent) => {
+  const handleSendSupport = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!supportMessage.trim()) return;
-    setSupportSent(true);
-    triggerPlushNotification({
-      type: 'system',
-      title: 'Mensaje de soporte enviado',
-      message: 'Nos pondremos en contacto contigo a la mayor brevedad.'
-    });
+    try {
+      const code = await createSupportTicket('TS', 'Consulta de Soporte', supportMessage, 'Alta');
+      setSupportSent(true);
+      triggerPlushNotification({
+        type: 'system',
+        title: `Mensaje de soporte enviado (${code})`,
+        message: 'Nos pondremos en contacto contigo a la mayor brevedad.'
+      });
+    } catch (err) {
+      console.error('Failed to create support ticket:', err);
+    }
   };
 
-  const handleSendReport = (e: React.FormEvent) => {
+  const handleSendReport = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!reportIssue.trim()) return;
-    setReportSent(true);
-    triggerPlushNotification({
-      type: 'system',
-      title: 'Reporte registrado',
-      message: 'Gracias por ayudarnos a mantener segura la comunidad de La Tierrita.'
-    });
+    try {
+      const code = await createSupportTicket('TS', `Reporte de problema en la app: ${reportCategory}`, reportIssue, 'Alta');
+      setReportSent(true);
+      triggerPlushNotification({
+        type: 'system',
+        title: `Reporte registrado (${code})`,
+        message: 'Gracias por ayudarnos a mantener segura la comunidad de La Tierrita.'
+      });
+    } catch (err) {
+      console.error('Failed to create report ticket:', err);
+    }
   };
 
   const handleStaffUnlock = (e: React.FormEvent) => {

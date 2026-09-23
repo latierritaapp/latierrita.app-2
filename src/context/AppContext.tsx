@@ -98,6 +98,7 @@ interface AppContextType {
 
   // Support & Administration
   supportTickets: SupportTicket[];
+  createSupportTicket: (type: TicketType, subject: string, description: string, priority?: 'Baja' | 'Media' | 'Alta') => Promise<string>;
   updateTicketStatus: (id: string, status: 'pendientes' | 'en_proceso' | 'resueltos', response?: string) => void;
   deleteSupportTicket: (id: string) => void;
   verificationRequests: VerificationRequest[];
@@ -1484,6 +1485,44 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       });
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, `support_tickets/${id}`);
+    }
+  };
+
+  const createSupportTicket = async (
+    type: TicketType,
+    subject: string,
+    description: string,
+    priority: 'Baja' | 'Media' | 'Alta' = 'Media'
+  ): Promise<string> => {
+    try {
+      // 1. Query existing tickets of this specific type to calculate the sequential suffix
+      const ticketsRef = collection(db, 'support_tickets');
+      const q = query(ticketsRef, where('type', '==', type));
+      const snapshot = await getDocs(q);
+      const nextNum = snapshot.size + 1;
+      const code = `${type}-${String(nextNum).padStart(4, '0')}`;
+
+      // 2. Build ticket object
+      const newTicket = {
+        code,
+        type,
+        userName: currentUser.name || currentUser.username || 'Usuario',
+        userUsername: currentUser.username || 'usuario',
+        userAvatar: currentUser.avatar || '',
+        subject,
+        description,
+        status: 'pendientes' as const,
+        priority,
+        date: new Date().toLocaleString()
+      };
+
+      // 3. Add to Firestore
+      await addDoc(ticketsRef, newTicket);
+
+      return code;
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, 'support_tickets');
+      throw error;
     }
   };
 
@@ -3121,30 +3160,64 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setReportTarget(null);
   };
 
-  const submitReport = (reason: 'spam' | 'inappropriate' | 'harassment' | 'scam' | 'other', details: string) => {
+  const submitReport = async (reason: 'spam' | 'inappropriate' | 'harassment' | 'scam' | 'other', details: string) => {
     if (!reportTarget) return;
 
-    const newReport: ContentReport = {
-      id: `report-${Date.now()}`,
-      reporterId: currentUser.id,
-      reporterName: currentUser.name,
-      reportedItemId: reportTarget.id,
-      reportedType: reportTarget.type,
-      reason,
-      details,
-      chatId: reportTarget.chatId,
-      timestamp: new Date().toLocaleString(),
-      status: 'pending'
-    };
+    // Map reported content type to TicketType
+    let ticketType: TicketType = 'TRP';
+    let typeLabel = 'Publicación';
 
-    setReports(prev => [newReport, ...prev]);
-    closeReportModal();
+    if (reportTarget.type === 'user') {
+      ticketType = 'TRU';
+      typeLabel = 'Usuario';
+    } else if (reportTarget.type === 'post') {
+      ticketType = 'TRP';
+      typeLabel = 'Publicación';
+    } else if (reportTarget.type === 'story') {
+      ticketType = 'TRH';
+      typeLabel = 'Historia';
+    } else if (reportTarget.type === 'message') {
+      ticketType = 'TRM';
+      typeLabel = 'Mensaje';
+    } else if ((reportTarget.type as string) === 'group') {
+      ticketType = 'TRG';
+      typeLabel = 'Grupo';
+    }
 
-    triggerPlushNotification({
-      type: 'system',
-      title: 'Reporte recibido por el STAFF',
-      message: 'Gracias por colaborar con la seguridad de la comunidad. Nuestro equipo de moderación revisará el contenido.',
-    });
+    const subject = `Reporte de ${typeLabel}: ${reportTarget.title}`;
+    const description = `Motivo: ${reason}. Detalles: ${details}. ID del ítem reportado: ${reportTarget.id}${
+      reportTarget.chatId ? ` (ID Chat: ${reportTarget.chatId})` : ''
+    }`;
+
+    try {
+      // Create persistent ticket in Firestore with the auto-numbered serial system
+      const code = await createSupportTicket(ticketType, subject, description, 'Media');
+
+      const newReport: ContentReport = {
+        id: `report-${Date.now()}`,
+        reporterId: currentUser.id,
+        reporterName: currentUser.name,
+        reportedItemId: reportTarget.id,
+        reportedType: reportTarget.type,
+        reason,
+        details,
+        chatId: reportTarget.chatId,
+        timestamp: new Date().toLocaleString(),
+        status: 'pending'
+      };
+
+      setReports(prev => [newReport, ...prev]);
+      closeReportModal();
+
+      triggerPlushNotification({
+        type: 'system',
+        title: `Reporte registrado (${code})`,
+        message: 'Gracias por colaborar con la seguridad de la comunidad. Nuestro equipo de moderación revisará el contenido.',
+      });
+    } catch (e) {
+      console.error('Failed to submit report ticket:', e);
+      closeReportModal();
+    }
   };
 
   // Notification actions
@@ -3203,6 +3276,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setIsStaffAdminOpen,
 
         supportTickets,
+        createSupportTicket,
         updateTicketStatus,
         deleteSupportTicket,
         verificationRequests,

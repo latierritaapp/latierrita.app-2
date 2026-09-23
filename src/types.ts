@@ -152,7 +152,7 @@ export interface StartupAdConfig {
   active: boolean;
 }
 
-export type TicketType = 'TS' | 'TR' | 'TCS'; // TS: Soporte, TR: Reportes, TCS: Cuentas suspendidas
+export type TicketType = 'TS' | 'TRU' | 'TRP' | 'TRH' | 'TRM' | 'TRG';
 
 export interface SupportTicket {
   id: string;

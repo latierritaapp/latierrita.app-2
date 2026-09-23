@@ -654,7 +654,7 @@ export const StaffAdminModal: React.FC = () => {
                   <div className="space-y-4">
                     {/* Ticket Type Filter Badges */}
                     <div className="flex flex-wrap items-center justify-between gap-2 bg-white/5 p-2 rounded-2xl border border-white/10">
-                      <div className="flex items-center gap-1">
+                      <div className="flex flex-wrap items-center gap-1">
                         <button
                           onClick={() => setTicketTypeFilter('TS')}
                           className={`px-2.5 py-1 rounded-lg text-xs font-extrabold transition-all ${
@@ -663,27 +663,57 @@ export const StaffAdminModal: React.FC = () => {
                               : 'text-white/70 hover:bg-white/10'
                           }`}
                         >
-                          Tickets de Soporte (TS)
+                          Soporte (TS)
                         </button>
                         <button
-                          onClick={() => setTicketTypeFilter('TR')}
+                          onClick={() => setTicketTypeFilter('TRU')}
                           className={`px-2.5 py-1 rounded-lg text-xs font-extrabold transition-all ${
-                            ticketTypeFilter === 'TR'
+                            ticketTypeFilter === 'TRU'
                               ? 'bg-rose-500 text-white'
                               : 'text-white/70 hover:bg-white/10'
                           }`}
                         >
-                          Tickets de Reportes (TR)
+                          Usuario (TRU)
                         </button>
                         <button
-                          onClick={() => setTicketTypeFilter('TCS')}
+                          onClick={() => setTicketTypeFilter('TRP')}
                           className={`px-2.5 py-1 rounded-lg text-xs font-extrabold transition-all ${
-                            ticketTypeFilter === 'TCS'
+                            ticketTypeFilter === 'TRP'
+                              ? 'bg-red-500 text-white'
+                              : 'text-white/70 hover:bg-white/10'
+                          }`}
+                        >
+                          Publicación (TRP)
+                        </button>
+                        <button
+                          onClick={() => setTicketTypeFilter('TRH')}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-extrabold transition-all ${
+                            ticketTypeFilter === 'TRH'
+                              ? 'bg-orange-500 text-white'
+                              : 'text-white/70 hover:bg-white/10'
+                          }`}
+                        >
+                          Historia (TRH)
+                        </button>
+                        <button
+                          onClick={() => setTicketTypeFilter('TRM')}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-extrabold transition-all ${
+                            ticketTypeFilter === 'TRM'
+                              ? 'bg-pink-500 text-white'
+                              : 'text-white/70 hover:bg-white/10'
+                          }`}
+                        >
+                          Mensaje (TRM)
+                        </button>
+                        <button
+                          onClick={() => setTicketTypeFilter('TRG')}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-extrabold transition-all ${
+                            ticketTypeFilter === 'TRG'
                               ? 'bg-purple-500 text-white'
                               : 'text-white/70 hover:bg-white/10'
                           }`}
                         >
-                          Tickets Cuentas Suspendidas (TCS)
+                          Grupo (TRG)
                         </button>
                       </div>
 
@@ -2313,7 +2343,7 @@ export const StaffAdminModal: React.FC = () => {
                             2. <strong>Moderación de Publicaciones:</strong> Eliminar publicaciones que infrinjan derechos de autor o atenten contra la seguridad de miembros.
                           </p>
                           <p>
-                            3. <strong>Respuesta a Tickets:</strong> Los tickets prioritarios (TCS) deben atenderse en menos de 24 horas.
+                            3. <strong>Respuesta a Tickets:</strong> Los tickets prioritarios (Soporte o Reportes Graves) deben atenderse en menos de 24 horas.
                           </p>
                           <p>
                             4. <strong>Gestión de Cuentas:</strong> Se aplica política de retención de 7 días antes de purgar definitivamente cualquier usuario.
