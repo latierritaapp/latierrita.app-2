@@ -42,7 +42,7 @@ export const CreatePostModal: React.FC = () => {
   const [mediaUrl, setMediaUrl] = useState('');
   const [caption, setCaption] = useState('');
   const [location, setLocation] = useState('Madrid, España');
-  const [showLocation, setShowLocation] = useState(true);
+  const [showLocation, setShowLocation] = useState(false);
   const [showLocationSuggestions, setShowLocationSuggestions] = useState(false);
 
   // Dragging / Pan framing state for 1:1 photo

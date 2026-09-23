@@ -73,6 +73,7 @@ export const StoryViewerModal: React.FC = () => {
   const [floatingEmojis, setFloatingEmojis] = useState<{ id: number; emoji: string; x: number }[]>([]);
   const [isViewersModalOpen, setIsViewersModalOpen] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
 
   const timerRef = useRef<number | null>(null);
 
@@ -250,11 +251,7 @@ export const StoryViewerModal: React.FC = () => {
     handleQuickReaction('💬');
   };
 
-  const viewersList = currentStory.viewers || [
-    { userId: 'u-1', username: 'mariana_bcn', userAvatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80', timestamp: 'Hace 5 min', reaction: '🔥' },
-    { userId: 'u-2', username: 'carlos_valencia', userAvatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&auto=format&fit=crop&q=80', timestamp: 'Hace 12 min', reaction: '❤️' },
-    { userId: 'u-3', username: 'valen_madrid', userAvatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=400&auto=format&fit=crop&q=80', timestamp: 'Hace 25 min' }
-  ];
+  const viewersList = currentStory.viewers || [];
 
   return (
     <div
@@ -346,13 +343,10 @@ export const StoryViewerModal: React.FC = () => {
                 {isOwner ? (
                   <button
                     type="button"
-                    onClick={async () => {
+                    onClick={() => {
                       setShowMenu(false);
-                      setIsPaused(false);
-                      if (confirm('¿Estás seguro de que deseas eliminar esta historia?')) {
-                        await deleteStory(currentStory.id);
-                        handleNextStory();
-                      }
+                      setIsPaused(true);
+                      setIsDeleteConfirmOpen(true);
                     }}
                     className="w-full flex items-center gap-2.5 px-3 py-2.5 text-rose-400 hover:bg-rose-500/10 rounded-xl text-left text-xs font-semibold transition-all cursor-pointer"
                   >
@@ -539,25 +533,35 @@ export const StoryViewerModal: React.FC = () => {
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto py-3 space-y-2.5">
-              {viewersList.map((viewer, idx) => (
-                <div key={idx} className="flex items-center justify-between p-2.5 bg-white/5 hover:bg-white/10 rounded-2xl border border-white/10 transition-all">
-                  <div className="flex items-center gap-3">
-                    <img src={viewer.userAvatar} alt={viewer.username} className="w-9 h-9 rounded-full object-cover border border-amber-400/50" referrerPolicy="no-referrer" />
-                    <div>
-                      <p className="text-xs font-bold text-white">@{viewer.username}</p>
-                      <p className="text-[10px] text-white/60">Visto {viewer.timestamp}</p>
+            {viewersList.length === 0 ? (
+              <div className="flex-1 flex flex-col items-center justify-center text-center text-white/50 p-6">
+                <Eye className="w-12 h-12 text-white/20 mb-3" />
+                <p className="text-sm font-bold text-white mb-1">Aún no hay visualizaciones</p>
+                <p className="text-xs text-white/60 max-w-xs leading-relaxed">
+                  Cuando tus parceros del barrio vean tu historia, aparecerán en esta lista con sus reacciones.
+                </p>
+              </div>
+            ) : (
+              <div className="flex-1 overflow-y-auto py-3 space-y-2.5">
+                {viewersList.map((viewer, idx) => (
+                  <div key={idx} className="flex items-center justify-between p-2.5 bg-white/5 hover:bg-white/10 rounded-2xl border border-white/10 transition-all">
+                    <div className="flex items-center gap-3">
+                      <img src={viewer.userAvatar} alt={viewer.username} className="w-9 h-9 rounded-full object-cover border border-amber-400/50" referrerPolicy="no-referrer" />
+                      <div>
+                        <p className="text-xs font-bold text-white">@{viewer.username}</p>
+                        <p className="text-[10px] text-white/60">Visto {viewer.timestamp}</p>
+                      </div>
                     </div>
+                    {viewer.reaction && (
+                      <div className="flex items-center gap-1 bg-amber-400/20 border border-amber-400/40 px-3 py-1 rounded-full">
+                        <span className="text-lg">{viewer.reaction}</span>
+                        <span className="text-[10px] font-bold text-amber-300">Reaccionó</span>
+                      </div>
+                    )}
                   </div>
-                  {viewer.reaction && (
-                    <div className="flex items-center gap-1 bg-amber-400/20 border border-amber-400/40 px-3 py-1 rounded-full">
-                      <span className="text-lg">{viewer.reaction}</span>
-                      <span className="text-[10px] font-bold text-amber-300">Reaccionó</span>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
 
             <button
               type="button"
@@ -569,6 +573,44 @@ export const StoryViewerModal: React.FC = () => {
             >
               Continuar viendo historia
             </button>
+          </div>
+        )}
+
+        {/* Custom Delete Confirmation Modal - Colombia Blue and Yellow style */}
+        {isDeleteConfirmOpen && (
+          <div className="absolute inset-0 z-50 bg-[#061432]/95 backdrop-blur-md flex items-center justify-center p-6 animate-fade-in">
+            <div className="bg-[#0c2454] border border-white/10 rounded-3xl p-6 text-center max-w-xs shadow-2xl animate-scaleUp">
+              <div className="w-14 h-14 bg-rose-500/10 text-rose-400 rounded-full flex items-center justify-center mx-auto mb-4 border border-rose-500/20">
+                <Trash2 className="w-7 h-7" />
+              </div>
+              <h3 className="text-base font-black text-white mb-2">¿Eliminar historia?</h3>
+              <p className="text-xs text-white/80 leading-relaxed mb-6">
+                Esta acción es permanente. Tu historia desaparecerá de forma inmediata para todos tus parceros.
+              </p>
+              <div className="flex flex-col gap-2.5">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setIsDeleteConfirmOpen(false);
+                    await deleteStory(currentStory.id);
+                    handleNextStory();
+                  }}
+                  className="w-full py-3 bg-amber-500 hover:bg-amber-400 active:scale-95 text-neutral-950 text-xs font-black rounded-2xl shadow-lg transition-all cursor-pointer"
+                >
+                  Sí, eliminar historia
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsDeleteConfirmOpen(false);
+                    setIsPaused(false);
+                  }}
+                  className="w-full py-3 bg-white/10 hover:bg-white/15 active:scale-95 text-white text-xs font-bold rounded-2xl transition-all cursor-pointer"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>

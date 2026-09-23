@@ -96,7 +96,20 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userToDisplay }) => {
   // Posts for the profile
   const userPosts: PostItem[] = (isMe
     ? myProfilePosts
-    : posts.filter(p => p.userId === user.id || p.username === user.username)
+    : posts.filter(p => {
+        const postUserId = p.userId;
+        const postUsername = p.username?.toLowerCase();
+        
+        const targetId = user.id || userToDisplay?.id;
+        const targetUsername = (user.username || userToDisplay?.username)?.toLowerCase();
+        const targetEmail = (user.email || userToDisplay?.email)?.toLowerCase();
+        
+        return (
+          (postUserId && targetId && postUserId === targetId) ||
+          (postUsername && targetUsername && postUsername === targetUsername) ||
+          (p.email && targetEmail && p.email.toLowerCase() === targetEmail)
+        );
+      })
   ).filter(p => !p.isStaffAd);
 
   const taggedPosts: PostItem[] = posts.filter(
