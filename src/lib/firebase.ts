@@ -121,6 +121,11 @@ function sanitizePayloadForTable(tableName: string, payload: any): any {
     delete clean.disable_comments;
     delete clean.hide_likes;
     delete clean.tagged_usernames;
+    delete clean.hide_location;
+    delete clean.ad_title;
+    delete clean.ad_description;
+    delete clean.sponsor_name;
+    delete clean.sponsor_city;
 
     if (clean.media_url && !clean.image_url) {
       clean.image_url = clean.media_url;

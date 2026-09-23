@@ -247,7 +247,7 @@ export const ExploreView: React.FC = () => {
                   </div>
 
                   <div className="text-[10px] text-white/80 truncate text-right">
-                    {post.location || post.userCity || 'España'}
+                    {!post.hideLocation ? (post.location || post.userCity || 'España') : 'Sin ubicación'}
                   </div>
                 </div>
               </div>
@@ -339,10 +339,12 @@ export const ExploreView: React.FC = () => {
                         <span className="text-xs sm:text-sm font-bold text-white group-hover:text-amber-300 transition-colors block leading-tight">
                           @{post.username}
                         </span>
-                        <div className="flex items-center gap-1 text-[11px] text-white/50">
-                          <MapPin className="w-3 h-3 text-rose-400" />
-                          <span>{post.location || post.userCity || 'España'}</span>
-                        </div>
+                        {!post.hideLocation && (post.location || post.userCity || 'España') && (
+                          <div className="flex items-center gap-1 text-[11px] text-white/50">
+                            <MapPin className="w-3 h-3 text-rose-400" />
+                            <span>{post.location || post.userCity || 'España'}</span>
+                          </div>
+                        )}
                       </div>
                     </div>
 

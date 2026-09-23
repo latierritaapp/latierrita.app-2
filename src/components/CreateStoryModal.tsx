@@ -42,6 +42,9 @@ export const CreateStoryModal: React.FC = () => {
     setCameraError(false);
     try {
       stopLiveCamera();
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error('API mediaDevices no soportada o contexto no seguro (se requiere HTTPS)');
+      }
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: { ideal: facingMode } },
         audio: false
@@ -52,7 +55,7 @@ export const CreateStoryModal: React.FC = () => {
         videoRef.current.play().catch(() => {});
       }
     } catch (err) {
-      console.error('Instagram-style camera error:', err);
+      // Cámara en vivo para historias no disponible, activando alternativas de galería y cámara nativa de forma limpia
       setCameraError(true);
     }
   };
@@ -218,9 +221,9 @@ export const CreateStoryModal: React.FC = () => {
           </div>
 
           {/* Bottom Overlays: Filter Carousel & Action Buttons */}
-          <div className="absolute bottom-0 inset-x-0 z-20 pb-8 pt-16 bg-gradient-to-t from-black via-black/70 to-transparent flex flex-col gap-4">
-            {/* Filter Carousel */}
-            {!cameraError && (
+          {!cameraError && (
+            <div className="absolute bottom-0 inset-x-0 z-20 pb-8 pt-16 bg-gradient-to-t from-black via-black/70 to-transparent flex flex-col gap-4">
+              {/* Filter Carousel */}
               <div className="w-full overflow-x-auto px-4 no-scrollbar">
                 <div className="flex items-center justify-center gap-3 min-w-max">
                   {FILTERS.map(filter => (
@@ -239,35 +242,35 @@ export const CreateStoryModal: React.FC = () => {
                   ))}
                 </div>
               </div>
-            )}
 
-            {/* Bottom Controls Bar: Gallery left, Shutter center */}
-            <div className="px-6 flex items-center justify-between relative">
-              {/* Lado izquierdo inferior: galería */}
-              <button
-                type="button"
-                onClick={() => galleryInputRef.current?.click()}
-                className="w-14 h-14 rounded-full bg-white/20 hover:bg-white/30 border-2 border-white flex items-center justify-center cursor-pointer transition-all active:scale-95 shadow-xl backdrop-blur-md"
-                title="Abrir Galería"
-              >
-                <Image className="w-6 h-6 text-white" />
-              </button>
+              {/* Bottom Controls Bar: Gallery left, Shutter center */}
+              <div className="px-6 flex items-center justify-between relative">
+                {/* Lado izquierdo inferior: galería */}
+                <button
+                  type="button"
+                  onClick={() => galleryInputRef.current?.click()}
+                  className="w-14 h-14 rounded-full bg-white/20 hover:bg-white/30 border-2 border-white flex items-center justify-center cursor-pointer transition-all active:scale-95 shadow-xl backdrop-blur-md"
+                  title="Abrir Galería"
+                >
+                  <Image className="w-6 h-6 text-white" />
+                </button>
 
-              {/* Lado centro inferior: botón obturador */}
-              <button
-                type="button"
-                onClick={handleCaptureSnapshot}
-                className="absolute left-1/2 -translate-x-1/2 w-20 h-20 rounded-full bg-white p-1 flex items-center justify-center cursor-pointer shadow-2xl active:scale-95 transition-all group"
-                title="Tomar Foto"
-              >
-                <div className="w-16 h-16 rounded-full bg-amber-400 border-4 border-white flex items-center justify-center group-hover:bg-amber-300 transition-colors">
-                  <Camera className="w-7 h-7 text-neutral-950" />
-                </div>
-              </button>
+                {/* Lado centro inferior: botón obturador */}
+                <button
+                  type="button"
+                  onClick={handleCaptureSnapshot}
+                  className="absolute left-1/2 -translate-x-1/2 w-20 h-20 rounded-full bg-white p-1 flex items-center justify-center cursor-pointer shadow-2xl active:scale-95 transition-all group"
+                  title="Tomar Foto"
+                >
+                  <div className="w-16 h-16 rounded-full bg-amber-400 border-4 border-white flex items-center justify-center group-hover:bg-amber-300 transition-colors">
+                    <Camera className="w-7 h-7 text-neutral-950" />
+                  </div>
+                </button>
 
-              <div className="w-14" />
+                <div className="w-14" />
+              </div>
             </div>
-          </div>
+          )}
         </div>
       ) : (
         /* PREVIEW & PUBLISH SCREEN */

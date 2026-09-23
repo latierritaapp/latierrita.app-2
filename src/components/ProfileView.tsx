@@ -723,7 +723,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userToDisplay }) => {
                       <span className="text-xs sm:text-sm font-bold text-white group-hover:text-amber-300 transition-colors block leading-tight">
                         @{post.username}
                       </span>
-                      {(post.location || post.userCity) && (
+                      {!post.hideLocation && (post.location || post.userCity) && (
                         <span className="text-[11px] text-white/50 block">
                           {post.location || post.userCity}
                         </span>

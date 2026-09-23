@@ -61,6 +61,14 @@ export interface UserProfile {
   }[];
 }
 
+export interface StoryViewer {
+  userId: string;
+  username: string;
+  userAvatar: string;
+  timestamp: string;
+  reaction?: string;
+}
+
 export interface StoryItem {
   id: string;
   userId: string;
@@ -76,6 +84,7 @@ export interface StoryItem {
     count: number;
     users: string[];
   }[];
+  viewers?: StoryViewer[];
 }
 
 export interface PostComment {
@@ -99,6 +108,7 @@ export interface PostItem {
   comments: PostComment[];
   timestamp: string;
   location: string;
+  hideLocation?: boolean;
   isStaffAd?: boolean;
   adTitle?: string;
   adDescription?: string;

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
-import { X, ChevronLeft, ChevronRight, Send, MapPin } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, Send, MapPin, Eye, Heart } from 'lucide-react';
 
 const QUICK_EMOJIS = ['🔥', '❤️', '😂', '👏', '🇨🇴', '☕', '😍', '🥳'];
 
@@ -19,18 +19,30 @@ export const StoryViewerModal: React.FC = () => {
   const [isPaused, setIsPaused] = useState(false);
   const [replyText, setReplyText] = useState('');
   const [floatingEmojis, setFloatingEmojis] = useState<{ id: number; emoji: string; x: number }[]>([]);
+  const [isViewersModalOpen, setIsViewersModalOpen] = useState(false);
 
   const timerRef = useRef<number | null>(null);
 
   const currentStory = activeStoryIndex !== null ? stories[activeStoryIndex] : null;
+  const isOwner = currentStory?.userId === currentUser.id;
+
+  // Record story view on open or change if not owner
+  useEffect(() => {
+    if (currentStory && !isOwner) {
+      // In a real app or state update, mark as viewed by currentUser
+      // We can update viewers array in story if needed
+    }
+  }, [currentStory?.id, isOwner]);
 
   const handleNextStory = () => {
     if (activeStoryIndex !== null && activeStoryIndex < stories.length - 1) {
       setActiveStoryIndex(activeStoryIndex + 1);
       setProgress(0);
+      setIsViewersModalOpen(false);
     } else {
       setActiveStoryIndex(null);
       setProgress(0);
+      setIsViewersModalOpen(false);
     }
   };
 
@@ -38,18 +50,18 @@ export const StoryViewerModal: React.FC = () => {
     if (activeStoryIndex !== null && activeStoryIndex > 0) {
       setActiveStoryIndex(activeStoryIndex - 1);
       setProgress(0);
+      setIsViewersModalOpen(false);
     } else {
       setProgress(0);
     }
   };
 
-  // Keep a ref to handleNextStory so setInterval doesn't close over stale handlers
   const handleNextStoryRef = useRef(handleNextStory);
   handleNextStoryRef.current = handleNextStory;
 
-  // Auto-progress story
+  // Auto-progress story (pause if viewers modal is open)
   useEffect(() => {
-    if (activeStoryIndex === null || !currentStory) {
+    if (activeStoryIndex === null || !currentStory || isViewersModalOpen) {
       setProgress(0);
       return;
     }
@@ -59,10 +71,9 @@ export const StoryViewerModal: React.FC = () => {
     const step = 100 / (5000 / intervalTime); // 5 seconds per story
 
     timerRef.current = window.setInterval(() => {
-      if (!isPaused) {
+      if (!isPaused && !isViewersModalOpen) {
         setProgress(prev => {
           if (prev >= 100) {
-            // Schedule story change outside the current render / state updater cycle
             setTimeout(() => {
               handleNextStoryRef.current();
             }, 0);
@@ -79,9 +90,9 @@ export const StoryViewerModal: React.FC = () => {
         timerRef.current = null;
       }
     };
-  }, [activeStoryIndex, isPaused, currentStory?.id]);
+  }, [activeStoryIndex, isPaused, currentStory?.id, isViewersModalOpen]);
 
-  // Lock background window scroll when viewing stories
+  // Lock background window scroll
   useEffect(() => {
     if (activeStoryIndex !== null) {
       const originalBodyOverflow = document.body.style.overflow;
@@ -98,11 +109,11 @@ export const StoryViewerModal: React.FC = () => {
   if (activeStoryIndex === null || !currentStory) return null;
 
   const handleQuickReaction = (emoji: string) => {
+    if (isOwner) return; // Owner cannot react to own story
     reactToStory(currentStory.id, emoji);
     
-    // Add floating emoji animation
     const id = Date.now() + Math.random();
-    const x = 30 + Math.random() * 40; // random % from left
+    const x = 30 + Math.random() * 40;
     setFloatingEmojis(prev => [...prev, { id, emoji, x }]);
 
     setTimeout(() => {
@@ -112,7 +123,7 @@ export const StoryViewerModal: React.FC = () => {
 
   const handleSendReply = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!replyText.trim()) return;
+    if (!replyText.trim() || isOwner) return;
 
     if (currentStory.userId !== currentUser.id) {
       const chatId = startPrivateChat(currentStory.userId);
@@ -124,6 +135,12 @@ export const StoryViewerModal: React.FC = () => {
     handleQuickReaction('💬');
   };
 
+  const viewersList = currentStory.viewers || [
+    { userId: 'u-1', username: 'mariana_bcn', userAvatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80', timestamp: 'Hace 5 min', reaction: '🔥' },
+    { userId: 'u-2', username: 'carlos_valencia', userAvatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&auto=format&fit=crop&q=80', timestamp: 'Hace 12 min', reaction: '❤️' },
+    { userId: 'u-3', username: 'valen_madrid', userAvatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=400&auto=format&fit=crop&q=80', timestamp: 'Hace 25 min' }
+  ];
+
   return (
     <div
       id="story-viewer-backdrop"
@@ -134,7 +151,7 @@ export const StoryViewerModal: React.FC = () => {
         id="btn-prev-story"
         onClick={handlePrevStory}
         disabled={activeStoryIndex === 0}
-        className="hidden md:flex absolute left-8 z-30 w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 text-white items-center justify-center disabled:opacity-30 transition-all"
+        className="hidden md:flex absolute left-8 z-30 w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 text-white items-center justify-center disabled:opacity-30 transition-all cursor-pointer"
         title="Historia anterior"
       >
         <ChevronLeft className="w-8 h-8" />
@@ -144,7 +161,7 @@ export const StoryViewerModal: React.FC = () => {
         id="btn-next-story"
         onClick={handleNextStory}
         disabled={activeStoryIndex === stories.length - 1}
-        className="hidden md:flex absolute right-8 z-30 w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 text-white items-center justify-center disabled:opacity-30 transition-all"
+        className="hidden md:flex absolute right-8 z-30 w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 text-white items-center justify-center disabled:opacity-30 transition-all cursor-pointer"
         title="Siguiente historia"
       >
         <ChevronRight className="w-8 h-8" />
@@ -154,10 +171,10 @@ export const StoryViewerModal: React.FC = () => {
       <div
         id="story-viewer-canvas"
         className="relative w-full max-w-sm h-full max-h-[92vh] sm:rounded-3xl overflow-hidden bg-neutral-900 flex flex-col justify-between shadow-2xl border border-neutral-800"
-        onMouseDown={() => setIsPaused(true)}
-        onMouseUp={() => setIsPaused(false)}
-        onTouchStart={() => setIsPaused(true)}
-        onTouchEnd={() => setIsPaused(false)}
+        onMouseDown={() => !isViewersModalOpen && setIsPaused(true)}
+        onMouseUp={() => !isViewersModalOpen && setIsPaused(false)}
+        onTouchStart={() => !isViewersModalOpen && setIsPaused(true)}
+        onTouchEnd={() => !isViewersModalOpen && setIsPaused(false)}
       >
         {/* Progress Bar Segments */}
         <div className="absolute top-3 left-3 right-3 z-30 flex items-center gap-1.5">
@@ -201,8 +218,11 @@ export const StoryViewerModal: React.FC = () => {
 
           <button
             id="btn-close-story"
-            onClick={() => setActiveStoryIndex(null)}
-            className="p-2 text-white hover:text-neutral-300 rounded-full bg-black/30 backdrop-blur-sm"
+            onClick={() => {
+              setActiveStoryIndex(null);
+              setIsViewersModalOpen(false);
+            }}
+            className="p-2 text-white hover:text-neutral-300 rounded-full bg-black/30 backdrop-blur-sm cursor-pointer"
             title="Cerrar"
           >
             <X className="w-5 h-5" />
@@ -210,16 +230,20 @@ export const StoryViewerModal: React.FC = () => {
         </div>
 
         {/* Touch zones for mobile tap navigation */}
-        <div
-          className="absolute inset-y-16 left-0 w-1/3 z-20 cursor-pointer"
-          onClick={handlePrevStory}
-          title="Toca para ir atrás"
-        />
-        <div
-          className="absolute inset-y-16 right-0 w-1/3 z-20 cursor-pointer"
-          onClick={handleNextStory}
-          title="Toca para avanzar"
-        />
+        {!isViewersModalOpen && (
+          <>
+            <div
+              className="absolute inset-y-16 left-0 w-1/3 z-20 cursor-pointer"
+              onClick={handlePrevStory}
+              title="Toca para ir atrás"
+            />
+            <div
+              className="absolute inset-y-16 right-0 w-1/3 z-20 cursor-pointer"
+              onClick={handleNextStory}
+              title="Toca para avanzar"
+            />
+          </>
+        )}
 
         {/* Story Media */}
         <div className="relative w-full h-full flex items-center justify-center bg-black">
@@ -255,50 +279,133 @@ export const StoryViewerModal: React.FC = () => {
           </div>
         </div>
 
-        {/* Story Bottom Interactions: Quick Emoji Reactions & Reply Input */}
+        {/* Story Bottom Interactions: IF OWNER -> Viewers Analytics Button / IF OTHER -> Quick Reactions & Reply */}
         <div className="relative z-30 bg-gradient-to-t from-black via-black/80 to-transparent p-4 pt-6 text-white">
-          {/* Quick Reaction Emoji Row */}
-          <div className="flex items-center justify-between gap-1 mb-3 px-1">
-            {QUICK_EMOJIS.map(emoji => {
-              const reactionData = currentStory.reactions?.find(r => r.emoji === emoji);
-              const count = reactionData?.count || 0;
-              return (
-                <button
-                  key={emoji}
-                  onClick={() => handleQuickReaction(emoji)}
-                  className="flex flex-col items-center justify-center p-1.5 hover:scale-125 transition-transform active:scale-95 group"
-                  title={`Reaccionar con ${emoji}`}
-                >
-                  <span className="text-2xl filter drop-shadow">{emoji}</span>
-                  {count > 0 && (
-                    <span className="text-[10px] font-bold text-amber-300 mt-0.5">
-                      {count}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
+          {isOwner ? (
+            /* OWNER VIEW: WHO VIEWED MY STORY & REACTIONS */
+            <div className="flex flex-col items-center pb-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsViewersModalOpen(true);
+                  setIsPaused(true);
+                }}
+                className="w-full py-3 px-4 bg-white/20 hover:bg-white/30 backdrop-blur-md rounded-2xl flex items-center justify-between text-xs font-bold text-white transition-all cursor-pointer shadow-lg border border-white/20"
+              >
+                <div className="flex items-center gap-2">
+                  <div className="flex -space-x-2">
+                    {viewersList.slice(0, 3).map((v, idx) => (
+                      <img key={idx} src={v.userAvatar} alt={v.username} className="w-6 h-6 rounded-full object-cover border border-white" referrerPolicy="no-referrer" />
+                    ))}
+                  </div>
+                  <span>Visto por {viewersList.length} parceros</span>
+                </div>
+                <div className="flex items-center gap-1 text-amber-300">
+                  <Eye className="w-4 h-4" />
+                  <span>Ver lista</span>
+                </div>
+              </button>
+            </div>
+          ) : (
+            /* OTHER USER VIEW: QUICK EMOJIS & REPLY DM */
+            <>
+              {/* Quick Reaction Emoji Row */}
+              <div className="flex items-center justify-between gap-1 mb-3 px-1">
+                {QUICK_EMOJIS.map(emoji => {
+                  const reactionData = currentStory.reactions?.find(r => r.emoji === emoji);
+                  const count = reactionData?.count || 0;
+                  return (
+                    <button
+                      key={emoji}
+                      onClick={() => handleQuickReaction(emoji)}
+                      className="flex flex-col items-center justify-center p-1.5 hover:scale-125 transition-transform active:scale-95 group cursor-pointer"
+                      title={`Reaccionar con ${emoji}`}
+                    >
+                      <span className="text-2xl filter drop-shadow">{emoji}</span>
+                      {count > 0 && (
+                        <span className="text-[10px] font-bold text-amber-300 mt-0.5">
+                          {count}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
 
-          {/* Reply DM Input */}
-          <form onSubmit={handleSendReply} className="flex items-center gap-2">
-            <input
-              type="text"
-              value={replyText}
-              onChange={e => setReplyText(e.target.value)}
-              placeholder={`Responder a @${currentStory.username}...`}
-              className="flex-1 bg-white/15 backdrop-blur-md border border-white/20 rounded-full px-4 py-2 text-sm text-white placeholder-white/60 focus:outline-none focus:ring-2 focus:ring-amber-400"
-            />
-            <button
-              type="submit"
-              disabled={!replyText.trim()}
-              className="w-9 h-9 rounded-full bg-amber-500 hover:bg-amber-400 text-neutral-950 flex items-center justify-center disabled:opacity-40 transition-all"
-              title="Enviar mensaje"
-            >
-              <Send className="w-4 h-4" />
-            </button>
-          </form>
+              {/* Reply DM Input */}
+              <form onSubmit={handleSendReply} className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={replyText}
+                  onChange={e => setReplyText(e.target.value)}
+                  placeholder={`Responder a @${currentStory.username}...`}
+                  className="flex-1 bg-white/15 backdrop-blur-md border border-white/20 rounded-full px-4 py-2 text-sm text-white placeholder-white/60 focus:outline-none focus:ring-2 focus:ring-amber-400"
+                />
+                <button
+                  type="submit"
+                  disabled={!replyText.trim()}
+                  className="w-9 h-9 rounded-full bg-amber-500 hover:bg-amber-400 text-neutral-950 flex items-center justify-center disabled:opacity-40 transition-all cursor-pointer"
+                  title="Enviar mensaje"
+                >
+                  <Send className="w-4 h-4" />
+                </button>
+              </form>
+            </>
+          )}
         </div>
+
+        {/* Viewers Modal Overlay for Story Owner */}
+        {isViewersModalOpen && (
+          <div className="absolute inset-0 z-50 bg-neutral-950/95 backdrop-blur-lg flex flex-col animate-fade-in text-white p-4">
+            <div className="flex items-center justify-between pb-3 border-b border-white/10">
+              <div className="flex items-center gap-2">
+                <Eye className="w-5 h-5 text-amber-400" />
+                <h3 className="text-sm font-black">Visualizaciones y Reacciones ({viewersList.length})</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsViewersModalOpen(false);
+                  setIsPaused(false);
+                }}
+                className="p-2 bg-white/10 hover:bg-white/20 rounded-full cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto py-3 space-y-2.5">
+              {viewersList.map((viewer, idx) => (
+                <div key={idx} className="flex items-center justify-between p-2.5 bg-white/5 hover:bg-white/10 rounded-2xl border border-white/10 transition-all">
+                  <div className="flex items-center gap-3">
+                    <img src={viewer.userAvatar} alt={viewer.username} className="w-9 h-9 rounded-full object-cover border border-amber-400/50" referrerPolicy="no-referrer" />
+                    <div>
+                      <p className="text-xs font-bold text-white">@{viewer.username}</p>
+                      <p className="text-[10px] text-white/60">Visto {viewer.timestamp}</p>
+                    </div>
+                  </div>
+                  {viewer.reaction && (
+                    <div className="flex items-center gap-1 bg-amber-400/20 border border-amber-400/40 px-3 py-1 rounded-full">
+                      <span className="text-lg">{viewer.reaction}</span>
+                      <span className="text-[10px] font-bold text-amber-300">Reaccionó</span>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                setIsViewersModalOpen(false);
+                setIsPaused(false);
+              }}
+              className="w-full py-3 bg-amber-400 hover:bg-amber-300 text-neutral-950 font-black text-xs rounded-2xl shadow cursor-pointer"
+            >
+              Continuar viendo historia
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

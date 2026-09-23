@@ -842,6 +842,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               timestamp: data.timestamp || data.createdAt || 'Reciente',
               likesCount: Array.isArray(data.likes) ? data.likes.length : (typeof data.likesCount === 'number' ? data.likesCount : 0),
               hasLiked: Array.isArray(data.likes) && currentUser ? data.likes.includes(currentUser.id) : (data.hasLiked ?? false),
+              hideLocation: data.hideLocation ?? !data.location,
               comments: Array.isArray(data.comments) ? data.comments : []
             } as PostItem);
           });
@@ -2154,6 +2155,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     mediaUrl: string;
     caption: string;
     location: string;
+    hideLocation?: boolean;
     isStaffAd?: boolean;
     adTitle?: string;
     adDescription?: string;
@@ -2188,7 +2190,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       hasLiked: false,
       comments: [],
       timestamp: 'Justo ahora',
-      location: data.location || `${currentUser.city}, España`,
+      location: data.hideLocation ? '' : (data.location || `${currentUser.city}, España`),
+      hideLocation: data.hideLocation,
       isStaffAd: data.isStaffAd,
       adTitle: data.adTitle,
       adDescription: data.adDescription,

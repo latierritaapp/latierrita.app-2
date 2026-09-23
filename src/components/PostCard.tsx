@@ -104,10 +104,12 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
                 </span>
               )}
             </div>
-            <div className="flex items-center gap-1 text-xs text-white/60">
-              <MapPin className="w-3 h-3" />
-              <span>{post.location}</span>
-            </div>
+            {!post.hideLocation && post.location && (
+              <div className="flex items-center gap-1 text-xs text-white/60">
+                <MapPin className="w-3 h-3" />
+                <span>{post.location}</span>
+              </div>
+            )}
           </div>
         </div>
 
