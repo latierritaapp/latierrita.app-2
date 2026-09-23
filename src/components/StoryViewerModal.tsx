@@ -64,7 +64,10 @@ export const StoryViewerModal: React.FC = () => {
     sendMessage,
     followingIds,
     deleteStory,
-    openReportModal
+    openReportModal,
+    setSelectedUserProfile,
+    setActiveTab,
+    otherUsers
   } = useApp();
 
   const [progress, setProgress] = useState(0);
@@ -76,6 +79,27 @@ export const StoryViewerModal: React.FC = () => {
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
 
   const timerRef = useRef<number | null>(null);
+
+  const handleUsernameClick = () => {
+    // 1. Cerrar el visor de historias de forma limpia
+    setActiveStoryIndex(null);
+    setStoryViewerRestriction(null);
+    setIsViewersModalOpen(false);
+    setShowMenu(false);
+    setIsDeleteConfirmOpen(false);
+
+    // 2. Navegar al perfil
+    if (currentStory.userId === currentUser.id) {
+      setSelectedUserProfile(null);
+      setActiveTab('profile');
+    } else {
+      const found = otherUsers.find(u => u.id === currentStory.userId);
+      if (found) {
+        setSelectedUserProfile(found);
+        setActiveTab('profile');
+      }
+    }
+  };
 
   // 1. Obtener la historia inicial basada en el índice global presionado (siempre 100% exacto)
   const initialStory = (activeStoryIndex !== null && activeStoryIndex >= 0 && activeStoryIndex < stories.length)
@@ -309,16 +333,20 @@ export const StoryViewerModal: React.FC = () => {
 
         {/* Story Header - Sin Ubicación y Simplificado */}
         <div className="absolute top-6 left-3 right-3 z-30 flex items-center justify-between text-white">
-          <div className="flex items-center gap-2.5">
+          <div 
+            onClick={handleUsernameClick}
+            className="flex items-center gap-2.5 cursor-pointer hover:opacity-90 transition-all group"
+            title={`Ver perfil de @${currentStory.username}`}
+          >
             <img
               src={currentStory.userAvatar || undefined}
               alt={currentStory.username}
-              className="w-9 h-9 rounded-full object-cover border border-white/40"
+              className="w-9 h-9 rounded-full object-cover border border-white/40 group-hover:border-white transition-all"
               referrerPolicy="no-referrer"
             />
             <div>
               <div className="flex items-center gap-1.5">
-                <span className="text-sm font-bold drop-shadow">{currentStory.username}</span>
+                <span className="text-sm font-bold drop-shadow group-hover:underline">{currentStory.username}</span>
                 <span className="text-xs text-white/80 font-semibold drop-shadow">{formatInstagramTime(currentStory)}</span>
               </div>
             </div>

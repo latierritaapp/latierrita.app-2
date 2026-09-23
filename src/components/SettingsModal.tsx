@@ -439,52 +439,6 @@ export const SettingsModal: React.FC = () => {
                 <ChevronRight className="w-3.5 h-3.5 text-white/50 group-hover:translate-x-0.5 transition-transform" />
               </button>
 
-              {/* 8. Administración STAFF */}
-              {currentUser && currentUser.staffRole && currentUser.staffRole !== 'Usuario' && (
-                <button
-                  id="opt-administration-staff"
-                  onClick={() => {
-                    if (isStaffMode) {
-                      setIsSettingsOpen(false);
-                      setIsStaffAdminOpen(true);
-                    } else {
-                      setSubView('staff_auth');
-                    }
-                  }}
-                  className={`w-full flex items-center justify-between px-3 py-2 rounded-xl transition-all text-left group ${
-                    isStaffMode
-                      ? 'bg-amber-500/20 border border-amber-500/40'
-                      : 'hover:bg-white/10'
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <div
-                      className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${
-                        isStaffMode
-                          ? 'bg-amber-400 text-neutral-950 font-black'
-                          : 'bg-amber-500/20 text-amber-300'
-                      }`}
-                    >
-                      <Shield className="w-3.5 h-3.5" />
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-xs font-black text-white">
-                          Administración
-                        </span>
-                        <span className="text-[8px] font-extrabold uppercase px-1 py-0.2 rounded bg-amber-400 text-neutral-950">
-                          STAFF
-                        </span>
-                      </div>
-                      <span className="text-[10px] text-white/60">
-                        Solo para miembros del equipo STAFF
-                      </span>
-                    </div>
-                  </div>
-                  <ChevronRight className="w-3.5 h-3.5 text-white/50 group-hover:translate-x-0.5 transition-transform" />
-                </button>
-              )}
-
               <div className="pt-1.5 border-t border-white/15 my-1" />
 
               {/* 9. Cerrar sesión */}

@@ -211,7 +211,14 @@ export const StaffAdminModal: React.FC = () => {
             No tienes un rango administrativo (MOD, Soporte o ADMIN) asignado a tu perfil para ingresar a este panel.
           </p>
           <button
-            onClick={() => setIsStaffAdminOpen(false)}
+            onClick={() => {
+              const isAdminSlug = window.location.pathname === '/admin' || window.location.pathname === '/administracion';
+              if (isAdminSlug) {
+                window.location.href = '/';
+              } else {
+                setIsStaffAdminOpen(false);
+              }
+            }}
             className="w-full py-2.5 bg-amber-400 hover:bg-amber-300 text-neutral-950 font-black text-xs rounded-xl shadow-md transition-all active:scale-95"
           >
             Volver a la aplicación
@@ -511,9 +518,16 @@ export const StaffAdminModal: React.FC = () => {
             )}
 
             <button
-              onClick={() => setIsStaffAdminOpen(false)}
+              onClick={() => {
+                const isAdminSlug = window.location.pathname === '/admin' || window.location.pathname === '/administracion';
+                if (isAdminSlug) {
+                  window.location.href = '/';
+                } else {
+                  setIsStaffAdminOpen(false);
+                }
+              }}
               className="p-1.5 text-white/70 hover:text-white rounded-lg hover:bg-white/10 ml-2 transition-colors"
-              title="Cerrar panel STAFF"
+              title="Volver a la aplicación"
             >
               <X className="w-4 h-4" />
             </button>

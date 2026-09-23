@@ -23,7 +23,27 @@ import { ReportModal } from './components/ReportModal';
 import { StaffAdminModal } from './components/StaffAdminModal';
 
 const AppContent: React.FC = () => {
-  const { activeTab, selectedUserProfile } = useApp();
+  const { activeTab, selectedUserProfile, isStaffAdminOpen, setIsStaffAdminOpen } = useApp();
+
+  const isAdminSlug = window.location.pathname === '/admin' || window.location.pathname === '/administracion';
+
+  React.useEffect(() => {
+    if (isAdminSlug && !isStaffAdminOpen) {
+      setIsStaffAdminOpen(true);
+    }
+  }, [isAdminSlug, isStaffAdminOpen, setIsStaffAdminOpen]);
+
+  if (isAdminSlug) {
+    return (
+      <div
+        id="app-root-gradient"
+        className="min-h-screen text-neutral-100 flex flex-col font-sans transition-colors duration-200 antialiased selection:bg-amber-400 selection:text-neutral-950 bg-[#001845]"
+      >
+        <StaffAdminModal />
+        <PlushNotificationToast />
+      </div>
+    );
+  }
 
   return (
     <div
