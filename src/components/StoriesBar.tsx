@@ -4,7 +4,7 @@ import { Plus } from 'lucide-react';
 import { StoryItem } from '../types';
 
 export const StoriesBar: React.FC = () => {
-  const { currentUser, stories, setActiveStoryIndex, setIsCreateStoryOpen, followingIds } = useApp();
+  const { currentUser, stories, setActiveStoryIndex, setIsCreateStoryOpen, followingIds, setStoryViewerRestriction } = useApp();
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [startX, setStartX] = useState(0);
@@ -93,6 +93,7 @@ export const StoriesBar: React.FC = () => {
                 onClick={() => {
                   if (hasMoved) return;
                   if (myStoryIndex >= 0) {
+                    setStoryViewerRestriction(null);
                     setActiveStoryIndex(myStoryIndex);
                   } else {
                     setIsCreateStoryOpen(true);
@@ -139,7 +140,7 @@ export const StoriesBar: React.FC = () => {
           {otherGroups.map((group) => {
             const representativeStory = group[0];
             const hasUnviewed = group.some(s => !s.viewed);
-            const flatIndex = followableStoriesGrouped.indexOf(representativeStory);
+            const globalIndex = stories.findIndex(s => s.id === representativeStory.id);
 
             return (
               <div
@@ -147,7 +148,8 @@ export const StoriesBar: React.FC = () => {
                 className="flex flex-col items-center shrink-0 w-18 cursor-pointer group"
                 onClick={() => {
                   if (hasMoved) return;
-                  setActiveStoryIndex(flatIndex);
+                  setStoryViewerRestriction(null);
+                  setActiveStoryIndex(globalIndex);
                 }}
               >
                 <div

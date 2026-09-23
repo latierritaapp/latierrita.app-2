@@ -55,6 +55,8 @@ interface AppContextType {
   reactToStory: (storyId: string, emoji: string) => void;
   activeStoryIndex: number | null;
   setActiveStoryIndex: (index: number | null) => void;
+  storyViewerRestriction: string | null;
+  setStoryViewerRestriction: (userId: string | null) => void;
   isCreateStoryOpen: boolean;
   setIsCreateStoryOpen: (open: boolean) => void;
   
@@ -578,6 +580,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Stories
   const [stories, setStories] = useState<StoryItem[]>([]);
   const [activeStoryIndex, setActiveStoryIndex] = useState<number | null>(null);
+  const [storyViewerRestriction, setStoryViewerRestriction] = useState<string | null>(null);
   const [isCreateStoryOpen, setIsCreateStoryOpen] = useState(false);
 
   // Posts & profile posts
@@ -3143,6 +3146,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         reactToStory,
         activeStoryIndex,
         setActiveStoryIndex,
+        storyViewerRestriction,
+        setStoryViewerRestriction,
         isCreateStoryOpen,
         setIsCreateStoryOpen,
 

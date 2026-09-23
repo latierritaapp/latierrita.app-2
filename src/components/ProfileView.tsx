@@ -49,6 +49,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userToDisplay }) => {
     blockUser,
     stories,
     setActiveStoryIndex,
+    setStoryViewerRestriction,
     likePost,
     addComment,
     deletePostByAdmin,
@@ -108,6 +109,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userToDisplay }) => {
 
   const handleAvatarClick = () => {
     if (hasStory) {
+      setStoryViewerRestriction(user.id);
       setActiveStoryIndex(userStoryIndex);
     } else if (isMe) {
       setIsCreateStoryOpen(true);

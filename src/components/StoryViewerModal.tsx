@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
-import { X, ChevronLeft, ChevronRight, Send, MapPin, Eye, Heart } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, Send, MapPin, Eye } from 'lucide-react';
 import { StoryItem } from '../types';
 
 const QUICK_EMOJIS = ['🔥', '❤️', '😂', '👏', '🇨🇴', '☕', '😍', '🥳'];
@@ -10,6 +10,8 @@ export const StoryViewerModal: React.FC = () => {
     stories,
     activeStoryIndex,
     setActiveStoryIndex,
+    storyViewerRestriction,
+    setStoryViewerRestriction,
     reactToStory,
     currentUser,
     startPrivateChat,
@@ -25,17 +27,25 @@ export const StoryViewerModal: React.FC = () => {
 
   const timerRef = useRef<number | null>(null);
 
-  // 1. Obtener la historia inicial basada en el índice global presionado
-  const initialStory = activeStoryIndex !== null ? stories[activeStoryIndex] : null;
+  // 1. Obtener la historia inicial basada en el índice global presionado (siempre 100% exacto)
+  const initialStory = (activeStoryIndex !== null && activeStoryIndex >= 0 && activeStoryIndex < stories.length)
+    ? stories[activeStoryIndex]
+    : null;
 
-  // 2. Filtrar historias del visor: mías, de seguidos, y la del perfil cliqueado (si no le sigues)
-  const viewerStories = stories.filter(s => 
-    s.userId === currentUser?.id || 
-    (followingIds && followingIds.includes(s.userId)) ||
-    (initialStory && s.userId === initialStory.userId)
-  );
+  // 2. Determinar qué historias se pueden reproducir en esta sesión del visor
+  let viewerStories: StoryItem[] = [];
+  if (storyViewerRestriction) {
+    // Si se abrió desde el perfil de un usuario, SOLO reproducimos historias de ese usuario
+    viewerStories = stories.filter(s => s.userId === storyViewerRestriction);
+  } else {
+    // Si viene del carrusel general, reproducimos las mías y las de mis seguidos
+    viewerStories = stories.filter(s => 
+      s.userId === currentUser?.id || 
+      (followingIds && followingIds.includes(s.userId))
+    );
+  }
 
-  // 3. Agrupar por usuario (Estilo Instagram)
+  // 3. Agrupar historias por usuario para mantener coherencia en la visualización
   const groupsMap = new Map<string, StoryItem[]>();
   viewerStories.forEach(s => {
     const list = groupsMap.get(s.userId) || [];
@@ -45,62 +55,66 @@ export const StoryViewerModal: React.FC = () => {
 
   const groups = Array.from(groupsMap.values());
   groups.forEach(g => {
-    g.sort((a, b) => a.id.localeCompare(b.id)); // Historias más antiguas primero
+    g.sort((a, b) => a.id.localeCompare(b.id)); // historias más antiguas primero
   });
 
-  // Ordenar grupos: Yo siempre primero, luego el perfil no-seguido visitado, luego los demás por fecha de última story desc
+  // Ordenar grupos: Yo primero, luego el resto ordenados por última actualización desc
   groups.sort((a, b) => {
     const aUserId = a[0]?.userId;
     const bUserId = b[0]?.userId;
     if (aUserId === currentUser?.id) return -1;
     if (bUserId === currentUser?.id) return 1;
-    if (initialStory && aUserId === initialStory.userId) return -1;
-    if (initialStory && bUserId === initialStory.userId) return 1;
     const aLatest = a[a.length - 1]?.id || '';
     const bLatest = b[b.length - 1]?.id || '';
     return bLatest.localeCompare(aLatest);
   });
 
-  // Aplanar para mantener la navegación uniforme
-  const followableStoriesGrouped = groups.flat();
+  // Aplanar la lista para navegación
+  const playList = groups.flat();
 
-  // Encontrar el índice de visualización real en la lista agrupada
-  const viewerIndex = initialStory 
-    ? followableStoriesGrouped.findIndex(s => s.id === initialStory.id)
-    : -1;
+  // Encontrar el índice del elemento activo dentro de nuestra lista de reproducción
+  let currentPlayIndex = -1;
+  if (initialStory) {
+    currentPlayIndex = playList.findIndex(s => s.id === initialStory.id);
+  }
 
-  const currentStory = viewerIndex !== -1 ? followableStoriesGrouped[viewerIndex] : null;
+  // Si no se encuentra pero hay elementos, usar el primero
+  if (currentPlayIndex === -1 && playList.length > 0) {
+    currentPlayIndex = 0;
+  }
+
+  const currentStory = currentPlayIndex !== -1 ? playList[currentPlayIndex] : null;
   const isOwner = currentStory?.userId === currentUser.id;
 
-  // Historias pertenecientes al creador de la historia actual activa (para los segmentos de arriba)
+  // Historias pertenecientes al creador de la historia activa actual (para los segmentos de arriba)
   const userStories = currentStory 
-    ? followableStoriesGrouped.filter(s => s.userId === currentStory.userId)
+    ? playList.filter(s => s.userId === currentStory.userId)
     : [];
   const activeSubIndex = currentStory 
     ? userStories.findIndex(s => s.id === currentStory.id)
     : -1;
 
-  // Avanzar historia (pasa a la siguiente del mismo usuario, o al siguiente usuario, o cierra)
+  // Avanzar historia (pasa a la siguiente historia del usuario, o siguiente usuario si no hay restricción, o cierra)
   const handleNextStory = () => {
-    if (viewerIndex !== -1 && viewerIndex < followableStoriesGrouped.length - 1) {
-      // Buscar la historia equivalente en el array global de stories para mantener sincronizada la propiedad de AppContext
-      const nextStoryInGrouped = followableStoriesGrouped[viewerIndex + 1];
-      const nextGlobalIndex = stories.findIndex(s => s.id === nextStoryInGrouped.id);
-      setActiveStoryIndex(nextGlobalIndex !== -1 ? nextGlobalIndex : viewerIndex + 1);
+    if (currentPlayIndex !== -1 && currentPlayIndex < playList.length - 1) {
+      const nextStory = playList[currentPlayIndex + 1];
+      const globalIndex = stories.findIndex(s => s.id === nextStory.id);
+      setActiveStoryIndex(globalIndex !== -1 ? globalIndex : null);
       setProgress(0);
       setIsViewersModalOpen(false);
     } else {
       setActiveStoryIndex(null);
+      setStoryViewerRestriction(null);
       setProgress(0);
       setIsViewersModalOpen(false);
     }
   };
 
   const handlePrevStory = () => {
-    if (viewerIndex !== -1 && viewerIndex > 0) {
-      const prevStoryInGrouped = followableStoriesGrouped[viewerIndex - 1];
-      const prevGlobalIndex = stories.findIndex(s => s.id === prevStoryInGrouped.id);
-      setActiveStoryIndex(prevGlobalIndex !== -1 ? prevGlobalIndex : viewerIndex - 1);
+    if (currentPlayIndex !== -1 && currentPlayIndex > 0) {
+      const prevStory = playList[currentPlayIndex - 1];
+      const globalIndex = stories.findIndex(s => s.id === prevStory.id);
+      setActiveStoryIndex(globalIndex !== -1 ? globalIndex : null);
       setProgress(0);
       setIsViewersModalOpen(false);
     } else {
@@ -111,7 +125,7 @@ export const StoryViewerModal: React.FC = () => {
   const handleNextStoryRef = useRef(handleNextStory);
   handleNextStoryRef.current = handleNextStory;
 
-  // Auto-progreso
+  // Auto-progreso (5 segundos por historia)
   useEffect(() => {
     if (activeStoryIndex === null || !currentStory || isViewersModalOpen) {
       setProgress(0);
@@ -120,7 +134,7 @@ export const StoryViewerModal: React.FC = () => {
 
     setProgress(0);
     const intervalTime = 50; // ms
-    const step = 100 / (5000 / intervalTime); // 5 segundos por historia
+    const step = 100 / (5000 / intervalTime);
 
     timerRef.current = window.setInterval(() => {
       if (!isPaused && !isViewersModalOpen) {
@@ -198,11 +212,11 @@ export const StoryViewerModal: React.FC = () => {
       id="story-viewer-backdrop"
       className="fixed inset-0 z-50 bg-black/95 backdrop-blur-md flex items-center justify-center select-none"
     >
-      {/* Botones laterales para navegación en Desktop */}
+      {/* Botones laterales Desktop */}
       <button
         id="btn-prev-story"
         onClick={handlePrevStory}
-        disabled={viewerIndex === 0}
+        disabled={currentPlayIndex === 0}
         className="hidden md:flex absolute left-8 z-30 w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 text-white items-center justify-center disabled:opacity-30 transition-all cursor-pointer"
         title="Historia anterior"
       >
@@ -212,7 +226,7 @@ export const StoryViewerModal: React.FC = () => {
       <button
         id="btn-next-story"
         onClick={handleNextStory}
-        disabled={viewerIndex === followableStoriesGrouped.length - 1}
+        disabled={currentPlayIndex === playList.length - 1}
         className="hidden md:flex absolute right-8 z-30 w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 text-white items-center justify-center disabled:opacity-30 transition-all cursor-pointer"
         title="Siguiente historia"
       >
@@ -228,7 +242,7 @@ export const StoryViewerModal: React.FC = () => {
         onTouchStart={() => !isViewersModalOpen && setIsPaused(true)}
         onTouchEnd={() => !isViewersModalOpen && setIsPaused(false)}
       >
-        {/* Progress Bar Segments - Independientes por usuario */}
+        {/* Progress Bar Segments */}
         <div className="absolute top-3 left-3 right-3 z-30 flex items-center gap-1.5">
           {userStories.map((story, i) => (
             <div key={story.id} className="h-1 flex-1 bg-white/30 rounded-full overflow-hidden">
@@ -272,6 +286,7 @@ export const StoryViewerModal: React.FC = () => {
             id="btn-close-story"
             onClick={() => {
               setActiveStoryIndex(null);
+              setStoryViewerRestriction(null);
               setIsViewersModalOpen(false);
             }}
             className="p-2 text-white hover:text-neutral-300 rounded-full bg-black/30 backdrop-blur-sm cursor-pointer"
@@ -287,12 +302,12 @@ export const StoryViewerModal: React.FC = () => {
             <div
               className="absolute inset-y-16 left-0 w-1/3 z-20 cursor-pointer"
               onClick={handlePrevStory}
-              title="Toca para ir atrás"
+              title="Atrás"
             />
             <div
               className="absolute inset-y-16 right-0 w-1/3 z-20 cursor-pointer"
               onClick={handleNextStory}
-              title="Toca para avanzar"
+              title="Siguiente"
             />
           </>
         )}
@@ -317,7 +332,7 @@ export const StoryViewerModal: React.FC = () => {
             {floatingEmojis.map(item => (
               <div
                 key={item.id}
-                className="absolute bottom-24 text-4xl animate-bounce"
+                className="absolute bottom-24 text-4xl"
                 style={{
                   left: `${item.x}%`,
                   animation: 'floatUp 1.4s ease-out forwards',
@@ -392,7 +407,7 @@ export const StoryViewerModal: React.FC = () => {
                   type="submit"
                   disabled={!replyText.trim()}
                   className="w-9 h-9 rounded-full bg-amber-500 hover:bg-amber-400 text-neutral-950 flex items-center justify-center disabled:opacity-40 transition-all cursor-pointer"
-                  title="Enviar mensaje"
+                  title="Enviar"
                 >
                   <Send className="w-4 h-4" />
                 </button>
@@ -401,7 +416,7 @@ export const StoryViewerModal: React.FC = () => {
           )}
         </div>
 
-        {/* Viewers modal list */}
+        {/* Viewers list */}
         {isViewersModalOpen && (
           <div className="absolute inset-0 z-50 bg-neutral-950/95 backdrop-blur-lg flex flex-col animate-fade-in text-white p-4">
             <div className="flex items-center justify-between pb-3 border-b border-white/10">
