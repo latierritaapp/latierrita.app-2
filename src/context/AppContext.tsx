@@ -1438,15 +1438,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (docSnap.exists() && docSnap.data()) {
           setStartupAdConfig({ id: docSnap.id, ...docSnap.data() } as StartupAdConfig);
         } else {
-          setStartupAdConfig(null);
+          setStartupAdConfig(DEFAULT_STARTUP_AD);
         }
       }, (error) => {
-        setStartupAdConfig(null);
+        setStartupAdConfig(DEFAULT_STARTUP_AD);
         console.warn('Startup ad config listener error:', error?.message || error);
       });
       return () => unsub();
     } catch (e) {
-      setStartupAdConfig(null);
+      setStartupAdConfig(DEFAULT_STARTUP_AD);
       console.warn('Failed to listen to startup_ad config in DB:', e);
     }
   }, []);

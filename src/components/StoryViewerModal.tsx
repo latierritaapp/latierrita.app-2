@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import { X, ChevronLeft, ChevronRight, Send, MapPin, Eye, Heart } from 'lucide-react';
+import { StoryItem } from '../types';
 
 const QUICK_EMOJIS = ['🔥', '❤️', '😂', '👏', '🇨🇴', '☕', '😍', '🥳'];
 
@@ -12,7 +13,8 @@ export const StoryViewerModal: React.FC = () => {
     reactToStory,
     currentUser,
     startPrivateChat,
-    sendMessage
+    sendMessage,
+    followingIds
   } = useApp();
 
   const [progress, setProgress] = useState(0);
@@ -23,20 +25,68 @@ export const StoryViewerModal: React.FC = () => {
 
   const timerRef = useRef<number | null>(null);
 
-  const currentStory = activeStoryIndex !== null ? stories[activeStoryIndex] : null;
+  // 1. Obtener la historia inicial basada en el índice global presionado
+  const initialStory = activeStoryIndex !== null ? stories[activeStoryIndex] : null;
+
+  // 2. Filtrar historias del visor: mías, de seguidos, y la del perfil cliqueado (si no le sigues)
+  const viewerStories = stories.filter(s => 
+    s.userId === currentUser?.id || 
+    (followingIds && followingIds.includes(s.userId)) ||
+    (initialStory && s.userId === initialStory.userId)
+  );
+
+  // 3. Agrupar por usuario (Estilo Instagram)
+  const groupsMap = new Map<string, StoryItem[]>();
+  viewerStories.forEach(s => {
+    const list = groupsMap.get(s.userId) || [];
+    list.push(s);
+    groupsMap.set(s.userId, list);
+  });
+
+  const groups = Array.from(groupsMap.values());
+  groups.forEach(g => {
+    g.sort((a, b) => a.id.localeCompare(b.id)); // Historias más antiguas primero
+  });
+
+  // Ordenar grupos: Yo siempre primero, luego el perfil no-seguido visitado, luego los demás por fecha de última story desc
+  groups.sort((a, b) => {
+    const aUserId = a[0]?.userId;
+    const bUserId = b[0]?.userId;
+    if (aUserId === currentUser?.id) return -1;
+    if (bUserId === currentUser?.id) return 1;
+    if (initialStory && aUserId === initialStory.userId) return -1;
+    if (initialStory && bUserId === initialStory.userId) return 1;
+    const aLatest = a[a.length - 1]?.id || '';
+    const bLatest = b[b.length - 1]?.id || '';
+    return bLatest.localeCompare(aLatest);
+  });
+
+  // Aplanar para mantener la navegación uniforme
+  const followableStoriesGrouped = groups.flat();
+
+  // Encontrar el índice de visualización real en la lista agrupada
+  const viewerIndex = initialStory 
+    ? followableStoriesGrouped.findIndex(s => s.id === initialStory.id)
+    : -1;
+
+  const currentStory = viewerIndex !== -1 ? followableStoriesGrouped[viewerIndex] : null;
   const isOwner = currentStory?.userId === currentUser.id;
 
-  // Record story view on open or change if not owner
-  useEffect(() => {
-    if (currentStory && !isOwner) {
-      // In a real app or state update, mark as viewed by currentUser
-      // We can update viewers array in story if needed
-    }
-  }, [currentStory?.id, isOwner]);
+  // Historias pertenecientes al creador de la historia actual activa (para los segmentos de arriba)
+  const userStories = currentStory 
+    ? followableStoriesGrouped.filter(s => s.userId === currentStory.userId)
+    : [];
+  const activeSubIndex = currentStory 
+    ? userStories.findIndex(s => s.id === currentStory.id)
+    : -1;
 
+  // Avanzar historia (pasa a la siguiente del mismo usuario, o al siguiente usuario, o cierra)
   const handleNextStory = () => {
-    if (activeStoryIndex !== null && activeStoryIndex < stories.length - 1) {
-      setActiveStoryIndex(activeStoryIndex + 1);
+    if (viewerIndex !== -1 && viewerIndex < followableStoriesGrouped.length - 1) {
+      // Buscar la historia equivalente en el array global de stories para mantener sincronizada la propiedad de AppContext
+      const nextStoryInGrouped = followableStoriesGrouped[viewerIndex + 1];
+      const nextGlobalIndex = stories.findIndex(s => s.id === nextStoryInGrouped.id);
+      setActiveStoryIndex(nextGlobalIndex !== -1 ? nextGlobalIndex : viewerIndex + 1);
       setProgress(0);
       setIsViewersModalOpen(false);
     } else {
@@ -47,8 +97,10 @@ export const StoryViewerModal: React.FC = () => {
   };
 
   const handlePrevStory = () => {
-    if (activeStoryIndex !== null && activeStoryIndex > 0) {
-      setActiveStoryIndex(activeStoryIndex - 1);
+    if (viewerIndex !== -1 && viewerIndex > 0) {
+      const prevStoryInGrouped = followableStoriesGrouped[viewerIndex - 1];
+      const prevGlobalIndex = stories.findIndex(s => s.id === prevStoryInGrouped.id);
+      setActiveStoryIndex(prevGlobalIndex !== -1 ? prevGlobalIndex : viewerIndex - 1);
       setProgress(0);
       setIsViewersModalOpen(false);
     } else {
@@ -59,7 +111,7 @@ export const StoryViewerModal: React.FC = () => {
   const handleNextStoryRef = useRef(handleNextStory);
   handleNextStoryRef.current = handleNextStory;
 
-  // Auto-progress story (pause if viewers modal is open)
+  // Auto-progreso
   useEffect(() => {
     if (activeStoryIndex === null || !currentStory || isViewersModalOpen) {
       setProgress(0);
@@ -68,7 +120,7 @@ export const StoryViewerModal: React.FC = () => {
 
     setProgress(0);
     const intervalTime = 50; // ms
-    const step = 100 / (5000 / intervalTime); // 5 seconds per story
+    const step = 100 / (5000 / intervalTime); // 5 segundos por historia
 
     timerRef.current = window.setInterval(() => {
       if (!isPaused && !isViewersModalOpen) {
@@ -92,7 +144,7 @@ export const StoryViewerModal: React.FC = () => {
     };
   }, [activeStoryIndex, isPaused, currentStory?.id, isViewersModalOpen]);
 
-  // Lock background window scroll
+  // Bloqueo de scroll de fondo
   useEffect(() => {
     if (activeStoryIndex !== null) {
       const originalBodyOverflow = document.body.style.overflow;
@@ -109,7 +161,7 @@ export const StoryViewerModal: React.FC = () => {
   if (activeStoryIndex === null || !currentStory) return null;
 
   const handleQuickReaction = (emoji: string) => {
-    if (isOwner) return; // Owner cannot react to own story
+    if (isOwner) return;
     reactToStory(currentStory.id, emoji);
     
     const id = Date.now() + Math.random();
@@ -146,11 +198,11 @@ export const StoryViewerModal: React.FC = () => {
       id="story-viewer-backdrop"
       className="fixed inset-0 z-50 bg-black/95 backdrop-blur-md flex items-center justify-center select-none"
     >
-      {/* Navigation arrows for desktop */}
+      {/* Botones laterales para navegación en Desktop */}
       <button
         id="btn-prev-story"
         onClick={handlePrevStory}
-        disabled={activeStoryIndex === 0}
+        disabled={viewerIndex === 0}
         className="hidden md:flex absolute left-8 z-30 w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 text-white items-center justify-center disabled:opacity-30 transition-all cursor-pointer"
         title="Historia anterior"
       >
@@ -160,14 +212,14 @@ export const StoryViewerModal: React.FC = () => {
       <button
         id="btn-next-story"
         onClick={handleNextStory}
-        disabled={activeStoryIndex === stories.length - 1}
+        disabled={viewerIndex === followableStoriesGrouped.length - 1}
         className="hidden md:flex absolute right-8 z-30 w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 text-white items-center justify-center disabled:opacity-30 transition-all cursor-pointer"
         title="Siguiente historia"
       >
         <ChevronRight className="w-8 h-8" />
       </button>
 
-      {/* Main Story Container */}
+      {/* Story Frame */}
       <div
         id="story-viewer-canvas"
         className="relative w-full max-w-sm h-full max-h-[92vh] sm:rounded-3xl overflow-hidden bg-neutral-900 flex flex-col justify-between shadow-2xl border border-neutral-800"
@@ -176,17 +228,17 @@ export const StoryViewerModal: React.FC = () => {
         onTouchStart={() => !isViewersModalOpen && setIsPaused(true)}
         onTouchEnd={() => !isViewersModalOpen && setIsPaused(false)}
       >
-        {/* Progress Bar Segments */}
+        {/* Progress Bar Segments - Independientes por usuario */}
         <div className="absolute top-3 left-3 right-3 z-30 flex items-center gap-1.5">
-          {stories.map((story, i) => (
+          {userStories.map((story, i) => (
             <div key={story.id} className="h-1 flex-1 bg-white/30 rounded-full overflow-hidden">
               <div
                 className="h-full bg-white transition-all duration-75"
                 style={{
                   width:
-                    i < activeStoryIndex
+                    i < activeSubIndex
                       ? '100%'
-                      : i === activeStoryIndex
+                      : i === activeSubIndex
                       ? `${progress}%`
                       : '0%'
                 }}
@@ -229,7 +281,7 @@ export const StoryViewerModal: React.FC = () => {
           </button>
         </div>
 
-        {/* Touch zones for mobile tap navigation */}
+        {/* Tap zones for mobile navigation */}
         {!isViewersModalOpen && (
           <>
             <div
@@ -245,7 +297,7 @@ export const StoryViewerModal: React.FC = () => {
           </>
         )}
 
-        {/* Story Media */}
+        {/* Media Frame */}
         <div className="relative w-full h-full flex items-center justify-center bg-black">
           <img
             src={currentStory.mediaUrl || undefined}
@@ -254,14 +306,13 @@ export const StoryViewerModal: React.FC = () => {
             referrerPolicy="no-referrer"
           />
 
-          {/* Optional Caption Overlay */}
           {currentStory.caption && (
-            <div className="absolute bottom-28 left-4 right-4 z-20 bg-black/60 backdrop-blur-md text-white p-3 rounded-2xl text-center text-sm font-medium border border-white/10 shadow-lg">
+            <div className="absolute bottom-28 left-4 right-4 z-20 bg-black/60 backdrop-blur-md text-white p-3 rounded-2xl text-center text-sm font-medium border border-white/10 shadow-lg animate-fade-in">
               {currentStory.caption}
             </div>
           )}
 
-          {/* Floating Emoji Reactions Layer */}
+          {/* Floating reactions */}
           <div className="absolute inset-0 pointer-events-none z-30 overflow-hidden">
             {floatingEmojis.map(item => (
               <div
@@ -279,10 +330,9 @@ export const StoryViewerModal: React.FC = () => {
           </div>
         </div>
 
-        {/* Story Bottom Interactions: IF OWNER -> Viewers Analytics Button / IF OTHER -> Quick Reactions & Reply */}
+        {/* Interactions Row */}
         <div className="relative z-30 bg-gradient-to-t from-black via-black/80 to-transparent p-4 pt-6 text-white">
           {isOwner ? (
-            /* OWNER VIEW: WHO VIEWED MY STORY & REACTIONS */
             <div className="flex flex-col items-center pb-2">
               <button
                 type="button"
@@ -307,9 +357,7 @@ export const StoryViewerModal: React.FC = () => {
               </button>
             </div>
           ) : (
-            /* OTHER USER VIEW: QUICK EMOJIS & REPLY DM */
             <>
-              {/* Quick Reaction Emoji Row */}
               <div className="flex items-center justify-between gap-1 mb-3 px-1">
                 {QUICK_EMOJIS.map(emoji => {
                   const reactionData = currentStory.reactions?.find(r => r.emoji === emoji);
@@ -332,7 +380,6 @@ export const StoryViewerModal: React.FC = () => {
                 })}
               </div>
 
-              {/* Reply DM Input */}
               <form onSubmit={handleSendReply} className="flex items-center gap-2">
                 <input
                   type="text"
@@ -354,7 +401,7 @@ export const StoryViewerModal: React.FC = () => {
           )}
         </div>
 
-        {/* Viewers Modal Overlay for Story Owner */}
+        {/* Viewers modal list */}
         {isViewersModalOpen && (
           <div className="absolute inset-0 z-50 bg-neutral-950/95 backdrop-blur-lg flex flex-col animate-fade-in text-white p-4">
             <div className="flex items-center justify-between pb-3 border-b border-white/10">
