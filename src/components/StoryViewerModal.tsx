@@ -1,9 +1,55 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
-import { X, ChevronLeft, ChevronRight, Send, MapPin, Eye } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, Send, Eye, MoreVertical, Trash2, Flag } from 'lucide-react';
 import { StoryItem } from '../types';
 
 const QUICK_EMOJIS = ['🔥', '❤️', '😂', '👏', '🇨🇴', '☕', '😍', '🥳'];
+
+const formatInstagramTime = (story: StoryItem): string => {
+  try {
+    const idMatch = story.id.match(/story-(\d+)/);
+    let ms = 0;
+    if (idMatch) {
+      ms = parseInt(idMatch[1], 10);
+    } else {
+      const numMatch = story.id.match(/\d{10,13}/);
+      if (numMatch) {
+        ms = parseInt(numMatch[0], 10);
+      }
+    }
+
+    if (ms > 0) {
+      const now = Date.now();
+      const diffSeconds = Math.max(0, Math.floor((now - ms) / 1000));
+      
+      if (diffSeconds < 60) {
+        return `${diffSeconds}s`;
+      }
+      
+      const diffMinutes = Math.floor(diffSeconds / 60);
+      if (diffMinutes < 60) {
+        return `${diffMinutes}m`;
+      }
+      
+      const diffHours = Math.floor(diffMinutes / 60);
+      if (diffHours < 24) {
+        return `${diffHours}h`;
+      }
+      
+      return `24h`;
+    }
+  } catch (e) {
+    console.warn('Error formatting instagram time:', e);
+  }
+
+  if (story.timestamp === 'Justo ahora' || story.timestamp === 'Reciente') {
+    return '1s';
+  }
+  
+  let cleanTime = story.timestamp || '1h';
+  cleanTime = cleanTime.replace('Hace ', '').replace(' minutos', 'm').replace(' minuto', 'm').replace(' min', 'm').replace(' horas', 'h').replace(' hora', 'h');
+  return cleanTime;
+};
 
 export const StoryViewerModal: React.FC = () => {
   const {
@@ -16,7 +62,9 @@ export const StoryViewerModal: React.FC = () => {
     currentUser,
     startPrivateChat,
     sendMessage,
-    followingIds
+    followingIds,
+    deleteStory,
+    openReportModal
   } = useApp();
 
   const [progress, setProgress] = useState(0);
@@ -24,6 +72,7 @@ export const StoryViewerModal: React.FC = () => {
   const [replyText, setReplyText] = useState('');
   const [floatingEmojis, setFloatingEmojis] = useState<{ id: number; emoji: string; x: number }[]>([]);
   const [isViewersModalOpen, setIsViewersModalOpen] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
 
   const timerRef = useRef<number | null>(null);
 
@@ -210,7 +259,7 @@ export const StoryViewerModal: React.FC = () => {
   return (
     <div
       id="story-viewer-backdrop"
-      className="fixed inset-0 z-50 bg-black/95 backdrop-blur-md flex items-center justify-center select-none"
+      className="fixed inset-0 z-50 bg-black md:bg-black/95 md:backdrop-blur-md flex items-center justify-center select-none"
     >
       {/* Botones laterales Desktop */}
       <button
@@ -233,10 +282,10 @@ export const StoryViewerModal: React.FC = () => {
         <ChevronRight className="w-8 h-8" />
       </button>
 
-      {/* Story Frame */}
+      {/* Story Frame - 100% Pantalla completa en móvil, Mockup en Desktop */}
       <div
         id="story-viewer-canvas"
-        className="relative w-full max-w-sm h-full max-h-[92vh] sm:rounded-3xl overflow-hidden bg-neutral-900 flex flex-col justify-between shadow-2xl border border-neutral-800"
+        className="relative w-full h-full md:max-w-md md:h-[95vh] md:rounded-3xl overflow-hidden bg-neutral-900 flex flex-col justify-between shadow-2xl md:border md:border-neutral-800"
         onMouseDown={() => !isViewersModalOpen && setIsPaused(true)}
         onMouseUp={() => !isViewersModalOpen && setIsPaused(false)}
         onTouchStart={() => !isViewersModalOpen && setIsPaused(true)}
@@ -261,7 +310,7 @@ export const StoryViewerModal: React.FC = () => {
           ))}
         </div>
 
-        {/* Story Header */}
+        {/* Story Header - Sin Ubicación y Simplificado */}
         <div className="absolute top-6 left-3 right-3 z-30 flex items-center justify-between text-white">
           <div className="flex items-center gap-2.5">
             <img
@@ -273,27 +322,77 @@ export const StoryViewerModal: React.FC = () => {
             <div>
               <div className="flex items-center gap-1.5">
                 <span className="text-sm font-bold drop-shadow">{currentStory.username}</span>
-                <span className="text-xs text-white/70">· {currentStory.timestamp}</span>
-              </div>
-              <div className="flex items-center gap-1 text-[11px] text-amber-300">
-                <MapPin className="w-3 h-3" />
-                <span>{currentStory.userCity}, España</span>
+                <span className="text-xs text-white/80 font-semibold drop-shadow">{formatInstagramTime(currentStory)}</span>
               </div>
             </div>
           </div>
 
-          <button
-            id="btn-close-story"
-            onClick={() => {
-              setActiveStoryIndex(null);
-              setStoryViewerRestriction(null);
-              setIsViewersModalOpen(false);
-            }}
-            className="p-2 text-white hover:text-neutral-300 rounded-full bg-black/30 backdrop-blur-sm cursor-pointer"
-            title="Cerrar"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="relative flex items-center gap-1.5">
+            <button
+              id="btn-story-actions"
+              type="button"
+              onClick={() => {
+                setShowMenu(prev => !prev);
+                setIsPaused(prev => !prev);
+              }}
+              className="p-2 text-white hover:text-neutral-300 rounded-full bg-black/30 backdrop-blur-sm cursor-pointer transition-all hover:scale-105"
+              title="Opciones de historia"
+            >
+              <MoreVertical className="w-5 h-5" />
+            </button>
+
+            {showMenu && (
+              <div className="absolute right-0 top-12 w-48 bg-neutral-900/95 backdrop-blur-md border border-neutral-800 rounded-2xl p-1.5 shadow-2xl z-50 animate-scaleUp">
+                {isOwner ? (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      setShowMenu(false);
+                      setIsPaused(false);
+                      if (confirm('¿Estás seguro de que deseas eliminar esta historia?')) {
+                        await deleteStory(currentStory.id);
+                        handleNextStory();
+                      }
+                    }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2.5 text-rose-400 hover:bg-rose-500/10 rounded-xl text-left text-xs font-semibold transition-all cursor-pointer"
+                  >
+                    <Trash2 className="w-4 h-4 text-rose-400" />
+                    <span>Eliminar Historia</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowMenu(false);
+                      openReportModal({
+                        id: currentStory.id,
+                        type: 'story',
+                        title: `Historia de @${currentStory.username}`
+                      });
+                    }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2.5 text-amber-400 hover:bg-amber-500/10 rounded-xl text-left text-xs font-semibold transition-all cursor-pointer"
+                  >
+                    <Flag className="w-4 h-4 text-amber-400" />
+                    <span>Reportar Historia</span>
+                  </button>
+                )}
+              </div>
+            )}
+
+            <button
+              id="btn-close-story"
+              onClick={() => {
+                setActiveStoryIndex(null);
+                setStoryViewerRestriction(null);
+                setIsViewersModalOpen(false);
+                setShowMenu(false);
+              }}
+              className="p-2 text-white hover:text-neutral-300 rounded-full bg-black/30 backdrop-blur-sm cursor-pointer"
+              title="Cerrar"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Tap zones for mobile navigation */}
@@ -317,15 +416,9 @@ export const StoryViewerModal: React.FC = () => {
           <img
             src={currentStory.mediaUrl || undefined}
             alt={currentStory.caption || 'Historia'}
-            className="w-full h-full object-cover"
+            className="w-full h-full object-cover animate-scaleUp"
             referrerPolicy="no-referrer"
           />
-
-          {currentStory.caption && (
-            <div className="absolute bottom-28 left-4 right-4 z-20 bg-black/60 backdrop-blur-md text-white p-3 rounded-2xl text-center text-sm font-medium border border-white/10 shadow-lg animate-fade-in">
-              {currentStory.caption}
-            </div>
-          )}
 
           {/* Floating reactions */}
           <div className="absolute inset-0 pointer-events-none z-30 overflow-hidden">
@@ -345,8 +438,18 @@ export const StoryViewerModal: React.FC = () => {
           </div>
         </div>
 
-        {/* Interactions Row */}
-        <div className="relative z-30 bg-gradient-to-t from-black via-black/80 to-transparent p-4 pt-6 text-white">
+        {/* Interactions Row con Pie de Foto en la Parte Inferior */}
+        <div className="relative z-30 bg-gradient-to-t from-black via-black/90 to-transparent p-4 pt-10 text-white">
+          {/* Pie de foto (Caption) movido a la parte inferior justo arriba de las reacciones */}
+          {currentStory.caption && 
+           currentStory.caption.trim() !== '' && 
+           currentStory.caption !== 'null' && 
+           currentStory.caption !== 'undefined' && (
+            <div className="mb-4 text-sm font-medium leading-relaxed drop-shadow-md text-white/95 text-left bg-black/50 p-3 rounded-2xl border border-white/10 backdrop-blur-sm">
+              {currentStory.caption}
+            </div>
+          )}
+
           {isOwner ? (
             <div className="flex flex-col items-center pb-2">
               <button

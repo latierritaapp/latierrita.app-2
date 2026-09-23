@@ -52,6 +52,7 @@ interface AppContextType {
   // Stories
   stories: StoryItem[];
   addStory: (data: { mediaUrl: string; caption?: string }) => void;
+  deleteStory: (storyId: string) => Promise<void>;
   reactToStory: (storyId: string, emoji: string) => void;
   activeStoryIndex: number | null;
   setActiveStoryIndex: (index: number | null) => void;
@@ -141,8 +142,8 @@ interface AppContextType {
   // Reports
   reports: ContentReport[];
   isReportModalOpen: boolean;
-  reportTarget: { id: string; type: 'message' | 'user' | 'post'; title: string; chatId?: string } | null;
-  openReportModal: (target: { id: string; type: 'message' | 'user' | 'post'; title: string; chatId?: string }) => void;
+  reportTarget: { id: string; type: 'message' | 'user' | 'post' | 'story'; title: string; chatId?: string } | null;
+  openReportModal: (target: { id: string; type: 'message' | 'user' | 'post' | 'story'; title: string; chatId?: string }) => void;
   closeReportModal: () => void;
   submitReport: (reason: 'spam' | 'inappropriate' | 'harassment' | 'scam' | 'other', details: string) => void;
 
@@ -669,7 +670,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [reportTarget, setReportTarget] = useState<{
     id: string;
-    type: 'message' | 'user' | 'post';
+    type: 'message' | 'user' | 'post' | 'story';
     title: string;
     chatId?: string;
   } | null>(null);
@@ -843,12 +844,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           }
         } catch (e) {}
         setStories(list);
-        console.warn('Stories listener error:', error?.message || error);
+        console.log('Stories sync: offline or guest mode fallback loaded.');
       });
       return () => unsub();
     } catch (e) {
       setStories([]);
-      console.warn('Failed to listen to stories in DB:', e);
+      console.log('Failed to listen to stories in DB:', e);
     }
   }, []);
 
@@ -2124,6 +2125,35 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const deleteStory = async (storyId: string) => {
+    try {
+      await deleteDoc(doc(db, 'stories', storyId));
+      
+      setStories(prev => prev.filter(s => s.id !== storyId));
+
+      try {
+        const localStoriesRaw = localStorage.getItem('latierrita_local_stories');
+        if (localStoriesRaw) {
+          const localStories = JSON.parse(localStoriesRaw);
+          if (Array.isArray(localStories)) {
+            const filtered = localStories.filter(s => s.id !== storyId);
+            localStorage.setItem('latierrita_local_stories', JSON.stringify(filtered));
+          }
+        }
+      } catch (e) {
+        console.warn('Error deleting local story:', e);
+      }
+
+      triggerPlushNotification({
+        type: 'system',
+        title: 'Historia Eliminada',
+        message: 'Tu historia ha sido eliminada con éxito.',
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `stories/${storyId}`);
+    }
+  };
+
   const reactToStory = async (storyId: string, emoji: string) => {
     const targetStory = stories.find(s => s.id === storyId);
     if (!targetStory) return;
@@ -3081,7 +3111,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Reports
-  const openReportModal = (target: { id: string; type: 'message' | 'user' | 'post'; title: string; chatId?: string }) => {
+  const openReportModal = (target: { id: string; type: 'message' | 'user' | 'post' | 'story'; title: string; chatId?: string }) => {
     setReportTarget(target);
     setIsReportModalOpen(true);
   };
@@ -3143,6 +3173,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         
         stories,
         addStory,
+        deleteStory,
         reactToStory,
         activeStoryIndex,
         setActiveStoryIndex,
