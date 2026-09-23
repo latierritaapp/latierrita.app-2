@@ -42,19 +42,7 @@ import {
   ShieldAlert
 } from 'lucide-react';
 import { AdCategory, StaffRole, TicketType, UserProfile, SpanishCity } from '../types';
-
-const SPANISH_CITIES: SpanishCity[] = [
-  'Madrid',
-  'Barcelona',
-  'Valencia',
-  'Sevilla',
-  'Málaga',
-  'Bilbao',
-  'Alicante',
-  'Zaragoza',
-  'Murcia',
-  'Palma de Mallorca'
-];
+import { SPANISH_CITIES } from '../data/citiesData';
 
 export const StaffAdminModal: React.FC = () => {
   const {

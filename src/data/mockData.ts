@@ -118,20 +118,11 @@ export const INITIAL_CHAT_ROOMS: ChatRoom[] = [
 
 export const INITIAL_GROUP_INVITES: GroupInvite[] = [];
 
+import { SPANISH_CITIES as ALL_SPANISH_CITIES } from './citiesData';
+
 export const INITIAL_NOTIFICATIONS: AppNotification[] = [];
 
-export const SPANISH_CITIES = [
-  'Madrid',
-  'Barcelona',
-  'Valencia',
-  'Sevilla',
-  'Málaga',
-  'Bilbao',
-  'Alicante',
-  'Zaragoza',
-  'Murcia',
-  'Palma de Mallorca'
-] as const;
+export const SPANISH_CITIES = ALL_SPANISH_CITIES;
 
 export const INITIAL_PLACES: PlaceItem[] = [];
 

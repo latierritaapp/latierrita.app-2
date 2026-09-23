@@ -1,5 +1,5 @@
-// Lista completa y ordenada de ciudades y municipios principales de Colombia
-export const COLOMBIAN_CITIES: string[] = [
+// Lista completa de ciudades y municipios principales de Colombia
+const RAW_COLOMBIAN_CITIES: string[] = [
   'Bogotá D.C.',
   'Medellín',
   'Cali',
@@ -130,12 +130,11 @@ export const COLOMBIAN_CITIES: string[] = [
   'Yarumal',
   'Yumbo',
   'Zarzal',
-  'Zipaquirá',
-  'Otra ciudad de Colombia'
+  'Zipaquirá'
 ];
 
-// Lista completa y ordenada de todas las capitales de provincia y principales ciudades de España
-export const SPANISH_CITIES: string[] = [
+// Lista completa de todas las capitales de provincia y principales ciudades de España
+const RAW_SPANISH_CITIES: string[] = [
   'Madrid',
   'Barcelona',
   'Valencia',
@@ -245,6 +244,16 @@ export const SPANISH_CITIES: string[] = [
   'Castelldefels',
   'Granollers',
   'Mollet del Vallès',
-  'Cerdanyola del Vallès',
+  'Cerdanyola del Vallès'
+];
+
+// Exportación ordenada alfabéticamente (con la opción "Otra..." siempre al final)
+export const COLOMBIAN_CITIES: string[] = [
+  ...[...RAW_COLOMBIAN_CITIES].sort((a, b) => a.localeCompare(b, 'es')),
+  'Otra ciudad de Colombia'
+];
+
+export const SPANISH_CITIES: string[] = [
+  ...[...RAW_SPANISH_CITIES].sort((a, b) => a.localeCompare(b, 'es')),
   'Otra ciudad de España'
 ];
