@@ -2317,6 +2317,35 @@ export const StaffAdminModal: React.FC = () => {
                             4. <strong>Gestión de Cuentas:</strong> Se aplica política de retención de 7 días antes de purgar definitivamente cualquier usuario.
                           </p>
                         </div>
+
+                        <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-2xl space-y-2.5">
+                          <h4 className="font-bold text-amber-300 text-sm flex items-center gap-1.5">
+                            <AlertTriangle className="w-4 h-4 text-amber-400" />
+                            <span>⚠️ IMPORTANTE: Resolver Bloqueo de Publicaciones (RLS de Supabase)</span>
+                          </h4>
+                          <p>
+                            Si notas que tú o los usuarios de la comunidad publican fotos o historias, pero al refrescar la página <strong>desaparecen</strong> o <strong>los demás parceros no pueden verlas</strong>, se debe a que la base de datos de tu VPS tiene activado el sistema de seguridad de filas (RLS) de Supabase en las tablas <code className="bg-black/30 px-1 py-0.5 rounded text-amber-200">posts</code> y <code className="bg-black/30 px-1 py-0.5 rounded text-amber-200">stories</code>, pero faltan las políticas que autorizan la inserción.
+                          </p>
+                          <p>
+                            Para resolverlo de forma inmediata, entra al panel de tu Supabase (SQL Editor) o accede por terminal y ejecuta la siguiente consulta SQL:
+                          </p>
+                          <pre className="p-3 bg-black/50 border border-white/10 rounded-xl font-mono text-[10px] text-emerald-300 overflow-x-auto whitespace-pre leading-normal">
+{`-- 1. Políticas de escritura (INSERT) libre para posts e historias
+CREATE POLICY "Permitir inserciones públicas posts" ON posts FOR INSERT WITH CHECK (true);
+CREATE POLICY "Permitir inserciones públicas stories" ON stories FOR INSERT WITH CHECK (true);
+
+-- 2. Asegurar lectura pública (SELECT) para todos
+CREATE POLICY "Permitir lectura pública posts" ON posts FOR SELECT USING (true);
+CREATE POLICY "Permitir lectura pública stories" ON stories FOR SELECT USING (true);
+
+-- 3. Opcional: Desactivar RLS por completo si quieres máxima compatibilidad
+ALTER TABLE posts DISABLE ROW LEVEL SECURITY;
+ALTER TABLE stories DISABLE ROW LEVEL SECURITY;`}
+                          </pre>
+                          <p className="text-white/60">
+                            *Nota: Al aplicar este SQL, el bloqueo se levantará inmediatamente en tiempo real y todas las publicaciones quedarán grabadas de forma permanente para todos los usuarios.*
+                          </p>
+                        </div>
                       </div>
                     )}
                   </div>

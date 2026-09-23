@@ -796,10 +796,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     try {
       const unsub = onSnapshot(collection(db, 'stories'), (snapshot) => {
-        if (snapshot.empty) {
-          setStories([]);
-        } else {
-          const list: StoryItem[] = [];
+        const list: StoryItem[] = [];
+        if (!snapshot.empty) {
           snapshot.forEach((docSnap: any) => {
             const data = docSnap.data() || {};
             list.push({
@@ -810,11 +808,38 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               reactions: Array.isArray(data.reactions) ? data.reactions : []
             } as StoryItem);
           });
-          list.sort((a, b) => b.id.localeCompare(a.id));
-          setStories(list);
         }
+
+        // Incorporar historias guardadas localmente (fallback por RLS)
+        try {
+          const localStoriesRaw = localStorage.getItem('latierrita_local_stories');
+          if (localStoriesRaw) {
+            const localStories = JSON.parse(localStoriesRaw);
+            if (Array.isArray(localStories)) {
+              localStories.forEach((ls: StoryItem) => {
+                if (!list.some(s => s.id === ls.id)) {
+                  list.push(ls);
+                }
+              });
+            }
+          }
+        } catch (e) {}
+
+        list.sort((a, b) => b.id.localeCompare(a.id));
+        setStories(list);
       }, (error) => {
-        setStories([]);
+        // En caso de error, mostrar al menos las historias locales
+        const list: StoryItem[] = [];
+        try {
+          const localStoriesRaw = localStorage.getItem('latierrita_local_stories');
+          if (localStoriesRaw) {
+            const localStories = JSON.parse(localStoriesRaw);
+            if (Array.isArray(localStories)) {
+              list.push(...localStories);
+            }
+          }
+        } catch (e) {}
+        setStories(list);
         console.warn('Stories listener error:', error?.message || error);
       });
       return () => unsub();
@@ -828,10 +853,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     try {
       const unsub = onSnapshot(collection(db, 'posts'), (snapshot) => {
-        if (snapshot.empty) {
-          setPosts([]);
-        } else {
-          const list: PostItem[] = [];
+        const list: PostItem[] = [];
+        if (!snapshot.empty) {
           snapshot.forEach((docSnap: any) => {
             const data = docSnap.data() || {};
             list.push({
@@ -846,11 +869,38 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               comments: Array.isArray(data.comments) ? data.comments : []
             } as PostItem);
           });
-          list.sort((a, b) => b.id.localeCompare(a.id));
-          setPosts(list);
         }
+
+        // Incorporar publicaciones guardadas localmente (fallback por RLS)
+        try {
+          const localPostsRaw = localStorage.getItem('latierrita_local_posts');
+          if (localPostsRaw) {
+            const localPosts = JSON.parse(localPostsRaw);
+            if (Array.isArray(localPosts)) {
+              localPosts.forEach((lp: PostItem) => {
+                if (!list.some(p => p.id === lp.id)) {
+                  list.push(lp);
+                }
+              });
+            }
+          }
+        } catch (e) {}
+
+        list.sort((a, b) => b.id.localeCompare(a.id));
+        setPosts(list);
       }, (error) => {
-        setPosts([]);
+        // En caso de error, mostrar al menos las publicaciones locales
+        const list: PostItem[] = [];
+        try {
+          const localPostsRaw = localStorage.getItem('latierrita_local_posts');
+          if (localPostsRaw) {
+            const localPosts = JSON.parse(localPostsRaw);
+            if (Array.isArray(localPosts)) {
+              list.push(...localPosts);
+            }
+          }
+        } catch (e) {}
+        setPosts(list);
         console.warn('Posts listener error:', error?.message || error);
       });
       return () => unsub();
@@ -2045,6 +2095,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       reactions: []
     };
     setStories(prev => [newStory, ...prev]);
+
+    // Guardado local resistente para fallback inmediato
+    try {
+      const localStoriesRaw = localStorage.getItem('latierrita_local_stories') || '[]';
+      const localStories = JSON.parse(localStoriesRaw);
+      localStories.push(newStory);
+      localStorage.setItem('latierrita_local_stories', JSON.stringify(localStories));
+    } catch (e) {
+      console.warn('Local story storage note:', e);
+    }
+
     try {
       await setDoc(doc(db, 'stories', newStoryId), newStory);
       setIsCreateStoryOpen(false);
@@ -2203,6 +2264,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       taggedUsernames: data.taggedUsernames
     };
     setPosts(prev => [newPost, ...prev]);
+
+    // Guardado local resistente para fallback inmediato
+    try {
+      const localPostsRaw = localStorage.getItem('latierrita_local_posts') || '[]';
+      const localPosts = JSON.parse(localPostsRaw);
+      localPosts.push(newPost);
+      localStorage.setItem('latierrita_local_posts', JSON.stringify(localPosts));
+    } catch (e) {
+      console.warn('Local post storage note:', e);
+    }
+
     try {
       await setDoc(doc(db, 'posts', newPostId), newPost);
       setCurrentUser(prev => ({ ...prev, postsCount: prev.postsCount + 1 }));
