@@ -39,9 +39,11 @@ import {
   RefreshCw,
   UserPlus,
   Edit3,
-  ShieldAlert
+  ShieldAlert,
+  Send,
+  ArrowLeft
 } from 'lucide-react';
-import { AdCategory, StaffRole, TicketType, UserProfile, SpanishCity } from '../types';
+import { AdCategory, StaffRole, TicketType, UserProfile, SpanishCity, SupportTicket } from '../types';
 import { SPANISH_CITIES } from '../data/citiesData';
 
 export const StaffAdminModal: React.FC = () => {
@@ -74,6 +76,9 @@ export const StaffAdminModal: React.FC = () => {
     startPrivateChat,
     setActiveChatId,
     setActiveTab,
+    chatRooms,
+    sendMessage,
+    triggerPlushNotification,
     startupAdConfig,
     updateStartupAdConfig,
     simulateAppRestart
@@ -151,10 +156,12 @@ export const StaffAdminModal: React.FC = () => {
 
   // Subtabs for Soporte
   const [soporteSubTab, setSoporteSubTab] = useState<'tickets' | 'comunidad'>('tickets');
-  const [ticketTypeFilter, setTicketTypeFilter] = useState<TicketType>('TS');
+  const [ticketTypeFilter, setTicketTypeFilter] = useState<'ALL' | TicketType>('ALL');
   const [ticketStatusFilter, setTicketStatusFilter] = useState<'pendientes' | 'en_proceso' | 'resueltos'>('pendientes');
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
   const [ticketResponseText, setTicketResponseText] = useState('');
+  const [selectedTicketForStaffChat, setSelectedTicketForStaffChat] = useState<SupportTicket | null>(null);
+  const [staffChatMessageText, setStaffChatMessageText] = useState('');
 
   // Forms State: Feed Post
   const [feedTitle, setFeedTitle] = useState('');
@@ -231,7 +238,7 @@ export const StaffAdminModal: React.FC = () => {
 
   // Tickets filtered
   const filteredTickets = supportTickets.filter(
-    t => t.type === ticketTypeFilter && (ticketStatusFilter === 'pendientes' ? t.status === 'pendientes' : ticketStatusFilter === 'en_proceso' ? t.status === 'en_proceso' : t.status === 'resueltos')
+    t => (ticketTypeFilter === 'ALL' || t.type === ticketTypeFilter) && (ticketStatusFilter === 'pendientes' ? t.status === 'pendientes' : ticketStatusFilter === 'en_proceso' ? t.status === 'en_proceso' : t.status === 'resueltos')
   );
 
   // File upload helper from device gallery
@@ -652,194 +659,538 @@ export const StaffAdminModal: React.FC = () => {
                 {/* Subtab 1: Gestión de tickets */}
                 {soporteSubTab === 'tickets' && (
                   <div className="space-y-4">
-                    {/* Ticket Type Filter Badges */}
-                    <div className="flex flex-wrap items-center justify-between gap-2 bg-white/5 p-2 rounded-2xl border border-white/10">
-                      <div className="flex flex-wrap items-center gap-1">
-                        <button
-                          onClick={() => setTicketTypeFilter('TS')}
-                          className={`px-2.5 py-1 rounded-lg text-xs font-extrabold transition-all ${
-                            ticketTypeFilter === 'TS'
-                              ? 'bg-amber-400 text-neutral-950'
-                              : 'text-white/70 hover:bg-white/10'
-                          }`}
-                        >
-                          Soporte (TS)
-                        </button>
-                        <button
-                          onClick={() => setTicketTypeFilter('TRU')}
-                          className={`px-2.5 py-1 rounded-lg text-xs font-extrabold transition-all ${
-                            ticketTypeFilter === 'TRU'
-                              ? 'bg-rose-500 text-white'
-                              : 'text-white/70 hover:bg-white/10'
-                          }`}
-                        >
-                          Usuario (TRU)
-                        </button>
-                        <button
-                          onClick={() => setTicketTypeFilter('TRP')}
-                          className={`px-2.5 py-1 rounded-lg text-xs font-extrabold transition-all ${
-                            ticketTypeFilter === 'TRP'
-                              ? 'bg-red-500 text-white'
-                              : 'text-white/70 hover:bg-white/10'
-                          }`}
-                        >
-                          Publicación (TRP)
-                        </button>
-                        <button
-                          onClick={() => setTicketTypeFilter('TRH')}
-                          className={`px-2.5 py-1 rounded-lg text-xs font-extrabold transition-all ${
-                            ticketTypeFilter === 'TRH'
-                              ? 'bg-orange-500 text-white'
-                              : 'text-white/70 hover:bg-white/10'
-                          }`}
-                        >
-                          Historia (TRH)
-                        </button>
-                        <button
-                          onClick={() => setTicketTypeFilter('TRM')}
-                          className={`px-2.5 py-1 rounded-lg text-xs font-extrabold transition-all ${
-                            ticketTypeFilter === 'TRM'
-                              ? 'bg-pink-500 text-white'
-                              : 'text-white/70 hover:bg-white/10'
-                          }`}
-                        >
-                          Mensaje (TRM)
-                        </button>
-                        <button
-                          onClick={() => setTicketTypeFilter('TRG')}
-                          className={`px-2.5 py-1 rounded-lg text-xs font-extrabold transition-all ${
-                            ticketTypeFilter === 'TRG'
-                              ? 'bg-purple-500 text-white'
-                              : 'text-white/70 hover:bg-white/10'
-                          }`}
-                        >
-                          Grupo (TRG)
-                        </button>
-                      </div>
+                    {/* View 1: Embedded Staff Ticket Chat with User */}
+                    {selectedTicketForStaffChat ? (() => {
+                      const activeTicket = supportTickets.find(t => t.id === selectedTicketForStaffChat.id) || selectedTicketForStaffChat;
+                      const linkedRoom = chatRooms.find(r =>
+                        r.id === activeTicket.chatRoomId ||
+                        r.ticketCode === activeTicket.code ||
+                        r.ticketId === activeTicket.id ||
+                        (r.type === 'private' && ((activeTicket.userId && r.id.includes(activeTicket.userId)) || (activeTicket.reportedUserId && r.id.includes(activeTicket.reportedUserId))))
+                      );
 
-                      {/* Status filter */}
-                      <div className="flex items-center gap-1 bg-black/30 p-1 rounded-xl">
-                        <button
-                          onClick={() => setTicketStatusFilter('pendientes')}
-                          className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                            ticketStatusFilter === 'pendientes'
-                              ? 'bg-amber-400/30 text-amber-300 border border-amber-400/40'
-                              : 'text-white/60'
-                          }`}
-                        >
-                          Pendientes
-                        </button>
-                        <button
-                          onClick={() => setTicketStatusFilter('en_proceso')}
-                          className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                            ticketStatusFilter === 'en_proceso'
-                              ? 'bg-cyan-400/30 text-cyan-300 border border-cyan-400/40'
-                              : 'text-white/60'
-                          }`}
-                        >
-                          En Proceso
-                        </button>
-                        <button
-                          onClick={() => setTicketStatusFilter('resueltos')}
-                          className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                            ticketStatusFilter === 'resueltos'
-                              ? 'bg-emerald-400/30 text-emerald-300 border border-emerald-400/40'
-                              : 'text-white/60'
-                          }`}
-                        >
-                          Resueltos
-                        </button>
-                      </div>
-                    </div>
+                      const handleStaffSendMessage = (textToSend?: string) => {
+                        const content = (textToSend || staffChatMessageText).trim();
+                        if (!content) return;
 
-                    {/* Tickets List */}
-                    <div className="space-y-2">
-                      {filteredTickets.length === 0 ? (
-                        <div className="p-6 text-center text-white/50 bg-white/5 rounded-2xl text-xs">
-                          No hay tickets registrados en esta categoría con estado "{ticketStatusFilter}".
-                        </div>
-                      ) : (
-                        filteredTickets.map(t => (
-                          <div
-                            key={t.id}
-                            className="p-3 bg-white/5 border border-white/10 rounded-2xl space-y-2 hover:bg-white/[0.08] transition-all"
-                          >
-                            <div className="flex items-center justify-between gap-2">
-                              <div className="flex items-center gap-2">
-                                <span className="text-[10px] font-black px-2 py-0.5 bg-black/40 text-amber-300 rounded-md border border-amber-400/30">
-                                  {t.code}
-                                </span>
-                                <span className="text-xs font-bold text-white">{t.subject}</span>
+                        // If ticket was pending, automatically assign to this staff and move to 'en_proceso'
+                        if (activeTicket.status === 'pendientes') {
+                          updateTicketStatus(activeTicket.id, 'en_proceso');
+                        }
+
+                        const targetRoomId = linkedRoom ? linkedRoom.id : (activeTicket.chatRoomId || `chat-ticket-${activeTicket.code}`);
+                        if (targetRoomId) {
+                          sendMessage(targetRoomId, content);
+                        }
+                        setStaffChatMessageText('');
+                      };
+
+                      return (
+                        <div className="bg-[#00172e] border border-cyan-500/30 rounded-2xl overflow-hidden shadow-2xl flex flex-col h-[580px]">
+                          {/* Chat Header inside Staff Panel */}
+                          <div className="p-3 bg-[#001c38] border-b border-white/10 flex flex-wrap items-center justify-between gap-2 shrink-0">
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => setSelectedTicketForStaffChat(null)}
+                                className="p-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-colors flex items-center gap-1 text-xs font-bold"
+                                title="Volver al listado de tickets"
+                              >
+                                <ArrowLeft className="w-4 h-4" />
+                                <span className="hidden sm:inline">Volver</span>
+                              </button>
+                              <span className="text-xs font-mono font-black px-2.5 py-0.5 rounded-lg bg-amber-400 text-neutral-950 shadow-sm">
+                                {activeTicket.code}
+                              </span>
+                              <div>
+                                <h4 className="text-xs font-black text-white flex items-center gap-1.5">
+                                  <span>{activeTicket.subject}</span>
+                                </h4>
+                                <p className="text-[10px] text-white/60">
+                                  Usuario: <strong className="text-white">{activeTicket.userName}</strong> (@{activeTicket.userUsername})
+                                </p>
                               </div>
-                              <span className="text-[10px] text-white/50">{t.date}</span>
                             </div>
 
-                            <p className="text-xs text-white/80 leading-relaxed pl-1">{t.description}</p>
+                            {/* Status & Quick Action Buttons */}
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                                activeTicket.status === 'resueltos'
+                                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                                  : activeTicket.status === 'en_proceso'
+                                  ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40'
+                                  : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                              }`}>
+                                {activeTicket.status === 'resueltos' ? 'Resuelto' : activeTicket.status === 'en_proceso' ? 'En Proceso' : 'Pendiente'}
+                              </span>
 
-                            <div className="flex items-center justify-between pt-1 text-[11px]">
-                              <div className="flex items-center gap-2">
-                                <img
-                                  src={t.userAvatar || undefined}
-                                  alt={t.userName}
-                                  className="w-5 h-5 rounded-full object-cover"
-                                />
-                                <span className="text-white/70 font-medium">
-                                  {t.userName} (@{t.userUsername})
-                                </span>
-                              </div>
+                              {activeTicket.status === 'pendientes' && (
+                                <button
+                                  onClick={() => updateTicketStatus(activeTicket.id, 'en_proceso')}
+                                  className="px-2.5 py-1 bg-cyan-400 hover:bg-cyan-300 text-neutral-950 font-bold rounded-lg text-[10px] flex items-center gap-1 cursor-pointer transition-all shadow-sm"
+                                  title="Tomar el caso y habilitar chat al usuario"
+                                >
+                                  <Shield className="w-3 h-3" />
+                                  <span>Tomar Caso</span>
+                                </button>
+                              )}
 
-                              <div className="flex items-center gap-1.5 flex-wrap">
-                                {t.status === 'resueltos' ? (
-                                  <>
-                                    <button
-                                      onClick={() => updateTicketStatus(t.id, 'en_proceso')}
-                                      className="px-2.5 py-1 bg-amber-400 hover:bg-amber-300 text-neutral-950 font-bold rounded-lg text-[10px] flex items-center gap-1 cursor-pointer transition-all shadow-sm"
-                                      title="Reabrir ticket y poner en proceso"
-                                    >
-                                      <RotateCcw className="w-3 h-3" />
-                                      <span>Volver a Proceso</span>
-                                    </button>
-                                    <button
-                                      onClick={() => deleteSupportTicket(t.id)}
-                                      className="px-2.5 py-1 bg-rose-600/80 hover:bg-rose-600 text-white font-bold rounded-lg text-[10px] flex items-center gap-1 cursor-pointer transition-all shadow-sm"
-                                      title="Eliminar ticket definitivamente"
-                                    >
-                                      <Trash2 className="w-3 h-3" />
-                                      <span>Eliminar Definitivamente</span>
-                                    </button>
-                                  </>
-                                ) : (
-                                  <>
-                                    {t.status === 'pendientes' && (
-                                      <button
-                                        onClick={() => updateTicketStatus(t.id, 'en_proceso')}
-                                        className="px-2.5 py-1 bg-cyan-400 hover:bg-cyan-300 text-neutral-950 font-bold rounded-lg text-[10px] flex items-center gap-1 cursor-pointer transition-all shadow-sm"
-                                      >
-                                        Atender Ticket
-                                      </button>
-                                    )}
-                                    <button
-                                      onClick={() => updateTicketStatus(t.id, 'resueltos', 'Ticket resuelto por el equipo de Soporte.')}
-                                      className="px-2.5 py-1 bg-emerald-500 hover:bg-emerald-400 text-neutral-950 font-bold rounded-lg text-[10px] flex items-center gap-1 cursor-pointer transition-all shadow-sm"
-                                    >
-                                      <CheckCircle className="w-3 h-3" />
-                                      <span>Marcar Resuelto</span>
-                                    </button>
-                                    <button
-                                      onClick={() => deleteSupportTicket(t.id)}
-                                      className="px-2 py-1 bg-white/10 hover:bg-rose-600 text-white/70 hover:text-white font-bold rounded-lg text-[10px] flex items-center gap-1 cursor-pointer transition-all"
-                                      title="Eliminar ticket"
-                                    >
-                                      <Trash2 className="w-3 h-3" />
-                                    </button>
-                                  </>
-                                )}
-                              </div>
+                              {activeTicket.status === 'en_proceso' && (
+                                <button
+                                  onClick={() => updateTicketStatus(activeTicket.id, 'resueltos', 'Ticket atendido y resuelto por el equipo de Soporte.')}
+                                  className="px-2.5 py-1 bg-emerald-500 hover:bg-emerald-400 text-neutral-950 font-bold rounded-lg text-[10px] flex items-center gap-1 cursor-pointer transition-all shadow-sm"
+                                  title="Marcar como resuelto"
+                                >
+                                  <CheckCircle className="w-3 h-3" />
+                                  <span>Marcar Resuelto</span>
+                                </button>
+                              )}
+
+                              {activeTicket.status === 'resueltos' && (
+                                <button
+                                  onClick={() => updateTicketStatus(activeTicket.id, 'en_proceso')}
+                                  className="px-2.5 py-1 bg-amber-400 hover:bg-amber-300 text-neutral-950 font-bold rounded-lg text-[10px] flex items-center gap-1 cursor-pointer transition-all shadow-sm"
+                                  title="Reabrir caso"
+                                >
+                                  <RotateCcw className="w-3 h-3" />
+                                  <span>Reabrir Caso</span>
+                                </button>
+                              )}
+
+                              {currentUser?.staffRole === 'ADMIN' && (
+                                <button
+                                  onClick={() => {
+                                    if (window.confirm(`¿Estás seguro de que deseas eliminar definitivamente el ticket ${activeTicket.code}? Solo los ADMIN tienen esta facultad.`)) {
+                                      deleteSupportTicket(activeTicket.id);
+                                      setSelectedTicketForStaffChat(null);
+                                    }
+                                  }}
+                                  className="px-2 py-1 bg-rose-600/80 hover:bg-rose-600 text-white font-bold rounded-lg text-[10px] flex items-center gap-1 cursor-pointer transition-all shadow-sm"
+                                  title="Eliminar ticket definitivamente (Solo ADMIN)"
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                  <span className="hidden sm:inline">Eliminar</span>
+                                </button>
+                              )}
                             </div>
                           </div>
-                        ))
-                      )}
-                    </div>
+
+                          {/* Collapsible Ticket Report Information Banner */}
+                          <div className="bg-black/30 border-b border-white/10 p-3 text-[11px] space-y-1.5 shrink-0">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-white/80">
+                              <div>
+                                <span className="text-white/40 block text-[10px]">Usuario Reportado:</span>
+                                <strong className="text-white">
+                                  {activeTicket.reportedUsername ? `@${activeTicket.reportedUsername}` : 'N/A (Soporte Técnico)'}
+                                </strong>
+                              </div>
+                              <div>
+                                <span className="text-white/40 block text-[10px]">Reportador:</span>
+                                <span className="text-white">
+                                  {activeTicket.reporterName || activeTicket.userName} (@{activeTicket.reporterUsername || activeTicket.userUsername})
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-white/40 block text-[10px]">Motivo:</span>
+                                <span className="text-amber-300 font-semibold">
+                                  {activeTicket.reasonTitle || activeTicket.subject} - {activeTicket.reasonText || activeTicket.description}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-white/40 block text-[10px]">Fecha del Registro:</span>
+                                <span className="text-white/70">{activeTicket.date}</span>
+                              </div>
+                            </div>
+
+                            {activeTicket.additionalDetails && (
+                              <div className="pt-1 border-t border-white/5">
+                                <span className="text-white/40 block text-[10px]">Detalles adicionales del usuario:</span>
+                                <p className="italic text-white/90 bg-white/5 p-1.5 rounded-lg mt-0.5">
+                                  "{activeTicket.additionalDetails}"
+                                </p>
+                              </div>
+                            )}
+
+                            {activeTicket.status === 'en_proceso' && (
+                              <div className="pt-1 text-[10px] text-cyan-300 flex items-center gap-1">
+                                <Shield className="w-3 h-3 shrink-0" />
+                                <span>Atendido actualmente por: <strong>{activeTicket.assignedStaffName || 'Staff'}</strong> ({activeTicket.assignedStaffRole || 'Soporte'})</span>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Live Chat Message Feed */}
+                          <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-[#001224] no-scrollbar">
+                            {(!linkedRoom || linkedRoom.messages.length === 0) ? (
+                              <div className="p-8 text-center text-white/50 text-xs space-y-2">
+                                <MessageSquare className="w-8 h-8 mx-auto text-white/30" />
+                                <p>No hay mensajes aún en la conversación de este ticket.</p>
+                                <p className="text-[11px] text-cyan-300">
+                                  Escribe un mensaje abajo para iniciar la atención directa con el usuario.
+                                </p>
+                              </div>
+                            ) : (
+                              linkedRoom.messages.map(msg => {
+                                const isMe = msg.senderId === currentUser.id;
+                                const isSystem = msg.senderId === 'system';
+
+                                if (isSystem) {
+                                  return (
+                                    <div key={msg.id} className="flex justify-center my-2">
+                                      <div className="bg-amber-500/10 border border-amber-500/20 text-amber-300 text-[10px] px-3 py-1 rounded-xl text-center flex items-center gap-1.5 max-w-sm">
+                                        <ShieldAlert className="w-3 h-3 shrink-0 text-amber-400" />
+                                        <span>{msg.text}</span>
+                                      </div>
+                                    </div>
+                                  );
+                                }
+
+                                return (
+                                  <div
+                                    key={msg.id}
+                                    className={`flex gap-2 items-end ${isMe ? 'justify-end' : 'justify-start'}`}
+                                  >
+                                    {!isMe && (
+                                      <img
+                                        src={msg.senderAvatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80'}
+                                        alt={msg.senderName}
+                                        className="w-6 h-6 rounded-full object-cover shrink-0 border border-white/20"
+                                      />
+                                    )}
+
+                                    <div
+                                      className={`max-w-[78%] rounded-2xl px-3.5 py-2 text-xs leading-relaxed shadow ${
+                                        isMe
+                                          ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white rounded-br-xs'
+                                          : 'bg-white/10 text-white rounded-bl-xs border border-white/10'
+                                      }`}
+                                    >
+                                      <div className="flex items-center gap-1.5 mb-0.5 text-[10px] opacity-80">
+                                        <span className="font-bold">{msg.senderName}</span>
+                                        {msg.senderStaffRole && (
+                                          <span className="px-1 py-0.2 rounded text-[8px] font-black bg-amber-400 text-neutral-950 uppercase">
+                                            {msg.senderStaffRole}
+                                          </span>
+                                        )}
+                                        <span className="ml-auto text-[9px]">{msg.timestamp}</span>
+                                      </div>
+                                      <p className="break-words">{msg.text}</p>
+                                    </div>
+
+                                    {isMe && (
+                                      <img
+                                        src={currentUser.avatar}
+                                        alt={currentUser.name}
+                                        className="w-6 h-6 rounded-full object-cover shrink-0 border border-cyan-400/50"
+                                      />
+                                    )}
+                                  </div>
+                                );
+                              })
+                            )}
+                          </div>
+
+                          {/* Quick Staff Response Canned Buttons */}
+                          <div className="px-3 py-1.5 bg-[#00172e] border-t border-white/10 flex items-center gap-1.5 overflow-x-auto no-scrollbar shrink-0">
+                            <span className="text-[10px] text-white/50 shrink-0 font-bold">Respuestas rápidas:</span>
+                            <button
+                              type="button"
+                              onClick={() => handleStaffSendMessage('👋 Hola, estamos atendiendo tu caso desde el equipo de soporte de La Tierrita. ¿Podrías brindarnos más información?')}
+                              className="px-2 py-0.5 bg-white/10 hover:bg-white/20 text-white/80 hover:text-white rounded-lg text-[10px] whitespace-nowrap transition-colors cursor-pointer"
+                            >
+                              👋 Saludo inicial
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleStaffSendMessage('✅ Hemos revisado tu reporte y tomado las acciones pertinentes. El caso ha sido solucionado.')}
+                              className="px-2 py-0.5 bg-white/10 hover:bg-white/20 text-white/80 hover:text-white rounded-lg text-[10px] whitespace-nowrap transition-colors cursor-pointer"
+                            >
+                              ✅ Caso atendido
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleStaffSendMessage('⚠️ Hemos aplicado las medidas de moderación necesarias conforme a las normas de convivencia comunitaria.')}
+                              className="px-2 py-0.5 bg-white/10 hover:bg-white/20 text-white/80 hover:text-white rounded-lg text-[10px] whitespace-nowrap transition-colors cursor-pointer"
+                            >
+                              ⚠️ Medidas de moderación
+                            </button>
+                          </div>
+
+                          {/* Interactive Staff Input Bar */}
+                          <form
+                            onSubmit={(e) => {
+                              e.preventDefault();
+                              handleStaffSendMessage();
+                            }}
+                            className="p-3 bg-[#001c38] border-t border-white/10 flex items-center gap-2 shrink-0"
+                          >
+                            <input
+                              type="text"
+                              value={staffChatMessageText}
+                              onChange={(e) => setStaffChatMessageText(e.target.value)}
+                              placeholder={`Escribir respuesta a ${activeTicket.userName}...`}
+                              className="flex-1 bg-white/10 text-white placeholder-white/40 text-xs px-3.5 py-2.5 rounded-xl border border-white/15 focus:outline-none focus:border-cyan-400"
+                            />
+                            <button
+                              type="submit"
+                              disabled={!staffChatMessageText.trim()}
+                              className="px-4 py-2.5 bg-cyan-400 hover:bg-cyan-300 disabled:opacity-40 text-neutral-950 font-black rounded-xl text-xs flex items-center gap-1.5 transition-all shadow-md cursor-pointer"
+                            >
+                              <Send className="w-3.5 h-3.5" />
+                              <span className="hidden sm:inline">Enviar</span>
+                            </button>
+                          </form>
+                        </div>
+                      );
+                    })() : (
+                      /* View 2: Tickets Table / List with Category & Status Filters */
+                      <div className="space-y-4">
+                        {/* Ticket Type Filter Badges */}
+                        <div className="flex flex-wrap items-center justify-between gap-2 bg-white/5 p-2 rounded-2xl border border-white/10">
+                          <div className="flex flex-wrap items-center gap-1">
+                            <button
+                              onClick={() => setTicketTypeFilter('ALL')}
+                              className={`px-2.5 py-1 rounded-lg text-xs font-extrabold transition-all ${
+                                ticketTypeFilter === 'ALL'
+                                  ? 'bg-white text-neutral-950 shadow'
+                                  : 'text-white/70 hover:bg-white/10'
+                              }`}
+                            >
+                              Todos ({supportTickets.length})
+                            </button>
+                            <button
+                              onClick={() => setTicketTypeFilter('TS')}
+                              className={`px-2.5 py-1 rounded-lg text-xs font-extrabold transition-all ${
+                                ticketTypeFilter === 'TS'
+                                  ? 'bg-amber-400 text-neutral-950 shadow'
+                                  : 'text-white/70 hover:bg-white/10'
+                              }`}
+                            >
+                              Soporte (TS)
+                            </button>
+                            <button
+                              onClick={() => setTicketTypeFilter('TRU')}
+                              className={`px-2.5 py-1 rounded-lg text-xs font-extrabold transition-all ${
+                                ticketTypeFilter === 'TRU'
+                                  ? 'bg-rose-500 text-white shadow'
+                                  : 'text-white/70 hover:bg-white/10'
+                              }`}
+                            >
+                              Usuario (TRU)
+                            </button>
+                            <button
+                              onClick={() => setTicketTypeFilter('TRP')}
+                              className={`px-2.5 py-1 rounded-lg text-xs font-extrabold transition-all ${
+                                ticketTypeFilter === 'TRP'
+                                  ? 'bg-red-500 text-white shadow'
+                                  : 'text-white/70 hover:bg-white/10'
+                              }`}
+                            >
+                              Publicación (TRP)
+                            </button>
+                            <button
+                              onClick={() => setTicketTypeFilter('TRH')}
+                              className={`px-2.5 py-1 rounded-lg text-xs font-extrabold transition-all ${
+                                ticketTypeFilter === 'TRH'
+                                  ? 'bg-orange-500 text-white shadow'
+                                  : 'text-white/70 hover:bg-white/10'
+                              }`}
+                            >
+                              Historia (TRH)
+                            </button>
+                            <button
+                              onClick={() => setTicketTypeFilter('TRM')}
+                              className={`px-2.5 py-1 rounded-lg text-xs font-extrabold transition-all ${
+                                ticketTypeFilter === 'TRM'
+                                  ? 'bg-pink-500 text-white shadow'
+                                  : 'text-white/70 hover:bg-white/10'
+                              }`}
+                            >
+                              Mensaje (TRM)
+                            </button>
+                            <button
+                              onClick={() => setTicketTypeFilter('TRG')}
+                              className={`px-2.5 py-1 rounded-lg text-xs font-extrabold transition-all ${
+                                ticketTypeFilter === 'TRG'
+                                  ? 'bg-purple-500 text-white shadow'
+                                  : 'text-white/70 hover:bg-white/10'
+                              }`}
+                            >
+                              Grupo (TRG)
+                            </button>
+                          </div>
+
+                          {/* Status filter with counts */}
+                          <div className="flex items-center gap-1 bg-black/30 p-1 rounded-xl">
+                            <button
+                              onClick={() => setTicketStatusFilter('pendientes')}
+                              className={`px-2.5 py-0.5 rounded text-[10px] font-bold transition-all ${
+                                ticketStatusFilter === 'pendientes'
+                                  ? 'bg-amber-400/30 text-amber-300 border border-amber-400/40 shadow-xs'
+                                  : 'text-white/60 hover:text-white'
+                              }`}
+                            >
+                              Pendientes ({supportTickets.filter(t => t.status === 'pendientes').length})
+                            </button>
+                            <button
+                              onClick={() => setTicketStatusFilter('en_proceso')}
+                              className={`px-2.5 py-0.5 rounded text-[10px] font-bold transition-all ${
+                                ticketStatusFilter === 'en_proceso'
+                                  ? 'bg-cyan-400/30 text-cyan-300 border border-cyan-400/40 shadow-xs'
+                                  : 'text-white/60 hover:text-white'
+                              }`}
+                            >
+                              En Proceso ({supportTickets.filter(t => t.status === 'en_proceso').length})
+                            </button>
+                            <button
+                              onClick={() => setTicketStatusFilter('resueltos')}
+                              className={`px-2.5 py-0.5 rounded text-[10px] font-bold transition-all ${
+                                ticketStatusFilter === 'resueltos'
+                                  ? 'bg-emerald-400/30 text-emerald-300 border border-emerald-400/40 shadow-xs'
+                                  : 'text-white/60 hover:text-white'
+                              }`}
+                            >
+                              Resueltos ({supportTickets.filter(t => t.status === 'resueltos').length})
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Tickets List */}
+                        <div className="space-y-3">
+                          {filteredTickets.length === 0 ? (
+                            <div className="p-8 text-center text-white/50 bg-white/5 border border-white/10 rounded-2xl text-xs space-y-1">
+                              <HelpCircle className="w-8 h-8 text-white/20 mx-auto" />
+                              <p className="font-semibold text-white/70">No hay tickets registrados</p>
+                              <p className="text-[11px]">En esta categoría ({ticketTypeFilter}) con estado "{ticketStatusFilter}".</p>
+                            </div>
+                          ) : (
+                            filteredTickets.map(t => {
+                              return (
+                                <div
+                                  key={t.id}
+                                  className="p-3.5 bg-white/5 border border-white/10 rounded-2xl space-y-2.5 hover:bg-white/[0.08] transition-all shadow-sm"
+                                >
+                                  {/* Ticket Header */}
+                                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-[11px] font-black px-2.5 py-0.5 bg-black/40 text-amber-300 rounded-md border border-amber-400/30 font-mono">
+                                        {t.code}
+                                      </span>
+                                      <span className="text-xs font-bold text-white">{t.subject}</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full border ${
+                                        t.status === 'resueltos'
+                                          ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                                          : t.status === 'en_proceso'
+                                          ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40'
+                                          : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                                      }`}>
+                                        {t.status === 'resueltos' ? 'Resuelto' : t.status === 'en_proceso' ? 'En Proceso' : 'Pendiente'}
+                                      </span>
+                                      <span className="text-[10px] text-white/50">{t.date}</span>
+                                    </div>
+                                  </div>
+
+                                  {/* Ticket Description */}
+                                  <p className="text-xs text-white/80 leading-relaxed pl-1">
+                                    {t.description}
+                                  </p>
+
+                                  {/* Additional details if available */}
+                                  {t.additionalDetails && (
+                                    <div className="p-2 bg-black/20 rounded-xl border border-white/5 text-[11px] text-white/70 italic">
+                                      <span className="text-[10px] font-bold text-white/40 block not-italic">Detalles adicionales:</span>
+                                      "{t.additionalDetails}"
+                                    </div>
+                                  )}
+
+                                  {/* Ticket Footer / Metadata & Actions */}
+                                  <div className="flex items-center justify-between pt-1 text-[11px] border-t border-white/10 gap-2 flex-wrap">
+                                    <div className="flex items-center gap-2">
+                                      <img
+                                        src={t.userAvatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80'}
+                                        alt={t.userName}
+                                        className="w-5 h-5 rounded-full object-cover"
+                                      />
+                                      <span className="text-white/70 font-medium">
+                                        Reportador: <strong className="text-white">{t.userName}</strong> (@{t.userUsername})
+                                      </span>
+                                      {t.reportedUsername && (
+                                        <span className="text-rose-300 text-[10px] bg-rose-500/10 px-1.5 py-0.2 rounded border border-rose-500/20">
+                                          Reportado: @{t.reportedUsername}
+                                        </span>
+                                      )}
+                                    </div>
+
+                                    {/* Action Buttons */}
+                                    <div className="flex items-center gap-1.5 flex-wrap ml-auto">
+                                      {/* Open embedded chat inside staff panel */}
+                                      <button
+                                        onClick={() => setSelectedTicketForStaffChat(t)}
+                                        className="px-2.5 py-1 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold rounded-lg text-[10px] flex items-center gap-1 cursor-pointer transition-all shadow-sm"
+                                        title="Abrir chat para responder al usuario"
+                                      >
+                                        <MessageSquare className="w-3 h-3" />
+                                        <span>Abrir Chat con Usuario</span>
+                                      </button>
+
+                                      {t.status === 'pendientes' && (
+                                        <button
+                                          onClick={() => updateTicketStatus(t.id, 'en_proceso')}
+                                          className="px-2.5 py-1 bg-cyan-400 hover:bg-cyan-300 text-neutral-950 font-bold rounded-lg text-[10px] flex items-center gap-1 cursor-pointer transition-all shadow-sm"
+                                          title="Asignar y poner en proceso"
+                                        >
+                                          <Shield className="w-3 h-3" />
+                                          <span>Tomar Caso</span>
+                                        </button>
+                                      )}
+
+                                      {t.status === 'en_proceso' && (
+                                        <button
+                                          onClick={() => updateTicketStatus(t.id, 'resueltos', 'Ticket resuelto por el equipo de Soporte.')}
+                                          className="px-2.5 py-1 bg-emerald-500 hover:bg-emerald-400 text-neutral-950 font-bold rounded-lg text-[10px] flex items-center gap-1 cursor-pointer transition-all shadow-sm"
+                                          title="Marcar como resuelto"
+                                        >
+                                          <CheckCircle className="w-3 h-3" />
+                                          <span>Marcar Resuelto</span>
+                                        </button>
+                                      )}
+
+                                      {t.status === 'resueltos' && (
+                                        <button
+                                          onClick={() => updateTicketStatus(t.id, 'en_proceso')}
+                                          className="px-2.5 py-1 bg-amber-400 hover:bg-amber-300 text-neutral-950 font-bold rounded-lg text-[10px] flex items-center gap-1 cursor-pointer transition-all shadow-sm"
+                                          title="Reabrir caso"
+                                        >
+                                          <RotateCcw className="w-3 h-3" />
+                                          <span>Reabrir Caso</span>
+                                        </button>
+                                      )}
+
+                                      {/* Deletion: Strictly ADMIN only */}
+                                      {currentUser?.staffRole === 'ADMIN' && (
+                                        <button
+                                          onClick={() => {
+                                            if (window.confirm(`¿Estás seguro de que deseas eliminar definitivamente el ticket ${t.code}? Esta acción es irreversible.`)) {
+                                              deleteSupportTicket(t.id);
+                                            }
+                                          }}
+                                          className="px-2 py-1 bg-rose-600/70 hover:bg-rose-600 text-white font-bold rounded-lg text-[10px] flex items-center gap-1 cursor-pointer transition-all shadow-sm"
+                                          title="Eliminar ticket (Solo ADMIN)"
+                                        >
+                                          <Trash2 className="w-3 h-3" />
+                                          <span className="hidden sm:inline">Eliminar</span>
+                                        </button>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 

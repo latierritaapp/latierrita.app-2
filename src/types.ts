@@ -156,6 +156,7 @@ export type TicketType = 'TS' | 'TRU' | 'TRP' | 'TRH' | 'TRM' | 'TRG';
 
 export interface SupportTicket {
   id: string;
+  userId?: string;
   code: string;
   type: TicketType;
   userName: string;
@@ -167,6 +168,19 @@ export interface SupportTicket {
   priority: 'Baja' | 'Media' | 'Alta';
   date: string;
   response?: string;
+  // Specific report details:
+  reportedUsername?: string;
+  reportedUserId?: string;
+  reportedItemTitle?: string;
+  reporterName?: string;
+  reporterUsername?: string;
+  reasonTitle?: string;
+  reasonText?: string;
+  additionalDetails?: string;
+  chatRoomId?: string;
+  assignedStaffId?: string;
+  assignedStaffName?: string;
+  assignedStaffRole?: StaffRole;
 }
 
 export interface VerificationRequest {
@@ -235,6 +249,7 @@ export interface ChatMessage {
   };
   audioUrl?: string;
   audioDuration?: number; // duration in seconds
+  senderStaffRole?: StaffRole;
 }
 
 export type ChatType = 'general' | 'city' | 'private' | 'group';
@@ -255,6 +270,28 @@ export interface ChatRoom {
   messages: ChatMessage[];
   unreadCount?: number;
   status?: 'active' | 'pending_invite' | 'rejected';
+  // Ticket chat enhancements:
+  isTicketChat?: boolean;
+  ticketId?: string;
+  ticketCode?: string;
+  ticketType?: TicketType;
+  ticketStatus?: 'pendientes' | 'en_proceso' | 'resueltos';
+  ticketLockedForUser?: boolean;
+  ticketReportedUsername?: string;
+  ticketReporterName?: string;
+  ticketReporterUsername?: string;
+  ticketReasonTitle?: string;
+  ticketReasonText?: string;
+  ticketSubject?: string;
+  ticketAdditionalDetails?: string;
+  ticketDate?: string;
+  ticketDetails?: {
+    reportedUsername?: string;
+    reporterName: string;
+    reason: string;
+    additionalDetails?: string;
+    date: string;
+  };
 }
 
 export interface GroupInvite {

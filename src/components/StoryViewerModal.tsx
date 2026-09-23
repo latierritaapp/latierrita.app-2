@@ -81,6 +81,7 @@ export const StoryViewerModal: React.FC = () => {
   const timerRef = useRef<number | null>(null);
 
   const handleUsernameClick = () => {
+    if (!currentStory) return;
     // 1. Cerrar el visor de historias de forma limpia
     setActiveStoryIndex(null);
     setStoryViewerRestriction(null);

@@ -107,7 +107,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userToDisplay }) => {
         return (
           (postUserId && targetId && postUserId === targetId) ||
           (postUsername && targetUsername && postUsername === targetUsername) ||
-          (p.email && targetEmail && p.email.toLowerCase() === targetEmail)
+          ((p as any).email && targetEmail && (p as any).email.toLowerCase() === targetEmail)
         );
       })
   ).filter(p => !p.isStaffAd);

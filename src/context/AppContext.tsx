@@ -19,7 +19,8 @@ import {
   StaffMember,
   DeletedAccount,
   StaffRole,
-  StartupAdConfig
+  StartupAdConfig,
+  TicketType
 } from '../types';
 import {
   INITIAL_CURRENT_USER,
@@ -77,6 +78,7 @@ interface AppContextType {
     sponsorName?: string;
     disableComments?: boolean;
     hideLikes?: boolean;
+    hideLocation?: boolean;
     taggedUsernames?: string[];
   }) => void;
   myProfilePosts: PostItem[];
@@ -98,8 +100,26 @@ interface AppContextType {
 
   // Support & Administration
   supportTickets: SupportTicket[];
-  createSupportTicket: (type: TicketType, subject: string, description: string, priority?: 'Baja' | 'Media' | 'Alta') => Promise<string>;
-  updateTicketStatus: (id: string, status: 'pendientes' | 'en_proceso' | 'resueltos', response?: string) => void;
+  createSupportTicket: (
+    type: TicketType,
+    subject: string,
+    description: string,
+    priority?: 'Baja' | 'Media' | 'Alta',
+    metadata?: {
+      reportedUsername?: string;
+      reportedUserId?: string;
+      reportedItemTitle?: string;
+      reasonTitle?: string;
+      reasonText?: string;
+      additionalDetails?: string;
+    }
+  ) => Promise<string>;
+  updateTicketStatus: (
+    id: string,
+    status: 'pendientes' | 'en_proceso' | 'resueltos',
+    response?: string,
+    options?: { assignedStaffName?: string; assignToMe?: boolean }
+  ) => void;
   deleteSupportTicket: (id: string) => void;
   verificationRequests: VerificationRequest[];
   respondVerification: (id: string, approve: boolean) => void;
@@ -143,10 +163,40 @@ interface AppContextType {
   // Reports
   reports: ContentReport[];
   isReportModalOpen: boolean;
-  reportTarget: { id: string; type: 'message' | 'user' | 'post' | 'story'; title: string; chatId?: string } | null;
-  openReportModal: (target: { id: string; type: 'message' | 'user' | 'post' | 'story'; title: string; chatId?: string }) => void;
+  reportTarget: {
+    id: string;
+    type: 'message' | 'user' | 'post' | 'story' | 'group' | 'support';
+    title: string;
+    chatId?: string;
+    reportedUserId?: string;
+    reportedUserName?: string;
+    initialTicketType?: TicketType;
+  } | null;
+  openReportModal: (target: {
+    id: string;
+    type: 'message' | 'user' | 'post' | 'story' | 'group' | 'support';
+    title: string;
+    chatId?: string;
+    reportedUserId?: string;
+    reportedUserName?: string;
+    initialTicketType?: TicketType;
+  }) => void;
   closeReportModal: () => void;
-  submitReport: (reason: 'spam' | 'inappropriate' | 'harassment' | 'scam' | 'other', details: string) => void;
+  submitReport: (reason: string, details: string) => void;
+  submitTicketReport: (
+    type: TicketType,
+    reasonTitle: string,
+    reasonText: string,
+    additionalDetails?: string,
+    targetItem?: {
+      id?: string;
+      type?: string;
+      title?: string;
+      chatId?: string;
+      reportedUserId?: string;
+      reportedUserName?: string;
+    }
+  ) => Promise<string>;
 
   // Notifications
   notifications: AppNotification[];
@@ -671,9 +721,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [reportTarget, setReportTarget] = useState<{
     id: string;
-    type: 'message' | 'user' | 'post' | 'story';
+    type: 'message' | 'user' | 'post' | 'story' | 'group' | 'support';
     title: string;
     chatId?: string;
+    reportedUserId?: string;
+    reportedUserName?: string;
+    initialTicketType?: TicketType;
   } | null>(null);
 
   // Notifications
@@ -1457,18 +1510,80 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, []);
 
   // Tickets actions
-  const updateTicketStatus = async (id: string, status: 'pendientes' | 'en_proceso' | 'resueltos', response?: string) => {
+  const updateTicketStatus = async (
+    id: string,
+    status: 'pendientes' | 'en_proceso' | 'resueltos',
+    response?: string,
+    options?: { assignedStaffName?: string; assignToMe?: boolean }
+  ) => {
     const target = supportTickets.find(t => t.id === id);
     if (!target) return;
+
+    const assignedStaffId = (status === 'en_proceso' || options?.assignToMe) ? (target.assignedStaffId || currentUser.id) : target.assignedStaffId;
+    const assignedStaffName = (status === 'en_proceso' || options?.assignToMe) ? (options?.assignedStaffName || target.assignedStaffName || currentUser.name) : target.assignedStaffName;
+    const assignedStaffRole = (status === 'en_proceso' || options?.assignToMe) ? (target.assignedStaffRole || currentUser.staffRole) : target.assignedStaffRole;
+
+    const updatePayload: Record<string, any> = {
+      status,
+      response: response || target.response || ''
+    };
+
+    if (assignedStaffId) updatePayload.assignedStaffId = assignedStaffId;
+    if (assignedStaffName) updatePayload.assignedStaffName = assignedStaffName;
+    if (assignedStaffRole) updatePayload.assignedStaffRole = assignedStaffRole;
+
     try {
-      await updateDoc(doc(db, 'support_tickets', id), {
-        status,
-        response: response || target.response || ''
-      });
+      await updateDoc(doc(db, 'support_tickets', id), updatePayload);
+      setSupportTickets(prev => prev.map(t => t.id === id ? { ...t, ...updatePayload } : t));
+
+      // Synchronize linked ChatRoom
+      const roomId = target.chatRoomId;
+      const targetRoom = chatRooms.find(r => r.id === roomId || r.ticketCode === target.code || r.ticketId === id);
+
+      if (targetRoom) {
+        const isLocked = status === 'pendientes';
+        let statusMessageText = '';
+
+        if (status === 'en_proceso') {
+          statusMessageText = `👨‍💼 El agente ${assignedStaffName || currentUser.name} (${assignedStaffRole || currentUser.staffRole}) ha tomado tu caso (${target.code}). El chat ha sido habilitado para que puedas comunicarte con el equipo de soporte.`;
+        } else if (status === 'resueltos') {
+          statusMessageText = `✅ El caso (${target.code}) ha sido marcado como Resuelto por ${currentUser.name}. Si requieres más asistencia puedes responder a este chat para reabrir tu caso.`;
+        } else if (status === 'pendientes') {
+          statusMessageText = `⏳ El caso (${target.code}) está actualmente en estado Pendiente de asignación.`;
+        }
+
+        const newMsg: ChatMessage = {
+          id: `msg-status-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          senderId: 'system',
+          senderName: 'Soporte La Tierrita',
+          senderAvatar: 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=200&auto=format&fit=crop&q=80',
+          text: statusMessageText,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          createdAt: Date.now(),
+          isEncrypted: true,
+          encryptedHash: 'SHA256:status-update'
+        };
+
+        const updatedRoom: ChatRoom = {
+          ...targetRoom,
+          ticketStatus: status,
+          ticketLockedForUser: isLocked,
+          messages: [...targetRoom.messages, newMsg]
+        };
+
+        setChatRooms(prev => prev.map(r => r.id === targetRoom.id ? updatedRoom : r));
+
+        try {
+          await setDoc(doc(db, 'chat_rooms', targetRoom.id), updatedRoom, { merge: true });
+        } catch (e) {
+          console.warn('Failed to update ticket chat room in Firestore:', e);
+        }
+      }
+
       triggerPlushNotification({
         type: 'system',
         title: 'Estado de Ticket Actualizado',
-        message: `El ticket ha sido cambiado a "${status}".`
+        message: `El ticket ${target.code} ha sido cambiado a "${status === 'pendientes' ? 'Pendiente' : status === 'en_proceso' ? 'En Proceso' : 'Resuelto'}".`
       });
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `support_tickets/${id}`);
@@ -1476,12 +1591,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const deleteSupportTicket = async (id: string) => {
+    // Only ADMIN role is authorized to delete tickets
+    if (currentUser.staffRole !== 'ADMIN') {
+      triggerPlushNotification({
+        type: 'system',
+        title: 'Acción no permitida',
+        message: 'Únicamente los administradores (ADMIN) tienen autorización para eliminar tickets.'
+      });
+      return;
+    }
+
     try {
+      const target = supportTickets.find(t => t.id === id);
       await deleteDoc(doc(db, 'support_tickets', id));
+      setSupportTickets(prev => prev.filter(t => t.id !== id));
+
+      if (target?.chatRoomId) {
+        setChatRooms(prev => prev.filter(r => r.id !== target.chatRoomId && r.ticketCode !== target.code));
+        try {
+          await deleteDoc(doc(db, 'chat_rooms', target.chatRoomId));
+        } catch {}
+      }
+
       triggerPlushNotification({
         type: 'system',
         title: 'Ticket Eliminado',
-        message: 'El ticket ha sido eliminado definitivamente del sistema.'
+        message: `El ticket ${target?.code || ''} ha sido eliminado definitivamente por el Administrador.`
       });
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, `support_tickets/${id}`);
@@ -1492,18 +1627,124 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     type: TicketType,
     subject: string,
     description: string,
-    priority: 'Baja' | 'Media' | 'Alta' = 'Media'
+    priority: 'Baja' | 'Media' | 'Alta' = 'Media',
+    metadata?: {
+      reportedUsername?: string;
+      reportedUserId?: string;
+      reportedItemTitle?: string;
+      reasonTitle?: string;
+      reasonText?: string;
+      additionalDetails?: string;
+    }
   ): Promise<string> => {
     try {
-      // 1. Query existing tickets of this specific type to calculate the sequential suffix
-      const ticketsRef = collection(db, 'support_tickets');
-      const q = query(ticketsRef, where('type', '==', type));
-      const snapshot = await getDocs(q);
-      const nextNum = snapshot.size + 1;
+      // 1. Calculate sequential code based on existing tickets of this type
+      let highestNum = 0;
+      supportTickets.filter(t => t.type === type).forEach(t => {
+        const match = t.code?.match(/-(\d+)$/);
+        if (match) {
+          const val = parseInt(match[1], 10);
+          if (!isNaN(val) && val > highestNum) highestNum = val;
+        }
+      });
+
+      try {
+        const ticketsRef = collection(db, 'support_tickets');
+        const q = query(ticketsRef, where('type', '==', type));
+        const snapshot = await getDocs(q);
+        snapshot.forEach((docSnap: any) => {
+          const data = docSnap.data();
+          const match = data?.code?.match(/-(\d+)$/);
+          if (match) {
+            const val = parseInt(match[1], 10);
+            if (!isNaN(val) && val > highestNum) highestNum = val;
+          }
+        });
+      } catch (e) {
+        console.warn('Could not query Firestore for ticket sequential count, using local state count', e);
+      }
+
+      const nextNum = highestNum + 1;
       const code = `${type}-${String(nextNum).padStart(4, '0')}`;
 
-      // 2. Build ticket object
-      const newTicket = {
+      // 2. Format details and build private ticket chat in user inbox
+      const dateFormatted = new Date().toLocaleString('es-ES', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+
+      const ticketChatId = `chat-ticket_${code.toLowerCase().replace(/[^a-z0-9]/g, '_')}_${currentUser.id}`;
+
+      const reportedUserDisplay = metadata?.reportedUsername || (metadata?.reportedItemTitle ? metadata.reportedItemTitle : 'N/A (Soporte)');
+      const reporterDisplay = `${currentUser.name || currentUser.username} (@${currentUser.username})`;
+      const reasonDisplay = `${metadata?.reasonTitle || subject} - ${metadata?.reasonText || description}`;
+      const additionalDetailsDisplay = metadata?.additionalDetails?.trim() || 'Ninguno';
+
+      const initialMessageSummary = `📋 Ticket #${code} registrado con éxito.
+
+• Nombre de usuario del reportado: ${reportedUserDisplay}
+• Nombre del reportador: ${reporterDisplay}
+• Motivo: ${reasonDisplay}
+• Detalles adicionales: ${additionalDetailsDisplay}
+• Fecha: ${dateFormatted}
+
+⏳ Estado: Pendiente de asignación.
+Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (Admin o Soporte) tome tu caso.`;
+
+      const newTicketRoom: ChatRoom = {
+        id: ticketChatId,
+        type: 'private',
+        name: `${code} - Soporte La Tierrita`,
+        avatar: 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=200&auto=format&fit=crop&q=80',
+        members: [currentUser.id, 'user-staff'],
+        admins: ['user-staff'],
+        createdBy: currentUser.id,
+        createdAt: new Date().toISOString().split('T')[0],
+        isTicketChat: true,
+        ticketCode: code,
+        ticketType: type,
+        ticketStatus: 'pendientes',
+        ticketLockedForUser: true,
+        ticketDetails: {
+          reportedUsername: reportedUserDisplay,
+          reporterName: reporterDisplay,
+          reason: reasonDisplay,
+          additionalDetails: additionalDetailsDisplay,
+          date: dateFormatted
+        },
+        messages: [
+          {
+            id: `msg-ticket-init-${Date.now()}`,
+            senderId: 'system',
+            senderName: 'Soporte La Tierrita',
+            senderAvatar: 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=200&auto=format&fit=crop&q=80',
+            text: initialMessageSummary,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            createdAt: Date.now(),
+            isEncrypted: true,
+            encryptedHash: 'SHA256:ticket-start'
+          }
+        ]
+      };
+
+      // 3. Add to chatRooms local state and persist to Firestore
+      setChatRooms(prev => {
+        const filtered = prev.filter(r => r.id !== ticketChatId && r.ticketCode !== code);
+        return [newTicketRoom, ...filtered];
+      });
+
+      try {
+        await setDoc(doc(db, 'chat_rooms', ticketChatId), newTicketRoom);
+      } catch (e) {
+        console.warn('Failed to write ticket chat room in Firestore:', e);
+      }
+
+      // 4. Build ticket object for support_tickets
+      const newTicket: Omit<SupportTicket, 'id'> = {
+        userId: currentUser.id,
         code,
         type,
         userName: currentUser.name || currentUser.username || 'Usuario',
@@ -1511,13 +1752,34 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         userAvatar: currentUser.avatar || '',
         subject,
         description,
-        status: 'pendientes' as const,
+        status: 'pendientes',
         priority,
-        date: new Date().toLocaleString()
+        date: dateFormatted,
+        reportedUsername: reportedUserDisplay,
+        reportedUserId: metadata?.reportedUserId,
+        reportedItemTitle: metadata?.reportedItemTitle,
+        reporterName: currentUser.name || currentUser.username,
+        reporterUsername: currentUser.username,
+        reasonTitle: metadata?.reasonTitle || subject,
+        reasonText: metadata?.reasonText || description,
+        additionalDetails: metadata?.additionalDetails,
+        chatRoomId: ticketChatId
       };
 
-      // 3. Add to Firestore
-      await addDoc(ticketsRef, newTicket);
+      const docRef = await addDoc(collection(db, 'support_tickets'), newTicket);
+      const createdTicket: SupportTicket = {
+        ...newTicket,
+        id: docRef.id
+      };
+
+      setSupportTickets(prev => [createdTicket, ...prev]);
+
+      // Update room with ticketId
+      newTicketRoom.ticketId = docRef.id;
+      setChatRooms(prev => prev.map(r => r.id === ticketChatId ? { ...r, ticketId: docRef.id } : r));
+      try {
+        await setDoc(doc(db, 'chat_rooms', ticketChatId), { ...newTicketRoom, ticketId: docRef.id }, { merge: true });
+      } catch {}
 
       return code;
     } catch (error) {
@@ -3150,7 +3412,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Reports
-  const openReportModal = (target: { id: string; type: 'message' | 'user' | 'post' | 'story'; title: string; chatId?: string }) => {
+  const openReportModal = (target: {
+    id: string;
+    type: 'message' | 'user' | 'post' | 'story' | 'group' | 'support';
+    title: string;
+    chatId?: string;
+    reportedUserId?: string;
+    reportedUserName?: string;
+    initialTicketType?: TicketType;
+  }) => {
     setReportTarget(target);
     setIsReportModalOpen(true);
   };
@@ -3160,48 +3430,55 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setReportTarget(null);
   };
 
-  const submitReport = async (reason: 'spam' | 'inappropriate' | 'harassment' | 'scam' | 'other', details: string) => {
-    if (!reportTarget) return;
-
-    // Map reported content type to TicketType
-    let ticketType: TicketType = 'TRP';
-    let typeLabel = 'Publicación';
-
-    if (reportTarget.type === 'user') {
-      ticketType = 'TRU';
-      typeLabel = 'Usuario';
-    } else if (reportTarget.type === 'post') {
-      ticketType = 'TRP';
-      typeLabel = 'Publicación';
-    } else if (reportTarget.type === 'story') {
-      ticketType = 'TRH';
-      typeLabel = 'Historia';
-    } else if (reportTarget.type === 'message') {
-      ticketType = 'TRM';
-      typeLabel = 'Mensaje';
-    } else if ((reportTarget.type as string) === 'group') {
-      ticketType = 'TRG';
-      typeLabel = 'Grupo';
+  const submitTicketReport = async (
+    type: TicketType,
+    reasonTitle: string,
+    reasonText: string,
+    additionalDetails?: string,
+    targetItem?: {
+      id?: string;
+      type?: string;
+      title?: string;
+      chatId?: string;
+      reportedUserId?: string;
+      reportedUserName?: string;
     }
+  ): Promise<string> => {
+    const item: any = targetItem || reportTarget || {
+      id: `item-${Date.now()}`,
+      title: 'Contenido General',
+      type: 'user'
+    };
 
-    const subject = `Reporte de ${typeLabel}: ${reportTarget.title}`;
-    const description = `Motivo: ${reason}. Detalles: ${details}. ID del ítem reportado: ${reportTarget.id}${
-      reportTarget.chatId ? ` (ID Chat: ${reportTarget.chatId})` : ''
-    }`;
+    const reportedUserDisplay = item.reportedUserName || (item.title?.startsWith('@') ? item.title.replace(/^@/, '') : item.title) || 'Usuario';
+    const subject = `[${type}] ${reasonTitle}: ${reportedUserDisplay}`;
+    const description = `${reasonText}${additionalDetails ? ` - Detalles: ${additionalDetails}` : ''}`;
 
     try {
-      // Create persistent ticket in Firestore with the auto-numbered serial system
-      const code = await createSupportTicket(ticketType, subject, description, 'Media');
+      const code = await createSupportTicket(
+        type,
+        subject,
+        description,
+        'Media',
+        {
+          reportedUsername: reportedUserDisplay,
+          reportedUserId: item.reportedUserId || (item.id as string),
+          reportedItemTitle: item.title,
+          reasonTitle,
+          reasonText,
+          additionalDetails
+        }
+      );
 
       const newReport: ContentReport = {
         id: `report-${Date.now()}`,
         reporterId: currentUser.id,
         reporterName: currentUser.name,
-        reportedItemId: reportTarget.id,
-        reportedType: reportTarget.type,
-        reason,
-        details,
-        chatId: reportTarget.chatId,
+        reportedItemId: (item.id as string) || `item-${Date.now()}`,
+        reportedType: (item.type as any) || 'user',
+        reason: reasonTitle as any,
+        details: `${reasonText}. ${additionalDetails || ''}`,
+        chatId: item.chatId,
         timestamp: new Date().toLocaleString(),
         status: 'pending'
       };
@@ -3211,13 +3488,38 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       triggerPlushNotification({
         type: 'system',
-        title: `Reporte registrado (${code})`,
-        message: 'Gracias por colaborar con la seguridad de la comunidad. Nuestro equipo de moderación revisará el contenido.',
+        title: `Ticket creado (${code})`,
+        message: 'Se ha creado un chat privado en tu bandeja con la etiqueta de tu ticket.',
       });
+
+      return code;
     } catch (e) {
-      console.error('Failed to submit report ticket:', e);
+      console.error('Failed to submit ticket report:', e);
       closeReportModal();
+      throw e;
     }
+  };
+
+  const submitReport = async (reason: string, details: string) => {
+    if (!reportTarget) return;
+
+    // Map reported content type to TicketType
+    let ticketType: TicketType = 'TRP';
+    if (reportTarget.type === 'user') {
+      ticketType = 'TRU';
+    } else if (reportTarget.type === 'post') {
+      ticketType = 'TRP';
+    } else if (reportTarget.type === 'story') {
+      ticketType = 'TRH';
+    } else if (reportTarget.type === 'message') {
+      ticketType = 'TRM';
+    } else if (reportTarget.type === 'group') {
+      ticketType = 'TRG';
+    } else if (reportTarget.type === 'support') {
+      ticketType = 'TS';
+    }
+
+    await submitTicketReport(ticketType, reason, details, '', reportTarget);
   };
 
   // Notification actions
@@ -3322,6 +3624,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         openReportModal,
         closeReportModal,
         submitReport,
+        submitTicketReport,
 
         notifications,
         markNotificationAsRead,

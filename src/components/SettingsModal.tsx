@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { LaTierritaLogo } from './LaTierritaLogo';
+import { TICKET_CATEGORIES } from '../data/ticketData';
 import {
   X,
   Lock,
@@ -48,7 +49,9 @@ export const SettingsModal: React.FC = () => {
     setIsStaffAdminOpen,
     triggerPlushNotification,
     openReportModal,
-    createSupportTicket
+    createSupportTicket,
+    setActiveTab,
+    setChatTypeTab
   } = useApp();
   const { logout, deleteAccount } = useAuth();
 
@@ -78,8 +81,10 @@ export const SettingsModal: React.FC = () => {
     { id: 'silencio', name: 'Silencioso', freq: [] }
   ];
 
-  // 6. Soporte
-  const [supportMessage, setSupportMessage] = useState('');
+  // 6. Soporte (TS)
+  const [selectedTSOptionIdx, setSelectedTSOptionIdx] = useState<number>(0);
+  const [tsAdditionalDetails, setTsAdditionalDetails] = useState('');
+  const [createdTsCode, setCreatedTsCode] = useState<string | null>(null);
   const [supportSent, setSupportSent] = useState(false);
 
   // 7. Reportar
@@ -165,14 +170,26 @@ export const SettingsModal: React.FC = () => {
 
   const handleSendSupport = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!supportMessage.trim()) return;
+    const tsOption = TICKET_CATEGORIES.TS.options[selectedTSOptionIdx] || TICKET_CATEGORIES.TS.options[0];
     try {
-      const code = await createSupportTicket('TS', 'Consulta de Soporte', supportMessage, 'Alta');
+      const code = await createSupportTicket(
+        'TS',
+        tsOption.title,
+        tsOption.text,
+        'Alta',
+        {
+          reportedUsername: 'N/A (Soporte Técnico)',
+          reasonTitle: tsOption.title,
+          reasonText: tsOption.text,
+          additionalDetails: tsAdditionalDetails.trim()
+        }
+      );
+      setCreatedTsCode(code);
       setSupportSent(true);
       triggerPlushNotification({
         type: 'system',
-        title: `Mensaje de soporte enviado (${code})`,
-        message: 'Nos pondremos en contacto contigo a la mayor brevedad.'
+        title: `Ticket Creado (${code})`,
+        message: 'Se ha creado un chat privado en tu bandeja con la información de tu ticket.'
       });
     } catch (err) {
       console.error('Failed to create support ticket:', err);
@@ -181,18 +198,12 @@ export const SettingsModal: React.FC = () => {
 
   const handleSendReport = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!reportIssue.trim()) return;
-    try {
-      const code = await createSupportTicket('TS', `Reporte de problema en la app: ${reportCategory}`, reportIssue, 'Alta');
-      setReportSent(true);
-      triggerPlushNotification({
-        type: 'system',
-        title: `Reporte registrado (${code})`,
-        message: 'Gracias por ayudarnos a mantener segura la comunidad de La Tierrita.'
-      });
-    } catch (err) {
-      console.error('Failed to create report ticket:', err);
-    }
+    handleClose();
+    openReportModal({
+      id: `report-app-${Date.now()}`,
+      type: 'support',
+      title: 'Aplicación La Tierrita (Reporte General)'
+    });
   };
 
   const handleStaffUnlock = (e: React.FormEvent) => {
@@ -836,61 +847,119 @@ export const SettingsModal: React.FC = () => {
           )}
 
           {/* ================================================================
-              6. SUBVIEW: SOPORTE
+              6. SUBVIEW: SOPORTE (TS)
               ================================================================ */}
           {subView === 'support' && (
             <div className="space-y-3">
               {supportSent ? (
-                <div className="p-5 text-center bg-indigo-500/20 rounded-xl border border-indigo-500/40 space-y-2">
-                  <CheckCircle className="w-8 h-8 text-indigo-400 mx-auto" />
-                  <h4 className="text-xs font-black text-indigo-200">
-                    Mensaje Recibido
-                  </h4>
-                  <p className="text-[11px] text-indigo-200/80">
-                    Un asesor del equipo de soporte de La Tierrita responderá a tu solicitud en menos de 24 horas.
+                <div className="p-5 text-center bg-indigo-500/20 rounded-2xl border border-indigo-500/40 space-y-3">
+                  <div className="w-12 h-12 rounded-2xl bg-indigo-500/30 text-indigo-300 mx-auto flex items-center justify-center">
+                    <CheckCircle className="w-7 h-7" />
+                  </div>
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-indigo-300 block">Ticket Creado</span>
+                    <h4 className="text-base font-black text-white font-mono">
+                      {createdTsCode || 'TS-0001'}
+                    </h4>
+                  </div>
+                  <p className="text-[11px] text-indigo-100/80 leading-relaxed max-w-xs mx-auto">
+                    Se ha creado una conversación privada en tu bandeja con la etiqueta <span className="font-mono font-bold text-amber-300">{createdTsCode}</span>.
                   </p>
-                  <button
-                    onClick={() => {
-                      setSupportSent(false);
-                      setSupportMessage('');
-                      setSubView('menu');
-                    }}
-                    className="mt-2 px-3 py-1.5 bg-indigo-500 text-white text-xs font-bold rounded-xl"
-                  >
-                    Volver
-                  </button>
+                  <div className="p-2 bg-indigo-950/50 rounded-xl border border-indigo-400/20 text-[10px] text-indigo-200 text-left">
+                    🔒 <strong>Nota:</strong> El chat se encuentra en espera. Un miembro del equipo de Staff (Admin o Soporte) tomará tu caso para habilitar los mensajes.
+                  </div>
+                  <div className="pt-1 flex items-center justify-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSupportSent(false);
+                        setTsAdditionalDetails('');
+                        setSelectedTSOptionIdx(0);
+                        setSubView('menu');
+                      }}
+                      className="px-3.5 py-2 bg-white/10 hover:bg-white/20 text-white text-xs font-bold rounded-xl transition-colors"
+                    >
+                      Volver
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleClose();
+                        setChatTypeTab('messages');
+                        setActiveTab('chats');
+                      }}
+                      className="px-4 py-2 bg-amber-400 hover:bg-amber-300 text-neutral-950 text-xs font-black rounded-xl transition-all shadow-md"
+                    >
+                      Ir al Chat
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <form onSubmit={handleSendSupport} className="space-y-3">
-                  <p className="text-xs text-white/70">
-                    ¿Tienes dudas sobre cómo usar la app, trámites en España o problemas con tu cuenta? Nuestro equipo está para ayudarte:
+                  <p className="text-xs text-white/80">
+                    Selecciona el motivo de tu consulta para abrir un ticket de soporte directo con nuestro equipo:
                   </p>
 
-                  <div className="p-2.5 bg-white/5 rounded-xl border border-white/10 space-y-0.5">
-                    <span className="text-[10px] font-bold text-white/50 block">Canales oficiales:</span>
-                    <p className="text-xs font-bold text-amber-300">
-                      📧 soporte@latierrita.es
-                    </p>
+                  <div className="space-y-2">
+                    {TICKET_CATEGORIES.TS.options.map((opt, idx) => {
+                      const isSelected = selectedTSOptionIdx === idx;
+                      return (
+                        <label
+                          key={idx}
+                          onClick={() => setSelectedTSOptionIdx(idx)}
+                          className={`block p-2.5 rounded-2xl border transition-all cursor-pointer ${
+                            isSelected
+                              ? 'bg-amber-500/20 border-amber-400 text-white'
+                              : 'bg-white/5 border-white/10 hover:bg-white/10 text-white/80'
+                          }`}
+                        >
+                          <div className="flex items-start gap-2.5">
+                            <input
+                              type="radio"
+                              name="tsOption"
+                              checked={isSelected}
+                              onChange={() => setSelectedTSOptionIdx(idx)}
+                              className="mt-0.5 accent-amber-400 cursor-pointer"
+                            />
+                            <div>
+                              <span className={`text-xs font-black block ${isSelected ? 'text-amber-300' : 'text-white'}`}>
+                                {opt.title}
+                              </span>
+                              <span className="text-[11px] text-white/60 block mt-0.5">
+                                {opt.text}
+                              </span>
+                            </div>
+                          </div>
+                        </label>
+                      );
+                    })}
                   </div>
 
-                  <div className="flex flex-col gap-1">
-                    <label className="text-[10px] font-bold text-white/70">¿En qué podemos ayudarte?</label>
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-[10px] font-bold text-white/70">
+                        Detalles adicionales <span className="text-white/40">(Opcional)</span>
+                      </label>
+                      <span className="text-[10px] font-mono text-white/40">
+                        {tsAdditionalDetails.length}/250
+                      </span>
+                    </div>
                     <textarea
-                      rows={3}
-                      required
-                      value={supportMessage}
-                      onChange={e => setSupportMessage(e.target.value)}
-                      placeholder="Describe tu consulta detalladamente..."
+                      rows={2}
+                      maxLength={250}
+                      value={tsAdditionalDetails}
+                      onChange={e => setTsAdditionalDetails(e.target.value)}
+                      placeholder="Breve explicación de máximo 250 caracteres..."
                       className="w-full px-3 py-2 text-xs bg-white/10 text-white placeholder-white/40 rounded-xl border border-white/20 focus:outline-none focus:ring-1 focus:ring-amber-400 resize-none"
                     />
                   </div>
 
                   <button
                     type="submit"
-                    className="w-full py-2.5 bg-amber-400 hover:bg-amber-300 text-neutral-950 font-black text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-1.5"
+                    className="w-full py-2.5 bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-neutral-950 font-black text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
                   >
                     <Send className="w-3.5 h-3.5" />
-                    <span>Enviar Mensaje a Soporte</span>
+                    <span>Crear Ticket de Soporte (TS)</span>
                   </button>
                 </form>
               )}

@@ -25,6 +25,8 @@ import {
   Smile,
   MoreHorizontal,
   Check,
+  CheckCircle,
+  Shield,
   X,
   ShieldCheck,
   MoreVertical,
@@ -234,7 +236,8 @@ export const ChatsView: React.FC = () => {
     toggleGroupAdmin,
     removeGroupMember,
     addMembersToGroup,
-    notifications
+    notifications,
+    updateTicketStatus
   } = useApp();
 
   const getUserInfo = (userId?: string) => {
@@ -807,6 +810,17 @@ export const ChatsView: React.FC = () => {
     e.preventDefault();
     if (!inputMessage.trim() || !activeChat) return;
 
+    const isStaffMember = currentUser?.staffRole === 'ADMIN' || currentUser?.staffRole === 'Soporte';
+    const isTicketLocked = activeChat.isTicketChat && !isStaffMember && (activeChat.ticketStatus === 'pendientes' || activeChat.ticketLockedForUser);
+    if (isTicketLocked) {
+      triggerPlushNotification({
+        type: 'system',
+        title: 'Ticket en espera',
+        message: 'No podrás enviar mensajes hasta que un miembro del staff (Admin o Soporte) tome tu caso.'
+      });
+      return;
+    }
+
     if ((activeChat.type === 'general' || activeChat.type === 'city') && cooldownTimeLeft > 0) {
       triggerPlushNotification({
         type: 'system',
@@ -814,6 +828,11 @@ export const ChatsView: React.FC = () => {
         message: `Por favor espera ${cooldownTimeLeft}s antes de enviar otro mensaje.`
       });
       return;
+    }
+
+    // If a resolved ticket gets a new message, reopen it to en_proceso
+    if (activeChat.isTicketChat && activeChat.ticketStatus === 'resueltos' && activeChat.ticketId) {
+      updateTicketStatus(activeChat.ticketId, 'en_proceso');
     }
 
     sendMessage(activeChat.id, inputMessage, replyingToMessage || undefined);
@@ -975,9 +994,18 @@ export const ChatsView: React.FC = () => {
               unifiedChatsList.map(room => {
                 const lastMsg = room.messages[room.messages.length - 1];
                 const isGroup = room.type === 'group';
+                const isTicket = room.isTicketChat || !!room.ticketCode;
                 const otherUser = room.type === 'private' ? getOtherUserInPrivateChat(room) : undefined;
-                const displayName = isGroup ? room.name : (otherUser ? otherUser.name : (room.name || 'Chat Privado'));
-                const avatarSrc = isGroup ? (room.avatar || DEFAULT_SILHOUETTE_AVATAR) : (otherUser?.avatar || room.avatar || DEFAULT_SILHOUETTE_AVATAR);
+                const displayName = isTicket
+                  ? `${room.ticketCode || 'TICKET'} · Soporte`
+                  : isGroup
+                  ? room.name
+                  : (otherUser ? otherUser.name : (room.name || 'Chat Privado'));
+                const avatarSrc = isTicket
+                  ? (room.avatar || '/chat_soporte.png')
+                  : isGroup
+                  ? (room.avatar || DEFAULT_SILHOUETTE_AVATAR)
+                  : (otherUser?.avatar || room.avatar || DEFAULT_SILHOUETTE_AVATAR);
 
                 return (
                   <div
@@ -997,16 +1025,16 @@ export const ChatsView: React.FC = () => {
                           src={avatarSrc}
                           alt={displayName}
                           className={`w-12 h-12 object-cover border border-neutral-200 dark:border-neutral-700 ${
-                            isGroup ? 'rounded-2xl' : 'rounded-full'
+                            isTicket ? 'rounded-2xl border-amber-400/40' : isGroup ? 'rounded-2xl' : 'rounded-full'
                           }`}
                           referrerPolicy="no-referrer"
                         />
                         <div
                           className={`absolute -bottom-1 -right-1 rounded-full p-1 text-white ring-2 ring-white dark:ring-neutral-900 ${
-                            isGroup ? 'bg-blue-600' : 'bg-emerald-500'
+                            isTicket ? 'bg-amber-500' : isGroup ? 'bg-blue-600' : 'bg-emerald-500'
                           }`}
                         >
-                          {isGroup ? <Users className="w-2.5 h-2.5" /> : <Lock className="w-2.5 h-2.5" />}
+                          {isTicket ? <ShieldAlert className="w-2.5 h-2.5" /> : isGroup ? <Users className="w-2.5 h-2.5" /> : <Lock className="w-2.5 h-2.5" />}
                         </div>
                       </div>
 
@@ -1024,10 +1052,20 @@ export const ChatsView: React.FC = () => {
                               <span>{getRoomRepliesToMeCount(room)}</span>
                             </span>
                           )}
-                          {room.type === 'private' && (
+                          {!isTicket && room.type === 'private' && (
                             <UserBadges isVerified={otherUser?.isVerified} staffRole={otherUser?.staffRole} />
                           )}
-                          {isGroup ? (
+                          {isTicket ? (
+                            <span className={`text-[10px] px-1.5 py-0.2 rounded font-bold shrink-0 border ${
+                              room.ticketStatus === 'resueltos'
+                                ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 border-emerald-500/20'
+                                : room.ticketStatus === 'en_proceso'
+                                ? 'text-cyan-600 dark:text-cyan-400 bg-cyan-50 dark:bg-cyan-950/40 border-cyan-500/20'
+                                : 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 border-amber-500/20'
+                            }`}>
+                              {room.ticketStatus === 'resueltos' ? 'Resuelto' : room.ticketStatus === 'en_proceso' ? 'En Proceso' : 'Pendiente'}
+                            </span>
+                          ) : isGroup ? (
                             <span className="text-[10px] text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40 px-1.5 py-0.2 rounded font-bold shrink-0">
                               Grupo · {room.members.length}
                             </span>
@@ -1248,10 +1286,15 @@ export const ChatsView: React.FC = () => {
                 {/* Hide avatar image for General Chat and City Chats */}
                 {activeChat.type !== 'general' && activeChat.type !== 'city' && (() => {
                   const otherUser = activeChat.type === 'private' ? getOtherUserInPrivateChat(activeChat) : undefined;
-                  const avatarSrc = activeChat.type === 'group'
+                  const isTicket = activeChat.isTicketChat || !!activeChat.ticketCode;
+                  const avatarSrc = isTicket
+                    ? (activeChat.avatar || '/chat_soporte.png')
+                    : activeChat.type === 'group'
                     ? (activeChat.avatar || DEFAULT_SILHOUETTE_AVATAR)
                     : (otherUser?.avatar || activeChat.avatar || DEFAULT_SILHOUETTE_AVATAR);
-                  const headerTitle = activeChat.type === 'group'
+                  const headerTitle = isTicket
+                    ? `${activeChat.ticketCode || 'TICKET'} · Soporte`
+                    : activeChat.type === 'group'
                     ? activeChat.name
                     : (otherUser ? otherUser.name : (activeChat.name || 'Chat Privado'));
 
@@ -1261,15 +1304,19 @@ export const ChatsView: React.FC = () => {
                         src={avatarSrc}
                         alt={headerTitle}
                         className={`w-9 h-9 object-cover border border-neutral-200 dark:border-neutral-700 ${
-                          activeChat.type === 'group' ? 'rounded-xl' : 'rounded-full'
+                          isTicket ? 'rounded-xl border-amber-400/50' : activeChat.type === 'group' ? 'rounded-xl' : 'rounded-full'
                         }`}
                         referrerPolicy="no-referrer"
                       />
-                      {activeChat.type === 'private' && (
+                      {isTicket ? (
+                        <div className="absolute -bottom-1 -right-1 bg-amber-500 rounded-full p-0.5 text-neutral-950">
+                          <ShieldAlert className="w-2.5 h-2.5" />
+                        </div>
+                      ) : activeChat.type === 'private' ? (
                         <div className="absolute -bottom-1 -right-1 bg-emerald-500 rounded-full p-0.5 text-white">
                           <Lock className="w-2.5 h-2.5" />
                         </div>
-                      )}
+                      ) : null}
                     </div>
                   );
                 })()}
@@ -1277,7 +1324,9 @@ export const ChatsView: React.FC = () => {
                 <div className="min-w-0">
                   <h3 className="text-xs sm:text-sm font-extrabold text-white truncate max-w-[200px] sm:max-w-sm flex items-center gap-1.5">
                     <span className="truncate">
-                      {activeChat.type === 'general'
+                      {activeChat.isTicketChat || activeChat.ticketCode
+                        ? `${activeChat.ticketCode || 'TICKET'} · Soporte La Tierrita`
+                        : activeChat.type === 'general'
                         ? 'Parceros en España.'
                         : activeChat.type === 'private'
                         ? (() => {
@@ -1286,38 +1335,60 @@ export const ChatsView: React.FC = () => {
                           })()
                         : activeChat.name}
                     </span>
-                    {activeChat.type === 'private' && (() => {
+                    {!activeChat.isTicketChat && activeChat.type === 'private' && (() => {
                       const otherUser = getOtherUserInPrivateChat(activeChat);
                       return <UserBadges isVerified={otherUser?.isVerified} staffRole={otherUser?.staffRole} />;
                     })()}
                   </h3>
                   <div className="flex items-center gap-1.5 text-[11px] text-white/80">
-                    {activeChat.type === 'general' && (
+                    {activeChat.isTicketChat || activeChat.ticketCode ? (
+                      <span className={`font-semibold truncate flex items-center gap-1 ${
+                        activeChat.ticketStatus === 'resueltos'
+                          ? 'text-emerald-300'
+                          : activeChat.ticketStatus === 'en_proceso'
+                          ? 'text-cyan-300'
+                          : 'text-amber-300'
+                      }`}>
+                        {activeChat.ticketStatus === 'resueltos' ? (
+                          <>
+                            <CheckCircle className="w-3 h-3 text-emerald-400" />
+                            <span>Caso Resuelto</span>
+                          </>
+                        ) : activeChat.ticketStatus === 'en_proceso' ? (
+                          <>
+                            <Shield className="w-3 h-3 text-cyan-400" />
+                            <span>En Atención por Soporte</span>
+                          </>
+                        ) : (
+                          <>
+                            <Lock className="w-3 h-3 text-amber-400" />
+                            <span>En espera de asignación de Staff</span>
+                          </>
+                        )}
+                      </span>
+                    ) : activeChat.type === 'general' ? (
                       <span className="text-amber-300 font-semibold truncate flex items-center gap-1">
                         <span>Comunidad Colombiana en España</span>
                         <FlagColombia size="xs" />
                         <FlagSpain size="xs" />
                       </span>
-                    )}
-                    {activeChat.type === 'city' && (
+                    ) : activeChat.type === 'city' ? (
                       <span className="text-rose-200 font-semibold truncate flex items-center gap-1">
                         <MapPin className="w-3 h-3 text-rose-300 shrink-0" />
                         <span>Chat de residentes en {activeChat.city}</span>
                         <FlagSpain size="xs" />
                       </span>
-                    )}
-                    {activeChat.type === 'private' && (
+                    ) : activeChat.type === 'private' ? (
                       <span className="text-emerald-300 font-medium flex items-center gap-1">
                         <Lock className="w-3 h-3" />
                         Cifrado E2E · En línea
                       </span>
-                    )}
-                    {activeChat.type === 'group' && (
+                    ) : activeChat.type === 'group' ? (
                       <span className="text-blue-200 font-medium flex items-center gap-1">
                         <Users className="w-3 h-3" />
                         {activeChat.members.length} miembros
                       </span>
-                    )}
+                    ) : null}
                   </div>
                 </div>
               </div>
@@ -1532,6 +1603,63 @@ export const ChatsView: React.FC = () => {
                     <AtSign className="w-4 h-4 shrink-0 fill-neutral-950/20" />
                     <span>{activeRepliesToMe.length} {activeRepliesToMe.length === 1 ? 'respuesta para ti' : 'respuestas para ti'}</span>
                   </button>
+                </div>
+              )}
+
+              {/* Ticket Information Card for User */}
+              {activeChat.isTicketChat && (
+                <div className="bg-[#00172e]/95 border border-amber-400/30 rounded-2xl p-4 mb-4 text-xs shadow-xl backdrop-blur-md">
+                  <div className="flex items-center justify-between border-b border-white/10 pb-2 mb-2.5">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono font-black text-xs px-2.5 py-0.5 rounded-lg bg-amber-400 text-neutral-950 shadow-xs">
+                        {activeChat.ticketCode || 'TICKET'}
+                      </span>
+                      <span className="font-bold text-white">Detalles del Reporte</span>
+                    </div>
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                      activeChat.ticketStatus === 'resueltos'
+                        ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                        : activeChat.ticketStatus === 'en_proceso'
+                        ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40'
+                        : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                    }`}>
+                      {activeChat.ticketStatus === 'resueltos' ? 'Resuelto' : activeChat.ticketStatus === 'en_proceso' ? 'En Proceso' : 'Pendiente'}
+                    </span>
+                  </div>
+
+                  <div className="space-y-1.5 text-white/90">
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-0.5 sm:gap-2">
+                      <span className="text-white/50 min-w-44 text-[11px]">Nombre de usuario del reportado:</span>
+                      <strong className="text-white">
+                        {activeChat.ticketReportedUsername ? `@${activeChat.ticketReportedUsername}` : 'N/A (Soporte General)'}
+                      </strong>
+                    </div>
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-0.5 sm:gap-2">
+                      <span className="text-white/50 min-w-44 text-[11px]">Nombre del reportador:</span>
+                      <span className="text-white">
+                        {activeChat.ticketReporterName || currentUser.name} (@{activeChat.ticketReporterUsername || currentUser.username})
+                      </span>
+                    </div>
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-0.5 sm:gap-2">
+                      <span className="text-white/50 min-w-44 text-[11px]">Motivo:</span>
+                      <span className="text-amber-300 font-semibold">
+                        {activeChat.ticketReasonTitle || activeChat.ticketSubject || 'Soporte'}
+                        {activeChat.ticketReasonText ? ` - ${activeChat.ticketReasonText}` : ''}
+                      </span>
+                    </div>
+                    {activeChat.ticketAdditionalDetails && (
+                      <div className="flex flex-col sm:flex-row sm:items-start gap-0.5 sm:gap-2 pt-0.5">
+                        <span className="text-white/50 min-w-44 text-[11px]">Detalles adicionales:</span>
+                        <span className="text-white/90 italic bg-white/5 px-2 py-1 rounded-lg">
+                          "{activeChat.ticketAdditionalDetails}"
+                        </span>
+                      </div>
+                    )}
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-0.5 sm:gap-2">
+                      <span className="text-white/50 min-w-44 text-[11px]">Fecha:</span>
+                      <span className="text-white/70">{activeChat.ticketDate || 'Hoy'}</span>
+                    </div>
+                  </div>
                 </div>
               )}
 
@@ -1844,6 +1972,14 @@ export const ChatsView: React.FC = () => {
                       <Send className="w-4 h-4 ml-0.5" />
                     </button>
                   </div>
+                </div>
+              ) : activeChat.isTicketChat && (currentUser?.staffRole !== 'ADMIN' && currentUser?.staffRole !== 'Soporte') && (activeChat.ticketStatus === 'pendientes' || activeChat.ticketLockedForUser) ? (
+                /* Ticket Locked Message Notice for User */
+                <div className="flex items-center justify-center p-3.5 sm:p-4 rounded-2xl bg-amber-500/15 border border-amber-500/30 text-amber-200 text-xs sm:text-sm text-center max-w-2xl mx-auto shadow-md gap-2.5">
+                  <Lock className="w-5 h-5 shrink-0 text-amber-400" />
+                  <span className="leading-snug">
+                    El usuario no podrá enviar mensajes en este chat de ticket hasta que un miembro del staff (Admin o Soporte) tome su caso.
+                  </span>
                 </div>
               ) : (
                 /* Standard Message Input Form */
