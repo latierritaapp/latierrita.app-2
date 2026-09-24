@@ -12,7 +12,7 @@ export const AdCarousel: React.FC<AdCarouselProps> = ({ type }) => {
   const [isHovered, setIsHovered] = useState(false);
 
   const activeBanners = adBanners.filter(
-    b => b.active && (!type || b.carouselType === type || b.carouselType === 'ambos' || !b.carouselType)
+    b => b && b.active !== false && (!type || (b.carouselType || 'inicio') === type || (b.carouselType as string) === 'ambos')
   );
 
   // Auto-play carousel every 5.5 seconds if not hovered
@@ -47,15 +47,18 @@ export const AdCarousel: React.FC<AdCarouselProps> = ({ type }) => {
     >
       <div className="relative rounded-2xl overflow-hidden shadow-lg border border-white/10 bg-neutral-900 group">
         {/* Banner image with dark gradient overlay */}
-        <div className="relative h-48 sm:h-56 w-full overflow-hidden">
+        <div className="relative h-48 sm:h-56 w-full overflow-hidden bg-neutral-950">
           <img
             src={currentBanner.imageUrl}
             alt={currentBanner.title}
             className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
             referrerPolicy="no-referrer"
+            onError={(e) => {
+              (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=1000&auto=format&fit=crop&q=80';
+            }}
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-neutral-950 via-neutral-950/60 to-transparent"></div>
-          <div className="absolute inset-0 bg-gradient-to-r from-neutral-950/70 via-transparent to-transparent"></div>
+          <div className="absolute inset-0 bg-gradient-to-t from-neutral-950 via-neutral-950/60 to-transparent pointer-events-none"></div>
+          <div className="absolute inset-0 bg-gradient-to-r from-neutral-950/70 via-transparent to-transparent pointer-events-none"></div>
         </div>
 
         {/* Top Badges & Staff Admin Controls */}

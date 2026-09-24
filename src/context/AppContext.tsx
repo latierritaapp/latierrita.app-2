@@ -1610,8 +1610,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             const localBanners = JSON.parse(localBannersRaw);
             if (Array.isArray(localBanners)) {
               localBanners.forEach((lb: AdBanner) => {
-                if (!list.some(b => b.id === lb.id) && !deletedIds.includes(lb.id) && lb.id !== 'banner-init-1') {
+                if (lb && !list.some(b => b.id === lb.id) && !deletedIds.includes(lb.id) && lb.id !== 'banner-init-1') {
                   list.unshift(lb);
+                }
+              });
+            }
+          }
+        } catch {}
+
+        // Also check latierrita_ad_banners
+        try {
+          const allBannersRaw = localStorage.getItem('latierrita_ad_banners');
+          if (allBannersRaw) {
+            const allBanners = JSON.parse(allBannersRaw);
+            if (Array.isArray(allBanners)) {
+              allBanners.forEach((ab: AdBanner) => {
+                if (ab && !list.some(b => b.id === ab.id) && !deletedIds.includes(ab.id) && ab.id !== 'banner-init-1') {
+                  list.unshift(ab);
                 }
               });
             }
@@ -1622,9 +1637,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setAdBanners(cleanList);
         try {
           localStorage.setItem('latierrita_ad_banners', JSON.stringify(cleanList));
+          localStorage.setItem('latierrita_local_banners', JSON.stringify(cleanList));
         } catch {}
       }, (error) => {
-        console.warn('Banners listener error:', error?.message || error);
+        console.warn('Banners listener note:', error?.message || error);
+        // Fallback to local storage if DB is not available
+        try {
+          const saved = localStorage.getItem('latierrita_ad_banners') || localStorage.getItem('latierrita_local_banners');
+          if (saved) {
+            const parsed = JSON.parse(saved);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              setAdBanners(parsed.filter(b => b && b.id !== 'banner-init-1'));
+            }
+          }
+        } catch {}
       });
       return () => unsub();
     } catch (e) {
