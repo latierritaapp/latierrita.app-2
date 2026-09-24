@@ -24,7 +24,47 @@ export const AdCarousel: React.FC<AdCarouselProps> = ({ type }) => {
     return () => clearInterval(interval);
   }, [activeBanners.length, isHovered]);
 
-  if (activeBanners.length === 0) return null;
+  if (activeBanners.length === 0) {
+    return (
+      <section
+        aria-label="Carrusel de anuncios destacados"
+        className="w-full max-w-2xl mx-auto px-4 py-3"
+      >
+        <div className="relative rounded-2xl overflow-hidden shadow-lg border border-white/10 bg-gradient-to-br from-amber-500/20 via-neutral-900 to-neutral-950 p-4 sm:p-5 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="space-y-1 text-center sm:text-left">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-amber-300 bg-amber-400/10 px-2.5 py-0.5 rounded-full border border-amber-400/20">
+              {type === 'explorar' ? 'Carrusel 02 · Explorar' : 'Carrusel 01 · Inicio'}
+            </span>
+            <h4 className="text-sm sm:text-base font-extrabold text-white">
+              🇨🇴 Espacio Publicitario y Oficial
+            </h4>
+            <p className="text-xs text-white/70 max-w-sm">
+              Anuncios oficiales, eventos y promociones de la comunidad colombiana en España.
+            </p>
+          </div>
+          {isStaffMode ? (
+            <button
+              onClick={() => setIsStaffAdminOpen(true)}
+              className="px-4 py-2 bg-amber-400 hover:bg-amber-300 text-neutral-950 font-black text-xs rounded-xl shadow-md transition-all active:scale-95 flex items-center gap-1.5 shrink-0"
+            >
+              <Plus className="w-4 h-4 stroke-[3]" />
+              <span>Subir Imagen al Carrusel</span>
+            </button>
+          ) : (
+            <a
+              href="https://latierrita.es"
+              target="_blank"
+              rel="noreferrer"
+              className="px-4 py-2 bg-white/10 hover:bg-white/20 border border-white/20 text-white font-bold text-xs rounded-xl transition-all flex items-center gap-1.5 shrink-0"
+            >
+              <span>Conoce Más</span>
+              <ExternalLink className="w-3.5 h-3.5" />
+            </a>
+          )}
+        </div>
+      </section>
+    );
+  }
 
   const safeIndex = (currentIndex < activeBanners.length && currentIndex >= 0) ? currentIndex : 0;
   const currentBanner = activeBanners[safeIndex];

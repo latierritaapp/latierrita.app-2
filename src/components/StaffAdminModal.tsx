@@ -375,19 +375,28 @@ export const StaffAdminModal: React.FC<{ isFullScreenRoute?: boolean }> = ({ isF
     });
   };
 
-  const handleAddCarrusel01 = (e: React.FormEvent) => {
-    e.preventDefault();
+  const formatUrl = (url: string, fallback: string = 'https://latierrita.es') => {
+    const trimmed = url.trim();
+    if (!trimmed) return fallback;
+    if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://')) {
+      return `https://${trimmed}`;
+    }
+    return trimmed;
+  };
+
+  const handleAddCarrusel01 = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     if (!c1Image.trim()) return;
 
     addAdBanner({
-      title: c1Title.trim() || 'Anuncio Promocional Inicio',
-      subtitle: c1Description.trim().slice(0, 100),
+      title: c1Title.trim() || 'Anuncio Oficial Inicio',
+      subtitle: c1Description.trim().slice(0, 100) || 'Publicación destacada en la comunidad La Tierrita',
       imageUrl: c1Image.trim(),
-      sponsorName: c1Sponsor.trim() || 'Patrocinador Oficial',
+      sponsorName: c1Sponsor.trim() || 'La Tierrita Staff',
       sponsorCity: 'Toda España',
-      ctaText: c1CtaText.trim() || 'Más información',
-      ctaLink: c1CtaUrl.trim() || 'https://latierrita.es',
-      category: c1Category,
+      ctaText: c1CtaText.trim() || 'Ver Más',
+      ctaLink: formatUrl(c1CtaUrl),
+      category: c1Category || 'Evento',
       carouselType: 'inicio'
     });
 
@@ -400,19 +409,19 @@ export const StaffAdminModal: React.FC<{ isFullScreenRoute?: boolean }> = ({ isF
     setC1Category('Evento');
   };
 
-  const handleAddCarrusel02 = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleAddCarrusel02 = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     if (!c2Image.trim()) return;
 
     addAdBanner({
-      title: c2Title.trim() || 'Anuncio Promocional Explorar',
-      subtitle: c2Description.trim().slice(0, 100),
+      title: c2Title.trim() || 'Anuncio Oficial Explorar',
+      subtitle: c2Description.trim().slice(0, 100) || 'Publicación destacada en la comunidad La Tierrita',
       imageUrl: c2Image.trim(),
-      sponsorName: c2Sponsor.trim() || 'Patrocinador Oficial',
+      sponsorName: c2Sponsor.trim() || 'La Tierrita Staff',
       sponsorCity: 'Toda España',
-      ctaText: c2CtaText.trim() || 'Ver oferta',
-      ctaLink: c2CtaUrl.trim() || 'https://latierrita.es',
-      category: c2Category,
+      ctaText: c2CtaText.trim() || 'Ver Oferta',
+      ctaLink: formatUrl(c2CtaUrl),
+      category: c2Category || 'Restaurante/Comida',
       carouselType: 'explorar'
     });
 
@@ -1632,18 +1641,28 @@ export const StaffAdminModal: React.FC<{ isFullScreenRoute?: boolean }> = ({ isF
                       </div>
 
                       {c1Image && (
-                        <div className="relative w-full h-32 rounded-xl overflow-hidden border border-white/20 group">
-                          <img src={c1Image} alt="Preview" className="w-full h-full object-cover" />
-                          <span className="absolute bottom-2 left-2 bg-black/70 px-2 py-0.5 rounded text-[10px] text-amber-300 font-bold">
-                            Vista Previa Carrusel 01
-                          </span>
+                        <div className="space-y-2">
+                          <div className="relative w-full h-36 rounded-xl overflow-hidden border border-white/20 group">
+                            <img src={c1Image} alt="Preview" className="w-full h-full object-cover" />
+                            <span className="absolute bottom-2 left-2 bg-black/70 px-2 py-0.5 rounded text-[10px] text-amber-300 font-bold">
+                              Vista Previa Carrusel 01
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setC1Image('')}
+                              className="absolute top-2 right-2 p-1 bg-rose-600 hover:bg-rose-500 text-white rounded-lg transition-colors"
+                              title="Quitar imagen"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                           <button
                             type="button"
-                            onClick={() => setC1Image('')}
-                            className="absolute top-2 right-2 p-1 bg-rose-600 hover:bg-rose-500 text-white rounded-lg transition-colors"
-                            title="Quitar imagen"
+                            onClick={() => handleAddCarrusel01()}
+                            className="w-full py-2 bg-emerald-500 hover:bg-emerald-400 text-white font-black text-xs rounded-xl shadow-md transition-all active:scale-95 flex items-center justify-center gap-1.5 cursor-pointer"
                           >
-                            <X className="w-3.5 h-3.5" />
+                            <Check className="w-4 h-4 stroke-[3]" />
+                            <span>Publicar Imagen Inmediatamente en Carrusel 01</span>
                           </button>
                         </div>
                       )}
@@ -1731,10 +1750,10 @@ export const StaffAdminModal: React.FC<{ isFullScreenRoute?: boolean }> = ({ isF
                             URL de destino
                           </label>
                           <input
-                            type="url"
+                            type="text"
                             value={c1CtaUrl}
                             onChange={e => setC1CtaUrl(e.target.value)}
-                            placeholder="https://..."
+                            placeholder="https://... o enlace"
                             className="w-full bg-white/10 text-white placeholder-white/40 px-3 py-2 rounded-xl border border-white/20 focus:outline-none focus:ring-1 focus:ring-amber-400"
                           />
                         </div>
@@ -1852,18 +1871,28 @@ export const StaffAdminModal: React.FC<{ isFullScreenRoute?: boolean }> = ({ isF
                       </div>
 
                       {c2Image && (
-                        <div className="relative w-full h-32 rounded-xl overflow-hidden border border-white/20 group">
-                          <img src={c2Image} alt="Preview" className="w-full h-full object-cover" />
-                          <span className="absolute bottom-2 left-2 bg-black/70 px-2 py-0.5 rounded text-[10px] text-amber-300 font-bold">
-                            Vista Previa Carrusel 02
-                          </span>
+                        <div className="space-y-2">
+                          <div className="relative w-full h-36 rounded-xl overflow-hidden border border-white/20 group">
+                            <img src={c2Image} alt="Preview" className="w-full h-full object-cover" />
+                            <span className="absolute bottom-2 left-2 bg-black/70 px-2 py-0.5 rounded text-[10px] text-amber-300 font-bold">
+                              Vista Previa Carrusel 02
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setC2Image('')}
+                              className="absolute top-2 right-2 p-1 bg-rose-600 hover:bg-rose-500 text-white rounded-lg transition-colors"
+                              title="Quitar imagen"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                           <button
                             type="button"
-                            onClick={() => setC2Image('')}
-                            className="absolute top-2 right-2 p-1 bg-rose-600 hover:bg-rose-500 text-white rounded-lg transition-colors"
-                            title="Quitar imagen"
+                            onClick={() => handleAddCarrusel02()}
+                            className="w-full py-2 bg-emerald-500 hover:bg-emerald-400 text-white font-black text-xs rounded-xl shadow-md transition-all active:scale-95 flex items-center justify-center gap-1.5 cursor-pointer"
                           >
-                            <X className="w-3.5 h-3.5" />
+                            <Check className="w-4 h-4 stroke-[3]" />
+                            <span>Publicar Imagen Inmediatamente en Carrusel 02</span>
                           </button>
                         </div>
                       )}
@@ -1951,10 +1980,10 @@ export const StaffAdminModal: React.FC<{ isFullScreenRoute?: boolean }> = ({ isF
                             URL de destino
                           </label>
                           <input
-                            type="url"
+                            type="text"
                             value={c2CtaUrl}
                             onChange={e => setC2CtaUrl(e.target.value)}
-                            placeholder="https://..."
+                            placeholder="https://... o enlace"
                             className="w-full bg-white/10 text-white placeholder-white/40 px-3 py-2 rounded-xl border border-white/20 focus:outline-none focus:ring-1 focus:ring-amber-400"
                           />
                         </div>

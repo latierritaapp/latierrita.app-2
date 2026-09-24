@@ -35,7 +35,22 @@ export const OTHER_USERS: UserProfile[] = [];
 
 export const INITIAL_STORIES: StoryItem[] = [];
 
-export const INITIAL_AD_BANNERS: AdBanner[] = [];
+export const INITIAL_AD_BANNERS: AdBanner[] = [
+  {
+    id: 'banner-oficial-latierrita',
+    title: '🇨🇴 ¡Bienvenidos a La Tierrita!',
+    subtitle: 'La red oficial de los colombianos en España. Eventos, restaurantes y comunidad.',
+    imageUrl: 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=1200&auto=format&fit=crop&q=80',
+    sponsorName: 'La Tierrita Oficial',
+    sponsorCity: 'Toda España',
+    ctaText: 'Descubrir Comunidad',
+    ctaLink: 'https://latierrita.es',
+    category: 'Evento',
+    carouselType: 'inicio',
+    discountBadge: 'OFICIAL',
+    active: true
+  }
+];
 
 export const INITIAL_POSTS: PostItem[] = [];
 
