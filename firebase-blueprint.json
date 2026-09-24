@@ -91,6 +91,24 @@
         "date": { "type": "string", "description": "Submission ISO date" },
         "response": { "type": "string", "description": "Staff feedback/response" }
       }
+    },
+    "AdBanner": {
+      "collection": "banners",
+      "description": "Public advertising banners displayed in Inicio and Explorar carousels",
+      "fields": {
+        "id": { "type": "string", "description": "Banner ID" },
+        "title": { "type": "string", "description": "Banner title" },
+        "subtitle": { "type": "string", "description": "Short description" },
+        "imageUrl": { "type": "string", "description": "Banner image URL" },
+        "sponsorName": { "type": "string", "description": "Sponsor name" },
+        "sponsorCity": { "type": "string", "description": "Sponsor city" },
+        "ctaText": { "type": "string", "description": "Button call to action text" },
+        "ctaLink": { "type": "string", "description": "Destination link URL" },
+        "category": { "type": "string", "description": "Category" },
+        "carouselType": { "type": "string", "description": "Type: inicio, explorar, ambos" },
+        "discountBadge": { "type": "string", "description": "Optional badge" },
+        "active": { "type": "boolean", "description": "Active status" }
+      }
     }
   }
 }

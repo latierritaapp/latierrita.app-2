@@ -645,19 +645,40 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Ads & Staff
   const [adBanners, setAdBanners] = useState<AdBanner[]>(() => {
     const saved = localStorage.getItem('latierrita_ad_banners');
+    const localSaved = localStorage.getItem('latierrita_local_banners');
+    const deletedRaw = localStorage.getItem('latierrita_deleted_banners') || '[]';
+    let deletedIds: string[] = [];
+    try {
+      deletedIds = JSON.parse(deletedRaw);
+    } catch {}
+
+    const cleanBanner = (b: AdBanner) => b && b.id !== 'banner-init-1' && !deletedIds.includes(b.id);
+
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed)) {
+          const filtered = parsed.filter(cleanBanner);
+          if (filtered.length > 0) return filtered;
+        }
       } catch {}
     }
-    return INITIAL_AD_BANNERS;
+    if (localSaved) {
+      try {
+        const parsed = JSON.parse(localSaved);
+        if (Array.isArray(parsed)) {
+          const filtered = parsed.filter(cleanBanner);
+          if (filtered.length > 0) return filtered;
+        }
+      } catch {}
+    }
+    return INITIAL_AD_BANNERS.filter(cleanBanner);
   });
 
   useEffect(() => {
-    if (adBanners && adBanners.length > 0) {
+    try {
       localStorage.setItem('latierrita_ad_banners', JSON.stringify(adBanners));
-    }
+    } catch {}
   }, [adBanners]);
   const [isStaffMode, setIsStaffMode] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
@@ -1561,6 +1582,53 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } catch (e) {
       setStartupAdConfig(DEFAULT_STARTUP_AD);
       console.warn('Failed to listen to startup_ad config in DB:', e);
+    }
+  }, []);
+
+  // Sync Banners Collection in Real-Time
+  useEffect(() => {
+    try {
+      const unsub = onSnapshot(collection(db, 'banners'), (snapshot) => {
+        const list: AdBanner[] = [];
+        if (!snapshot.empty) {
+          snapshot.forEach((docSnap: any) => {
+            const data = docSnap.data() || {};
+            list.push({ id: docSnap.id, ...data } as AdBanner);
+          });
+        }
+
+        const deletedRaw = localStorage.getItem('latierrita_deleted_banners') || '[]';
+        let deletedIds: string[] = [];
+        try {
+          deletedIds = JSON.parse(deletedRaw);
+        } catch {}
+
+        // Merge local banners
+        try {
+          const localBannersRaw = localStorage.getItem('latierrita_local_banners');
+          if (localBannersRaw) {
+            const localBanners = JSON.parse(localBannersRaw);
+            if (Array.isArray(localBanners)) {
+              localBanners.forEach((lb: AdBanner) => {
+                if (!list.some(b => b.id === lb.id) && !deletedIds.includes(lb.id) && lb.id !== 'banner-init-1') {
+                  list.unshift(lb);
+                }
+              });
+            }
+          }
+        } catch {}
+
+        const cleanList = list.filter(b => b && b.id !== 'banner-init-1' && !deletedIds.includes(b.id));
+        setAdBanners(cleanList);
+        try {
+          localStorage.setItem('latierrita_ad_banners', JSON.stringify(cleanList));
+        } catch {}
+      }, (error) => {
+        console.warn('Banners listener error:', error?.message || error);
+      });
+      return () => unsub();
+    } catch (e) {
+      console.warn('Failed to listen to banners in DB:', e);
     }
   }, []);
 
@@ -2688,9 +2756,17 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
       active: true
     };
 
+    // Ensure this new banner is not in the deleted set
+    try {
+      const deletedRaw = localStorage.getItem('latierrita_deleted_banners') || '[]';
+      const deletedIds: string[] = JSON.parse(deletedRaw);
+      const updatedDeleted = deletedIds.filter(id => id !== newBannerId);
+      localStorage.setItem('latierrita_deleted_banners', JSON.stringify(updatedDeleted));
+    } catch {}
+
     // 1. Immediate optimistic UI update
     setAdBanners(prev => {
-      const filtered = prev.filter(b => b.id !== newBannerId);
+      const filtered = prev.filter(b => b.id !== newBannerId && b.id !== 'banner-init-1');
       return [newBanner, ...filtered];
     });
 
@@ -2698,12 +2774,12 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
     try {
       const localBannersRaw = localStorage.getItem('latierrita_local_banners') || '[]';
       const localBanners = JSON.parse(localBannersRaw);
-      const updatedLocal = [newBanner, ...localBanners.filter((b: any) => b.id !== newBannerId)];
+      const updatedLocal = [newBanner, ...localBanners.filter((b: any) => b.id !== newBannerId && b.id !== 'banner-init-1')];
       localStorage.setItem('latierrita_local_banners', JSON.stringify(updatedLocal));
 
       const allBannersRaw = localStorage.getItem('latierrita_ad_banners') || '[]';
       const allBanners = JSON.parse(allBannersRaw);
-      const updatedAll = [newBanner, ...allBanners.filter((b: any) => b.id !== newBannerId)];
+      const updatedAll = [newBanner, ...allBanners.filter((b: any) => b.id !== newBannerId && b.id !== 'banner-init-1')];
       localStorage.setItem('latierrita_ad_banners', JSON.stringify(updatedAll));
     } catch (e) {
       console.warn('Local banner storage note:', e);
@@ -2741,6 +2817,12 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
         });
       }
 
+      const deletedRaw = localStorage.getItem('latierrita_deleted_banners') || '[]';
+      let deletedIds: string[] = [];
+      try {
+        deletedIds = JSON.parse(deletedRaw);
+      } catch {}
+
       // Merge locally stored banners
       try {
         const localBannersRaw = localStorage.getItem('latierrita_local_banners');
@@ -2748,7 +2830,7 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
           const localBanners = JSON.parse(localBannersRaw);
           if (Array.isArray(localBanners)) {
             localBanners.forEach((lb: AdBanner) => {
-              if (!list.some(b => b.id === lb.id)) {
+              if (!list.some(b => b.id === lb.id) && !deletedIds.includes(lb.id) && lb.id !== 'banner-init-1') {
                 list.unshift(lb);
               }
             });
@@ -2756,27 +2838,33 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
         }
       } catch (e) {}
 
-      const finalList = list.length > 0 ? list : INITIAL_AD_BANNERS;
-      setAdBanners(finalList);
+      const cleanList = list.filter(b => b && b.id !== 'banner-init-1' && !deletedIds.includes(b.id));
+      setAdBanners(cleanList);
       try {
-        localStorage.setItem('latierrita_ad_banners', JSON.stringify(finalList));
+        localStorage.setItem('latierrita_ad_banners', JSON.stringify(cleanList));
       } catch {}
 
       triggerPlushNotification({
         type: 'system',
         title: 'Carruseles Actualizados',
-        message: `Se han sincronizado ${finalList.length} anuncios activos en los carruseles.`,
+        message: `Se han sincronizado ${cleanList.length} anuncios activos en los carruseles.`,
         avatar: 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=200&auto=format&fit=crop&q=80'
       });
     } catch (err) {
       console.warn('Manual refresh banners note, checking local storage:', err);
       const cached = localStorage.getItem('latierrita_ad_banners');
-      let fallbackList = INITIAL_AD_BANNERS;
+      let fallbackList: AdBanner[] = [];
+      const deletedRaw = localStorage.getItem('latierrita_deleted_banners') || '[]';
+      let deletedIds: string[] = [];
+      try {
+        deletedIds = JSON.parse(deletedRaw);
+      } catch {}
+
       if (cached) {
         try {
           const parsed = JSON.parse(cached);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            fallbackList = parsed;
+          if (Array.isArray(parsed)) {
+            fallbackList = parsed.filter((b: AdBanner) => b && b.id !== 'banner-init-1' && !deletedIds.includes(b.id));
           }
         } catch {}
       }
@@ -2784,16 +2872,26 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
       triggerPlushNotification({
         type: 'system',
         title: 'Carruseles Actualizados',
-        message: 'Se ha restaurado y actualizado la lista de anuncios correctamente.'
+        message: `Se ha sincronizado la lista de anuncios (${fallbackList.length} activos).`
       });
     }
   };
 
   const deleteAdBanner = async (id: string) => {
-    // 1. Immediate local state update
+    // 1. Mark as deleted so it is never re-added by fallbacks
+    try {
+      const deletedRaw = localStorage.getItem('latierrita_deleted_banners') || '[]';
+      const deletedIds: string[] = JSON.parse(deletedRaw);
+      if (!deletedIds.includes(id)) {
+        deletedIds.push(id);
+        localStorage.setItem('latierrita_deleted_banners', JSON.stringify(deletedIds));
+      }
+    } catch {}
+
+    // 2. Immediate local state update
     setAdBanners(prev => prev.filter(b => b.id !== id));
 
-    // 2. Remove from local storage
+    // 3. Remove from local storage
     try {
       const localBannersRaw = localStorage.getItem('latierrita_local_banners');
       if (localBannersRaw) {
@@ -2821,7 +2919,7 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
       message: 'El anuncio ha sido removido del carrusel.'
     });
 
-    // 3. Delete from Firestore
+    // 4. Delete from Firestore
     try {
       await deleteDoc(doc(db, 'banners', id));
     } catch (error) {
