@@ -265,18 +265,17 @@ export const StaffAdminModal: React.FC<{ isFullScreenRoute?: boolean }> = ({ isF
               Desbloquear Panel
             </button>
           </form>
-          <button
-            onClick={() => {
-              if (isAdminSlug) {
-                window.location.href = '/';
-              } else {
+            <button
+              onClick={() => {
+                if (isAdminSlug) {
+                  window.history.pushState({}, '', '/');
+                }
                 setIsStaffAdminOpen(false);
-              }
-            }}
-            className="w-full py-2 bg-white/10 hover:bg-white/20 text-white font-bold text-xs rounded-xl transition-all"
-          >
-            Volver a la aplicación
-          </button>
+              }}
+              className="w-full py-2 bg-white/10 hover:bg-white/20 text-white font-bold text-xs rounded-xl transition-all"
+            >
+              Volver a la aplicación
+            </button>
         </div>
       </div>
     );
@@ -601,10 +600,9 @@ export const StaffAdminModal: React.FC<{ isFullScreenRoute?: boolean }> = ({ isF
               onClick={() => {
                 const isAdminSlug = window.location.pathname === '/admin' || window.location.pathname === '/administracion';
                 if (isAdminSlug) {
-                  window.location.href = '/';
-                } else {
-                  setIsStaffAdminOpen(false);
+                  window.history.pushState({}, '', '/');
                 }
+                setIsStaffAdminOpen(false);
               }}
               className="p-1.5 text-white/70 hover:text-white rounded-lg hover:bg-white/10 ml-2 transition-colors cursor-pointer"
               title="Volver a la aplicación"

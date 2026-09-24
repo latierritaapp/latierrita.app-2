@@ -38,6 +38,11 @@ import {
   INITIAL_STAFF_MEMBERS,
   INITIAL_DELETED_ACCOUNTS
 } from '../data/mockData';
+import {
+  saveBannerToIndexedDB,
+  getAllBannersFromIndexedDB,
+  deleteBannerFromIndexedDB
+} from '../lib/bannerStorage';
 
 interface AppContextType {
   currentUser: UserProfile;
@@ -871,10 +876,36 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [posts, currentUser]);
 
-  // Sync Banners
+  // Load Banners from IndexedDB and Sync with Firestore
   useEffect(() => {
+    let isMounted = true;
+
+    // 1. Asynchronously load high-capacity IndexedDB banners
+    getAllBannersFromIndexedDB().then((idbBanners) => {
+      if (!isMounted || !Array.isArray(idbBanners) || idbBanners.length === 0) return;
+      const deletedRaw = localStorage.getItem('latierrita_deleted_banners') || '[]';
+      let deletedIds: string[] = [];
+      try {
+        deletedIds = JSON.parse(deletedRaw);
+      } catch {}
+
+      const cleanIdb = idbBanners.filter(b => b && b.id !== 'banner-init-1' && !deletedIds.includes(b.id));
+      if (cleanIdb.length > 0) {
+        setAdBanners(prev => {
+          const merged = [...prev];
+          cleanIdb.forEach(ib => {
+            if (!merged.some(m => m.id === ib.id)) {
+              merged.unshift(ib);
+            }
+          });
+          return merged;
+        });
+      }
+    }).catch(() => {});
+
+    // 2. Real-time Firestore Snapshot Listener
     try {
-      const unsub = onSnapshot(collection(db, 'banners'), (snapshot) => {
+      const unsub = onSnapshot(collection(db, 'banners'), async (snapshot) => {
         const list: AdBanner[] = [];
         if (!snapshot.empty) {
           snapshot.forEach((docSnap: any) => {
@@ -888,6 +919,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         try {
           deletedIds = JSON.parse(deletedRaw);
         } catch {}
+
+        // Incorporate IndexedDB stored banners
+        try {
+          const idbList = await getAllBannersFromIndexedDB();
+          if (Array.isArray(idbList)) {
+            idbList.forEach((ib: AdBanner) => {
+              if (!list.some(b => b.id === ib.id) && !deletedIds.includes(ib.id) && ib.id !== 'banner-init-1') {
+                list.unshift(ib);
+              }
+            });
+          }
+        } catch (e) {}
 
         // Incorporate locally saved banners (offline / local resilience fallback)
         try {
@@ -906,14 +949,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
         const cleanList = list.filter(b => b && b.id !== 'banner-init-1' && !deletedIds.includes(b.id));
 
-        // Fallback to INITIAL_AD_BANNERS only if cleanList is completely empty
+        // Preserve current user-added banners if remote is empty
         if (cleanList.length === 0) {
-          setAdBanners(INITIAL_AD_BANNERS);
+          setAdBanners(prev => {
+            const userCreated = prev.filter(b => b && b.id !== 'banner-init-1' && !deletedIds.includes(b.id) && b.id !== 'banner-oficial-latierrita');
+            return userCreated.length > 0 ? userCreated : INITIAL_AD_BANNERS;
+          });
         } else {
           setAdBanners(cleanList);
+          // Persist back to IndexedDB for offline resilience
+          cleanList.forEach(b => {
+            if (b.id !== 'banner-oficial-latierrita' && b.id !== 'banner-init-1') {
+              saveBannerToIndexedDB(b);
+            }
+          });
         }
-      }, (error) => {
-        // En caso de error, mostrar al menos los banners locales o iniciales
+      }, async (error) => {
+        // Fallback on network/permission error
         const list: AdBanner[] = [];
         const deletedRaw = localStorage.getItem('latierrita_deleted_banners') || '[]';
         let deletedIds: string[] = [];
@@ -922,20 +974,38 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         } catch {}
 
         try {
+          const idbList = await getAllBannersFromIndexedDB();
+          if (Array.isArray(idbList)) {
+            list.push(...idbList.filter((b: AdBanner) => b && !deletedIds.includes(b.id) && b.id !== 'banner-init-1'));
+          }
+        } catch (e) {}
+
+        try {
           const localBannersRaw = localStorage.getItem('latierrita_local_banners');
           if (localBannersRaw) {
             const localBanners = JSON.parse(localBannersRaw);
             if (Array.isArray(localBanners)) {
-              list.push(...localBanners.filter((b: AdBanner) => b && !deletedIds.includes(b.id) && b.id !== 'banner-init-1'));
+              localBanners.forEach((lb: AdBanner) => {
+                if (!list.some(b => b.id === lb.id) && !deletedIds.includes(lb.id) && lb.id !== 'banner-init-1') {
+                  list.push(lb);
+                }
+              });
             }
           }
         } catch (e) {}
-        setAdBanners(list.length > 0 ? list : INITIAL_AD_BANNERS);
+
+        if (list.length > 0) {
+          setAdBanners(list);
+        } else {
+          setAdBanners(prev => (prev.length > 0 ? prev : INITIAL_AD_BANNERS));
+        }
         console.warn('Banners listener note:', error?.message || error);
       });
-      return () => unsub();
+      return () => {
+        isMounted = false;
+        unsub();
+      };
     } catch (e) {
-      setAdBanners(INITIAL_AD_BANNERS);
       console.warn('Failed to listen to banners in DB:', e);
     }
   }, []);
@@ -2812,7 +2882,10 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
       return [newBanner, ...filtered];
     });
 
-    // 2. Persist to localStorage for zero-latency fallback and offline access
+    // 2. Persist to high-capacity IndexedDB immediately
+    saveBannerToIndexedDB(newBanner).catch(() => {});
+
+    // 3. Persist to localStorage for zero-latency fallback
     try {
       const localBannersRaw = localStorage.getItem('latierrita_local_banners') || '[]';
       const localBanners = JSON.parse(localBannersRaw);
@@ -2824,10 +2897,10 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
       const updatedAll = [newBanner, ...allBanners.filter((b: any) => b.id !== newBannerId && b.id !== 'banner-init-1' && b.id !== 'banner-oficial-latierrita')];
       localStorage.setItem('latierrita_ad_banners', JSON.stringify(updatedAll));
     } catch (e) {
-      console.warn('Local banner storage note:', e);
+      console.warn('Local banner storage note (preserved in IndexedDB):', e);
     }
 
-    // 3. Write to Firestore banners collection
+    // 4. Write to Firestore banners collection
     try {
       await setDoc(doc(db, 'banners', newBannerId), newBanner);
       triggerPlushNotification({
@@ -2865,6 +2938,18 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
         deletedIds = JSON.parse(deletedRaw);
       } catch {}
 
+      // Merge IndexedDB stored banners
+      try {
+        const idbList = await getAllBannersFromIndexedDB();
+        if (Array.isArray(idbList)) {
+          idbList.forEach((ib: AdBanner) => {
+            if (!list.some(b => b.id === ib.id) && !deletedIds.includes(ib.id) && ib.id !== 'banner-init-1') {
+              list.unshift(ib);
+            }
+          });
+        }
+      } catch (e) {}
+
       // Merge locally stored banners
       try {
         const localBannersRaw = localStorage.getItem('latierrita_local_banners');
@@ -2881,7 +2966,7 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
       } catch (e) {}
 
       const cleanList = list.filter(b => b && b.id !== 'banner-init-1' && !deletedIds.includes(b.id));
-      setAdBanners(cleanList);
+      setAdBanners(cleanList.length > 0 ? cleanList : INITIAL_AD_BANNERS);
       try {
         localStorage.setItem('latierrita_ad_banners', JSON.stringify(cleanList));
       } catch {}
@@ -2902,7 +2987,15 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
         deletedIds = JSON.parse(deletedRaw);
       } catch {}
 
-      if (cached) {
+      // Merge from IndexedDB on error
+      try {
+        const idbList = await getAllBannersFromIndexedDB();
+        if (Array.isArray(idbList)) {
+          fallbackList = idbList.filter((b: AdBanner) => b && b.id !== 'banner-init-1' && !deletedIds.includes(b.id));
+        }
+      } catch {}
+
+      if (fallbackList.length === 0 && cached) {
         try {
           const parsed = JSON.parse(cached);
           if (Array.isArray(parsed)) {
@@ -2910,7 +3003,7 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
           }
         } catch {}
       }
-      setAdBanners(fallbackList);
+      setAdBanners(fallbackList.length > 0 ? fallbackList : INITIAL_AD_BANNERS);
       triggerPlushNotification({
         type: 'system',
         title: 'Carruseles Actualizados',
@@ -2933,7 +3026,10 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
     // 2. Immediate local state update
     setAdBanners(prev => prev.filter(b => b.id !== id));
 
-    // 3. Remove from local storage
+    // 3. Remove from IndexedDB
+    deleteBannerFromIndexedDB(id).catch(() => {});
+
+    // 4. Remove from local storage
     try {
       const localBannersRaw = localStorage.getItem('latierrita_local_banners');
       if (localBannersRaw) {
@@ -2961,7 +3057,7 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
       message: 'El anuncio ha sido removido del carrusel.'
     });
 
-    // 4. Delete from Firestore
+    // 5. Delete from Firestore
     try {
       await deleteDoc(doc(db, 'banners', id));
     } catch (error) {
