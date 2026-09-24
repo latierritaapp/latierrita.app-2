@@ -45,6 +45,7 @@ import {
 } from 'lucide-react';
 import { AdCategory, StaffRole, TicketType, UserProfile, SpanishCity, SupportTicket } from '../types';
 import { SPANISH_CITIES } from '../data/citiesData';
+import { optimizeBannerImage } from '../lib/imageOptimizer';
 
 export const StaffAdminModal: React.FC = () => {
   const {
@@ -241,17 +242,22 @@ export const StaffAdminModal: React.FC = () => {
     t => (ticketTypeFilter === 'ALL' || t.type === ticketTypeFilter) && (ticketStatusFilter === 'pendientes' ? t.status === 'pendientes' : ticketStatusFilter === 'en_proceso' ? t.status === 'en_proceso' : t.status === 'resueltos')
   );
 
-  // File upload helper from device gallery
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>, setter: (url: string) => void) => {
+  // File upload helper from device gallery with automatic lightweight compression
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>, setter: (url: string) => void) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onload = () => {
-        if (typeof reader.result === 'string') {
-          setter(reader.result);
-        }
-      };
-      reader.readAsDataURL(file);
+      try {
+        const optimized = await optimizeBannerImage(file);
+        setter(optimized);
+      } catch {
+        const reader = new FileReader();
+        reader.onload = () => {
+          if (typeof reader.result === 'string') {
+            setter(reader.result);
+          }
+        };
+        reader.readAsDataURL(file);
+      }
     }
   };
 
@@ -273,6 +279,7 @@ export const StaffAdminModal: React.FC = () => {
     setFeedDescription('');
     setFeedImage('');
     setFeedSponsor('');
+    setFeedCtaText('');
     setFeedCtaUrl('');
   };
 
@@ -317,7 +324,9 @@ export const StaffAdminModal: React.FC = () => {
     setC1Description('');
     setC1Image('');
     setC1Sponsor('');
+    setC1CtaText('');
     setC1CtaUrl('');
+    setC1Category('Evento');
   };
 
   const handleAddCarrusel02 = (e: React.FormEvent) => {
@@ -340,7 +349,9 @@ export const StaffAdminModal: React.FC = () => {
     setC2Description('');
     setC2Image('');
     setC2Sponsor('');
+    setC2CtaText('');
     setC2CtaUrl('');
+    setC2Category('Evento');
   };
 
   // User Management Actions

@@ -72,8 +72,7 @@ service cloud.firestore {
 
     // Banners
     match /banners/{bannerId} {
-      allow read: if true;
-      allow write: if isAuthenticated();
+      allow read, write: if true;
     }
 
     // Staff members

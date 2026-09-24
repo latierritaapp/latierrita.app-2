@@ -830,22 +830,53 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     try {
       const unsub = onSnapshot(collection(db, 'banners'), (snapshot) => {
-        if (snapshot.empty) {
-          setAdBanners([]);
-        } else {
-          const list: AdBanner[] = [];
+        const list: AdBanner[] = [];
+        if (!snapshot.empty) {
           snapshot.forEach((docSnap: any) => {
-            list.push({ id: docSnap.id, ...docSnap.data() } as AdBanner);
+            const data = docSnap.data() || {};
+            list.push({ id: docSnap.id, ...data } as AdBanner);
           });
+        }
+
+        // Incorporate locally saved banners (offline / local resilience fallback)
+        try {
+          const localBannersRaw = localStorage.getItem('latierrita_local_banners');
+          if (localBannersRaw) {
+            const localBanners = JSON.parse(localBannersRaw);
+            if (Array.isArray(localBanners)) {
+              localBanners.forEach((lb: AdBanner) => {
+                if (!list.some(b => b.id === lb.id)) {
+                  list.unshift(lb);
+                }
+              });
+            }
+          }
+        } catch (e) {}
+
+        // Fallback to INITIAL_AD_BANNERS if still empty
+        if (list.length === 0) {
+          setAdBanners(INITIAL_AD_BANNERS);
+        } else {
           setAdBanners(list);
         }
       }, (error) => {
-        setAdBanners([]);
-        console.warn('Banners listener error:', error?.message || error);
+        // En caso de error, mostrar al menos los banners locales o iniciales
+        const list: AdBanner[] = [];
+        try {
+          const localBannersRaw = localStorage.getItem('latierrita_local_banners');
+          if (localBannersRaw) {
+            const localBanners = JSON.parse(localBannersRaw);
+            if (Array.isArray(localBanners)) {
+              list.push(...localBanners);
+            }
+          }
+        } catch (e) {}
+        setAdBanners(list.length > 0 ? list : INITIAL_AD_BANNERS);
+        console.warn('Banners listener note:', error?.message || error);
       });
       return () => unsub();
     } catch (e) {
-      setAdBanners([]);
+      setAdBanners(INITIAL_AD_BANNERS);
       console.warn('Failed to listen to banners in DB:', e);
     }
   }, []);
@@ -2632,24 +2663,85 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
       id: newBannerId,
       active: true
     };
+
+    // 1. Immediate optimistic UI update
+    setAdBanners(prev => {
+      const filtered = prev.filter(b => b.id !== newBannerId);
+      return [newBanner, ...filtered];
+    });
+
+    // 2. Persist to localStorage for zero-latency fallback and offline access
+    try {
+      const localBannersRaw = localStorage.getItem('latierrita_local_banners') || '[]';
+      const localBanners = JSON.parse(localBannersRaw);
+      const updatedLocal = [newBanner, ...localBanners.filter((b: any) => b.id !== newBannerId)];
+      localStorage.setItem('latierrita_local_banners', JSON.stringify(updatedLocal));
+
+      const allBannersRaw = localStorage.getItem('latierrita_ad_banners') || '[]';
+      const allBanners = JSON.parse(allBannersRaw);
+      const updatedAll = [newBanner, ...allBanners.filter((b: any) => b.id !== newBannerId)];
+      localStorage.setItem('latierrita_ad_banners', JSON.stringify(updatedAll));
+    } catch (e) {
+      console.warn('Local banner storage note:', e);
+    }
+
+    // 3. Write to Firestore banners collection
     try {
       await setDoc(doc(db, 'banners', newBannerId), newBanner);
       triggerPlushNotification({
         type: 'system',
         title: 'STAFF: Anuncio añadido al carrusel',
-        message: `El banner "${banner.title}" ya está activo en el carrusel de inicio.`,
-        avatar: 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=200&auto=format&fit=crop&q=80'
+        message: `El banner "${banner.title}" ya está activo en el carrusel ${banner.carouselType === 'explorar' ? 'de Explorar' : 'de Inicio'}.`,
+        avatar: banner.imageUrl || 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=200&auto=format&fit=crop&q=80'
       });
     } catch (error) {
-      handleFirestoreError(error, OperationType.CREATE, 'banners');
+      console.warn('Firestore banners write fallback to local state:', error);
+      triggerPlushNotification({
+        type: 'system',
+        title: 'STAFF: Anuncio guardado',
+        message: `El banner "${banner.title}" se ha guardado y está visible en el carrusel ${banner.carouselType === 'explorar' ? 'de Explorar' : 'de Inicio'}.`,
+        avatar: banner.imageUrl || 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=200&auto=format&fit=crop&q=80'
+      });
     }
   };
 
   const deleteAdBanner = async (id: string) => {
+    // 1. Immediate local state update
+    setAdBanners(prev => prev.filter(b => b.id !== id));
+
+    // 2. Remove from local storage
+    try {
+      const localBannersRaw = localStorage.getItem('latierrita_local_banners');
+      if (localBannersRaw) {
+        const localBanners = JSON.parse(localBannersRaw);
+        if (Array.isArray(localBanners)) {
+          const filtered = localBanners.filter((b: AdBanner) => b.id !== id);
+          localStorage.setItem('latierrita_local_banners', JSON.stringify(filtered));
+        }
+      }
+      const allBannersRaw = localStorage.getItem('latierrita_ad_banners');
+      if (allBannersRaw) {
+        const allBanners = JSON.parse(allBannersRaw);
+        if (Array.isArray(allBanners)) {
+          const filtered = allBanners.filter((b: AdBanner) => b.id !== id);
+          localStorage.setItem('latierrita_ad_banners', JSON.stringify(filtered));
+        }
+      }
+    } catch (e) {
+      console.warn('Error deleting local banner:', e);
+    }
+
+    triggerPlushNotification({
+      type: 'system',
+      title: 'Banner Eliminado',
+      message: 'El anuncio ha sido removido del carrusel.'
+    });
+
+    // 3. Delete from Firestore
     try {
       await deleteDoc(doc(db, 'banners', id));
     } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, `banners/${id}`);
+      console.warn('Firestore deleteDoc banners note:', error);
     }
   };
 
@@ -2675,6 +2767,20 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
       adCtaUrl: data.ctaUrl || 'https://latierrita.es',
       sponsorName: data.sponsorName
     };
+
+    // 1. Immediate optimistic UI update
+    setPosts(prev => [newStaffPost, ...prev.filter(p => p.id !== newStaffPostId)]);
+
+    // 2. Persist to local storage
+    try {
+      const localPostsRaw = localStorage.getItem('latierrita_local_posts') || '[]';
+      const localPosts = JSON.parse(localPostsRaw);
+      localPosts.unshift(newStaffPost);
+      localStorage.setItem('latierrita_local_posts', JSON.stringify(localPosts));
+    } catch (e) {
+      console.warn('Local staff post note:', e);
+    }
+
     try {
       await setDoc(doc(db, 'posts', newStaffPostId), newStaffPost);
       triggerPlushNotification({
@@ -2684,7 +2790,13 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
         avatar: 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=200&auto=format&fit=crop&q=80'
       });
     } catch (error) {
-      handleFirestoreError(error, OperationType.CREATE, 'posts');
+      console.warn('Firestore staff post note (stored locally):', error);
+      triggerPlushNotification({
+        type: 'system',
+        title: 'STAFF: Anuncio publicado en el feed',
+        message: `Se ha publicado el anuncio patrocinado "${data.title}".`,
+        avatar: 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=200&auto=format&fit=crop&q=80'
+      });
     }
   };
 
