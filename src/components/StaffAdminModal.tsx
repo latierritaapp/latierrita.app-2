@@ -389,13 +389,13 @@ export const StaffAdminModal: React.FC<{ isFullScreenRoute?: boolean }> = ({ isF
     if (!c1Image.trim()) return;
 
     addAdBanner({
-      title: c1Title.trim() || 'Anuncio Oficial Inicio',
-      subtitle: c1Description.trim().slice(0, 100) || 'Publicación destacada en la comunidad La Tierrita',
+      title: c1Title.trim() || '',
+      subtitle: c1Description.trim().slice(0, 100) || '',
       imageUrl: c1Image.trim(),
-      sponsorName: c1Sponsor.trim() || 'La Tierrita Staff',
-      sponsorCity: 'Toda España',
-      ctaText: c1CtaText.trim() || 'Ver Más',
-      ctaLink: formatUrl(c1CtaUrl),
+      sponsorName: c1Sponsor.trim() || '',
+      sponsorCity: c1Sponsor.trim() ? 'Toda España' : '',
+      ctaText: c1CtaText.trim() || (c1CtaUrl.trim() ? 'Ver Más' : ''),
+      ctaLink: c1CtaUrl.trim() ? formatUrl(c1CtaUrl) : '',
       category: c1Category || 'Evento',
       carouselType: 'inicio'
     });
@@ -414,13 +414,13 @@ export const StaffAdminModal: React.FC<{ isFullScreenRoute?: boolean }> = ({ isF
     if (!c2Image.trim()) return;
 
     addAdBanner({
-      title: c2Title.trim() || 'Anuncio Oficial Explorar',
-      subtitle: c2Description.trim().slice(0, 100) || 'Publicación destacada en la comunidad La Tierrita',
+      title: c2Title.trim() || '',
+      subtitle: c2Description.trim().slice(0, 100) || '',
       imageUrl: c2Image.trim(),
-      sponsorName: c2Sponsor.trim() || 'La Tierrita Staff',
-      sponsorCity: 'Toda España',
-      ctaText: c2CtaText.trim() || 'Ver Oferta',
-      ctaLink: formatUrl(c2CtaUrl),
+      sponsorName: c2Sponsor.trim() || '',
+      sponsorCity: c2Sponsor.trim() ? 'Toda España' : '',
+      ctaText: c2CtaText.trim() || (c2CtaUrl.trim() ? 'Ver Oferta' : ''),
+      ctaLink: c2CtaUrl.trim() ? formatUrl(c2CtaUrl) : '',
       category: c2Category || 'Restaurante/Comida',
       carouselType: 'explorar'
     });
