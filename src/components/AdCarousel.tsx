@@ -46,19 +46,21 @@ export const AdCarousel: React.FC<AdCarouselProps> = ({ type }) => {
       onMouseLeave={() => setIsHovered(false)}
     >
       <div className="relative rounded-2xl overflow-hidden shadow-lg border border-white/10 bg-neutral-900 group">
-        {/* Banner image with dark gradient overlay */}
-        <div className="relative h-48 sm:h-56 w-full overflow-hidden bg-neutral-950">
-          <img
-            src={currentBanner.imageUrl}
-            alt={currentBanner.title}
-            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
-            referrerPolicy="no-referrer"
-            onError={(e) => {
-              (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=1000&auto=format&fit=crop&q=80';
-            }}
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-neutral-950 via-neutral-950/60 to-transparent pointer-events-none"></div>
-          <div className="absolute inset-0 bg-gradient-to-r from-neutral-950/70 via-transparent to-transparent pointer-events-none"></div>
+        {/* Banner image */}
+        <div className="relative h-48 sm:h-60 w-full overflow-hidden bg-neutral-950 flex items-center justify-center">
+          {currentBanner.imageUrl ? (
+            <img
+              src={currentBanner.imageUrl}
+              alt={currentBanner.title || 'Anuncio publicitario'}
+              className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+            />
+          ) : (
+            <div className="w-full h-full bg-neutral-900 flex items-center justify-center text-white/40 text-xs">
+              Sin imagen
+            </div>
+          )}
+          {/* Subtle bottom gradient to keep text readable without darkening the whole picture */}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-transparent pointer-events-none"></div>
         </div>
 
         {/* Top Badges & Staff Admin Controls */}

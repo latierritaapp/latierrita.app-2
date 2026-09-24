@@ -1589,11 +1589,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     try {
       const unsub = onSnapshot(collection(db, 'banners'), (snapshot) => {
-        const list: AdBanner[] = [];
+        const dbList: AdBanner[] = [];
         if (!snapshot.empty) {
           snapshot.forEach((docSnap: any) => {
             const data = docSnap.data() || {};
-            list.push({ id: docSnap.id, ...data } as AdBanner);
+            dbList.push({ id: docSnap.id, ...data } as AdBanner);
           });
         }
 
@@ -1603,45 +1603,47 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           deletedIds = JSON.parse(deletedRaw);
         } catch {}
 
-        // Merge local banners
+        // Read all local banners stored
+        let localBanners: AdBanner[] = [];
         try {
-          const localBannersRaw = localStorage.getItem('latierrita_local_banners');
-          if (localBannersRaw) {
-            const localBanners = JSON.parse(localBannersRaw);
-            if (Array.isArray(localBanners)) {
-              localBanners.forEach((lb: AdBanner) => {
-                if (lb && !list.some(b => b.id === lb.id) && !deletedIds.includes(lb.id) && lb.id !== 'banner-init-1') {
-                  list.unshift(lb);
-                }
-              });
-            }
+          const localSaved = localStorage.getItem('latierrita_local_banners') || localStorage.getItem('latierrita_ad_banners');
+          if (localSaved) {
+            const parsed = JSON.parse(localSaved);
+            if (Array.isArray(parsed)) localBanners = parsed;
           }
         } catch {}
 
-        // Also check latierrita_ad_banners
-        try {
-          const allBannersRaw = localStorage.getItem('latierrita_ad_banners');
-          if (allBannersRaw) {
-            const allBanners = JSON.parse(allBannersRaw);
-            if (Array.isArray(allBanners)) {
-              allBanners.forEach((ab: AdBanner) => {
-                if (ab && !list.some(b => b.id === ab.id) && !deletedIds.includes(ab.id) && ab.id !== 'banner-init-1') {
-                  list.unshift(ab);
-                }
-              });
-            }
+        // Combined list prioritizing newest
+        const combinedMap = new Map<string, AdBanner>();
+        
+        // Add DB items first
+        dbList.forEach(b => {
+          if (b && b.id && b.id !== 'banner-init-1' && !deletedIds.includes(b.id)) {
+            combinedMap.set(b.id, b);
           }
-        } catch {}
+        });
 
-        const cleanList = list.filter(b => b && b.id !== 'banner-init-1' && !deletedIds.includes(b.id));
-        setAdBanners(cleanList);
-        try {
-          localStorage.setItem('latierrita_ad_banners', JSON.stringify(cleanList));
-          localStorage.setItem('latierrita_local_banners', JSON.stringify(cleanList));
-        } catch {}
+        // Overlay / merge local items (ensures instantly uploaded user banners are not lost)
+        localBanners.forEach(b => {
+          if (b && b.id && b.id !== 'banner-init-1' && !deletedIds.includes(b.id)) {
+            combinedMap.set(b.id, b);
+          }
+        });
+
+        const cleanList = Array.from(combinedMap.values());
+
+        // Only update if we have a valid list, or if we explicitly cleared everything
+        if (cleanList.length > 0) {
+          setAdBanners(cleanList);
+          try {
+            localStorage.setItem('latierrita_ad_banners', JSON.stringify(cleanList));
+            localStorage.setItem('latierrita_local_banners', JSON.stringify(cleanList));
+          } catch {}
+        } else if (dbList.length === 0 && localBanners.length === 0) {
+          setAdBanners([]);
+        }
       }, (error) => {
         console.warn('Banners listener note:', error?.message || error);
-        // Fallback to local storage if DB is not available
         try {
           const saved = localStorage.getItem('latierrita_ad_banners') || localStorage.getItem('latierrita_local_banners');
           if (saved) {
