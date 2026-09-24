@@ -17,7 +17,7 @@ export const FeedView: React.FC = () => {
       {/* 1. Instagram Stories Bar at the very top */}
       <StoriesBar />
 
-      {/* 2. Staff-managed Advertising Carousel 01 (Inicio) */}
+      {/* 2. Top Image Carousel (Inicio) right under stories */}
       <AdCarousel type="inicio" />
 
       {/* 3. Posts Stream (Only Staff Publications) */}

@@ -7,10 +7,12 @@ interface AdCarouselProps {
 }
 
 export const AdCarousel: React.FC<AdCarouselProps> = ({ type }) => {
-  const { adBanners, isStaffMode, setIsStaffAdminOpen, openReportModal } = useApp();
+  const { adBanners, isStaffMode, setIsStaffAdminOpen, openReportModal, currentUser } = useApp();
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isHovered, setIsHovered] = useState(false);
   const [selectedZoomImage, setSelectedZoomImage] = useState<string | null>(null);
+
+  const isAdmin = isStaffMode || currentUser?.staffRole === 'ADMIN' || currentUser?.username === 'latierrita_app' || currentUser?.id === 'user-staff';
 
   const activeBanners = adBanners.filter(
     b => b && (type === 'explorar' 
@@ -45,7 +47,7 @@ export const AdCarousel: React.FC<AdCarouselProps> = ({ type }) => {
               Anuncios oficiales, eventos y promociones de la comunidad colombiana en España.
             </p>
           </div>
-          {isStaffMode ? (
+          {isAdmin ? (
             <button
               onClick={() => setIsStaffAdminOpen(true)}
               className="px-4 py-2 bg-amber-400 hover:bg-amber-300 text-neutral-950 font-black text-xs rounded-xl shadow-md transition-all active:scale-95 flex items-center gap-1.5 shrink-0 cursor-pointer"
@@ -146,7 +148,7 @@ export const AdCarousel: React.FC<AdCarouselProps> = ({ type }) => {
                   <Maximize2 className="w-3.5 h-3.5" />
                 </button>
               )}
-              {isStaffMode && (
+              {isAdmin && (
                 <button
                   id="btn-staff-quick-edit-banner"
                   onClick={() => setIsStaffAdminOpen(true)}

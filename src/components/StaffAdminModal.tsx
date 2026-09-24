@@ -137,7 +137,7 @@ export const StaffAdminModal: React.FC<{ isFullScreenRoute?: boolean }> = ({ isF
   };
 
   // Main navigation tab for ADMIN perspective
-  const [adminMainTab, setAdminMainTab] = useState<'feed_post' | 'carrusel_01' | 'carrusel_02' | 'administracion' | 'soporte' | 'popup_emergente'>('feed_post');
+  const [adminMainTab, setAdminMainTab] = useState<'carrusel_01' | 'carrusel_02' | 'feed_post' | 'administracion' | 'soporte' | 'popup_emergente'>('carrusel_01');
 
   // Subtabs for Administracion
   const [adminSubTab, setAdminSubTab] = useState<'usuarios' | 'verificacion' | 'staff' | 'popup_emergente' | 'documentacion'>('usuarios');
@@ -209,8 +209,9 @@ export const StaffAdminModal: React.FC<{ isFullScreenRoute?: boolean }> = ({ isF
   const [c1Image, setC1Image] = useState('');
   const [c1Sponsor, setC1Sponsor] = useState('');
   const [c1Category, setC1Category] = useState<AdCategory>('Evento');
-  const [c1CtaText, setC1CtaText] = useState('Más información');
+  const [c1CtaText, setC1CtaText] = useState('Ver detalles');
   const [c1CtaUrl, setC1CtaUrl] = useState('');
+  const [c1TargetType, setC1TargetType] = useState<'inicio' | 'explorar' | 'ambos'>('inicio');
 
   // Forms State: Carrusel 02 (Explorar)
   const [c2Title, setC2Title] = useState('');
@@ -393,10 +394,10 @@ export const StaffAdminModal: React.FC<{ isFullScreenRoute?: boolean }> = ({ isF
       imageUrl: c1Image.trim(),
       sponsorName: c1Sponsor.trim() || '',
       sponsorCity: c1Sponsor.trim() ? 'Toda España' : '',
-      ctaText: c1CtaText.trim() || (c1CtaUrl.trim() ? 'Ver Más' : ''),
+      ctaText: c1CtaText.trim() || (c1CtaUrl.trim() ? 'Ver detalles' : ''),
       ctaLink: c1CtaUrl.trim() ? formatUrl(c1CtaUrl) : '',
       category: c1Category || 'Evento',
-      carouselType: 'inicio'
+      carouselType: c1TargetType || 'inicio'
     });
 
     setC1Title('');
@@ -618,6 +619,21 @@ export const StaffAdminModal: React.FC<{ isFullScreenRoute?: boolean }> = ({ isF
           {activeRole === 'ADMIN' && (
             <div className="w-full md:w-60 bg-[#001f52] border-b md:border-b-0 md:border-r border-white/10 p-2 flex md:flex-col gap-1 overflow-x-auto shrink-0 no-scrollbar">
               <button
+                onClick={() => setAdminMainTab('carrusel_01')}
+                className={`flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold text-left transition-all shrink-0 ${
+                  adminMainTab === 'carrusel_01'
+                    ? 'bg-amber-400 text-neutral-950 font-black shadow-md'
+                    : 'text-white/80 hover:bg-white/10 hover:text-white'
+                }`}
+              >
+                <Sliders className="w-4 h-4 shrink-0" />
+                <span>Carrusel (Inicio)</span>
+                <span className="ml-auto text-[9px] px-1.5 py-0.2 bg-black/30 rounded-full">
+                  {bannersC1.length}
+                </span>
+              </button>
+
+              <button
                 onClick={() => setAdminMainTab('feed_post')}
                 className={`flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold text-left transition-all shrink-0 ${
                   adminMainTab === 'feed_post'
@@ -630,21 +646,6 @@ export const StaffAdminModal: React.FC<{ isFullScreenRoute?: boolean }> = ({ isF
               </button>
 
               <button
-                onClick={() => setAdminMainTab('carrusel_01')}
-                className={`flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold text-left transition-all shrink-0 ${
-                  adminMainTab === 'carrusel_01'
-                    ? 'bg-amber-400 text-neutral-950 font-black shadow-md'
-                    : 'text-white/80 hover:bg-white/10 hover:text-white'
-                }`}
-              >
-                <ImageIcon className="w-4 h-4 shrink-0" />
-                <span>Carrusel 01 (Inicio)</span>
-                <span className="ml-auto text-[9px] px-1.5 py-0.2 bg-black/30 rounded-full">
-                  {bannersC1.length}
-                </span>
-              </button>
-
-              <button
                 onClick={() => setAdminMainTab('carrusel_02')}
                 className={`flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold text-left transition-all shrink-0 ${
                   adminMainTab === 'carrusel_02'
@@ -653,7 +654,7 @@ export const StaffAdminModal: React.FC<{ isFullScreenRoute?: boolean }> = ({ isF
                 }`}
               >
                 <Sliders className="w-4 h-4 shrink-0" />
-                <span>Carrusel 02 (Explorar)</span>
+                <span>Carrusel (Explorar)</span>
                 <span className="ml-auto text-[9px] px-1.5 py-0.2 bg-black/30 rounded-full">
                   {bannersC2.length}
                 </span>
@@ -1351,6 +1352,250 @@ export const StaffAdminModal: React.FC<{ isFullScreenRoute?: boolean }> = ({ isF
             {/* ROLE = ADMIN Content */}
             {activeRole === 'ADMIN' && (
               <>
+                {/* TAB 0: CARRUSEL (INICIO) */}
+                {adminMainTab === 'carrusel_01' && (
+                  <div className="space-y-5">
+                    <div className="p-3.5 bg-white/5 border border-white/10 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div>
+                        <h4 className="text-xs font-black text-amber-300 uppercase tracking-wider">
+                          Gestionar Carrusel de Anuncios (Inicio)
+                        </h4>
+                        <p className="text-[11px] text-white/70">
+                          Banners publicitarios e imágenes mostradas en la parte superior de Inicio, debajo de las historias.
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+                        <button
+                          id="btn-refresh-carrusel-01"
+                          type="button"
+                          onClick={handleRefreshBanners}
+                          disabled={isRefreshingBanners}
+                          className="px-3 py-1.5 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 active:scale-95 text-neutral-950 font-black text-xs rounded-xl flex items-center gap-1.5 transition-all shadow-md cursor-pointer disabled:opacity-50"
+                          title="Sincronizar y actualizar inmediatamente el Carrusel de Inicio"
+                        >
+                          <RefreshCw className={`w-3.5 h-3.5 stroke-[2.5] ${isRefreshingBanners ? 'animate-spin' : ''}`} />
+                          <span>{isRefreshingBanners ? 'Actualizando...' : 'Actualizar Carrusel'}</span>
+                        </button>
+                        <span className="px-2.5 py-1.5 bg-white/10 border border-white/20 text-amber-300 text-xs font-black rounded-xl">
+                          {bannersC1.length} Activos
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Banners List */}
+                    <div className="space-y-2">
+                      <span className="text-xs font-extrabold uppercase text-white/80 block">
+                        Lista de imágenes en el carrusel de Inicio
+                      </span>
+                      {bannersC1.length === 0 ? (
+                        <p className="text-xs text-white/50 p-4 bg-white/5 rounded-xl text-center">
+                          No hay anuncios cargados en el Carrusel de Inicio.
+                        </p>
+                      ) : (
+                        bannersC1.map(ad => (
+                          <div
+                            key={ad.id}
+                            className="p-3 bg-white/5 border border-white/10 rounded-2xl flex items-center justify-between gap-3"
+                          >
+                            <img
+                              src={ad.imageUrl || undefined}
+                              alt={ad.title}
+                              className="w-16 h-12 rounded-xl object-cover shrink-0 border border-white/20"
+                            />
+                            <div className="min-w-0 flex-1 text-xs">
+                              <span className="font-bold text-white block truncate">{ad.title || 'Anuncio sin título'}</span>
+                              <span className="text-[10px] text-white/60 block truncate">
+                                {ad.sponsorName || 'Staff'} · Ubicación: <strong className="text-amber-300">{ad.carouselType === 'ambos' ? 'Inicio & Explorar' : 'Solo Inicio'}</strong>
+                              </span>
+                            </div>
+                            <button
+                              onClick={() => deleteAdBanner(ad.id)}
+                              className="p-2 text-rose-400 hover:bg-rose-500/20 rounded-xl transition-colors shrink-0 cursor-pointer"
+                              title="Eliminar del Carrusel de Inicio"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        ))
+                      )}
+                    </div>
+
+                    {/* Form: Add Banner to Carrusel 01 */}
+                    <form onSubmit={handleAddCarrusel01} className="p-4 bg-white/5 border border-white/10 rounded-2xl space-y-3 text-xs">
+                      <h4 className="font-extrabold text-amber-300 text-xs uppercase tracking-wider">
+                        Añadir Nueva Imagen / Anuncio al Carrusel de Inicio
+                      </h4>
+
+                      <div>
+                        <label className="block text-[10px] font-bold text-white/70 mb-1">
+                          Subir imagen para Carrusel de Inicio *
+                        </label>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            required
+                            value={c1Image}
+                            onChange={e => setC1Image(e.target.value)}
+                            placeholder="Pega la URL o elige de tu galería..."
+                            className="flex-1 bg-white/10 text-white placeholder-white/40 px-3 py-2 rounded-xl border border-white/20 focus:outline-none focus:ring-1 focus:ring-amber-400 text-xs"
+                          />
+                          <label className="px-3 py-2 bg-amber-400 hover:bg-amber-300 text-neutral-950 font-black rounded-xl flex items-center gap-1.5 shrink-0 cursor-pointer shadow-md transition-all active:scale-95 text-xs">
+                            <Upload className="w-3.5 h-3.5" />
+                            <span>Galería</span>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              onChange={e => handleFileSelect(e, setC1Image)}
+                            />
+                          </label>
+                        </div>
+                      </div>
+
+                      {c1Image && (
+                        <div className="space-y-2">
+                          <div className="relative w-full h-36 rounded-xl overflow-hidden border border-white/20 group">
+                            <img src={c1Image} alt="Preview" className="w-full h-full object-cover" />
+                            <span className="absolute bottom-2 left-2 bg-black/70 px-2 py-0.5 rounded text-[10px] text-amber-300 font-bold">
+                              Vista Previa Carrusel de Inicio
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setC1Image('')}
+                              className="absolute top-2 right-2 p-1 bg-rose-600 hover:bg-rose-500 text-white rounded-lg transition-colors"
+                              title="Quitar imagen"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleAddCarrusel01()}
+                            className="w-full py-2 bg-emerald-500 hover:bg-emerald-400 text-white font-black text-xs rounded-xl shadow-md transition-all active:scale-95 flex items-center justify-center gap-1.5 cursor-pointer"
+                          >
+                            <Check className="w-4 h-4 stroke-[3]" />
+                            <span>Publicar Imagen Inmediatamente en Carrusel de Inicio</span>
+                          </button>
+                        </div>
+                      )}
+
+                      <div>
+                        <label className="block text-[10px] font-bold text-white/70 mb-1">
+                          Ubicación del Carrusel
+                        </label>
+                        <select
+                          value={c1TargetType}
+                          onChange={e => setC1TargetType(e.target.value as any)}
+                          className="w-full bg-[#002466] text-white px-3 py-2 rounded-xl border border-white/20 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                        >
+                          <option value="inicio">Solo en Inicio (Debajo de Historias)</option>
+                          <option value="ambos">En Ambos Carruseles (Inicio y Explorar)</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold text-white/70 mb-1">
+                          Título (Opcional)
+                        </label>
+                        <input
+                          type="text"
+                          value={c1Title}
+                          onChange={e => setC1Title(e.target.value)}
+                          placeholder="ej. Bienvenidos a La Tierrita España"
+                          className="w-full bg-white/10 text-white placeholder-white/40 px-3 py-2 rounded-xl border border-white/20 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                        />
+                      </div>
+
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="block text-[10px] font-bold text-white/70">
+                            Descripción (Opcional - Máximo 100 caracteres)
+                          </label>
+                          <span className={`text-[10px] font-bold ${c1Description.length > 100 ? 'text-rose-400' : 'text-amber-300'}`}>
+                            {c1Description.length}/100
+                          </span>
+                        </div>
+                        <input
+                          type="text"
+                          maxLength={100}
+                          value={c1Description}
+                          onChange={e => setC1Description(e.target.value)}
+                          placeholder="ej. La mayor comunidad colombiana en España. ¡Únete ya!"
+                          className="w-full bg-white/10 text-white placeholder-white/40 px-3 py-2 rounded-xl border border-white/20 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="block text-[10px] font-bold text-white/70 mb-1">
+                            Patrocinador / Organizador
+                          </label>
+                          <input
+                            type="text"
+                            value={c1Sponsor}
+                            onChange={e => setC1Sponsor(e.target.value)}
+                            placeholder="ej. La Tierrita Oficial"
+                            className="w-full bg-white/10 text-white placeholder-white/40 px-3 py-2 rounded-xl border border-white/20 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[10px] font-bold text-white/70 mb-1">
+                            Categoría
+                          </label>
+                          <select
+                            value={c1Category}
+                            onChange={e => setC1Category(e.target.value as AdCategory)}
+                            className="w-full bg-[#002466] text-white px-3 py-2 rounded-xl border border-white/20 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                          >
+                            <option value="Evento">Evento</option>
+                            <option value="Restaurante/Comida">Restaurante/Comida</option>
+                            <option value="Servicio">Servicio</option>
+                            <option value="Tienda">Tienda</option>
+                            <option value="Otro">Otro</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="block text-[10px] font-bold text-white/70 mb-1">
+                            Texto botón CTA
+                          </label>
+                          <input
+                            type="text"
+                            value={c1CtaText}
+                            onChange={e => setC1CtaText(e.target.value)}
+                            placeholder="ej. Ver detalles"
+                            className="w-full bg-white/10 text-white placeholder-white/40 px-3 py-2 rounded-xl border border-white/20 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[10px] font-bold text-white/70 mb-1">
+                            URL de destino
+                          </label>
+                          <input
+                            type="text"
+                            value={c1CtaUrl}
+                            onChange={e => setC1CtaUrl(e.target.value)}
+                            placeholder="https://... o enlace"
+                            className="w-full bg-white/10 text-white placeholder-white/40 px-3 py-2 rounded-xl border border-white/20 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                          />
+                        </div>
+                      </div>
+
+                      <button
+                        type="submit"
+                        className="w-full py-2.5 bg-amber-400 hover:bg-amber-300 text-neutral-950 font-black text-xs rounded-xl shadow-md transition-all active:scale-95 flex items-center justify-center gap-1.5 cursor-pointer"
+                      >
+                        <Plus className="w-4 h-4 stroke-[3]" />
+                        <span>Añadir Imagen al Carrusel de Inicio</span>
+                      </button>
+                    </form>
+                  </div>
+                )}
+
                 {/* TAB 1: CREAR POST DE FEED */}
                 {adminMainTab === 'feed_post' && (
                   <div className="space-y-5">
@@ -1533,248 +1778,13 @@ export const StaffAdminModal: React.FC<{ isFullScreenRoute?: boolean }> = ({ isF
                   </div>
                 )}
 
-                {/* TAB 2: CARRUSEL 01 (INICIO) */}
-                {adminMainTab === 'carrusel_01' && (
-                  <div className="space-y-5">
-                    <div className="p-3.5 bg-white/5 border border-white/10 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                      <div>
-                        <h4 className="text-xs font-black text-amber-300 uppercase tracking-wider">
-                          Gestionar Carrusel 01 (Carrusel de Inicio)
-                        </h4>
-                        <p className="text-[11px] text-white/70">
-                          Banners publicitarios superiores que se muestran en el Feed de Inicio.
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
-                        <button
-                          id="btn-refresh-carrusel-01"
-                          type="button"
-                          onClick={handleRefreshBanners}
-                          disabled={isRefreshingBanners}
-                          className="px-3 py-1.5 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 active:scale-95 text-neutral-950 font-black text-xs rounded-xl flex items-center gap-1.5 transition-all shadow-md cursor-pointer disabled:opacity-50"
-                          title="Sincronizar y actualizar inmediatamente el Carrusel 01 en toda la app"
-                        >
-                          <RefreshCw className={`w-3.5 h-3.5 stroke-[2.5] ${isRefreshingBanners ? 'animate-spin' : ''}`} />
-                          <span>{isRefreshingBanners ? 'Actualizando...' : 'Actualizar Carrusel'}</span>
-                        </button>
-                        <span className="px-2.5 py-1.5 bg-white/10 border border-white/20 text-amber-300 text-xs font-black rounded-xl">
-                          {bannersC1.length} Activos
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Banners List */}
-                    <div className="space-y-2">
-                      <span className="text-xs font-extrabold uppercase text-white/80 block">
-                        Lista de imágenes en el carrusel de Inicio
-                      </span>
-                      {bannersC1.length === 0 ? (
-                        <p className="text-xs text-white/50 p-4 bg-white/5 rounded-xl text-center">
-                          No hay anuncios cargados en el Carrusel 01.
-                        </p>
-                      ) : (
-                        bannersC1.map(ad => (
-                          <div
-                            key={ad.id}
-                            className="p-3 bg-white/5 border border-white/10 rounded-2xl flex items-center justify-between gap-3"
-                          >
-                            <img
-                              src={ad.imageUrl || undefined}
-                              alt={ad.title}
-                              className="w-16 h-12 rounded-xl object-cover shrink-0 border border-white/20"
-                            />
-                            <div className="min-w-0 flex-1 text-xs">
-                              <span className="font-bold text-white block truncate">{ad.title}</span>
-                              <span className="text-[10px] text-white/60 block truncate">
-                                {ad.sponsorName} · Categoría: <strong className="text-amber-300">{ad.category}</strong>
-                              </span>
-                              {ad.subtitle && (
-                                <span className="text-[10px] text-white/50 block truncate">
-                                  {ad.subtitle}
-                                </span>
-                              )}
-                            </div>
-                            <button
-                              onClick={() => deleteAdBanner(ad.id)}
-                              className="p-2 text-rose-400 hover:bg-rose-500/20 rounded-xl transition-colors shrink-0"
-                              title="Eliminar del Carrusel 01"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        ))
-                      )}
-                    </div>
-
-                    {/* Form: Add Advertising to Carrusel 01 */}
-                    <form onSubmit={handleAddCarrusel01} className="p-4 bg-white/5 border border-white/10 rounded-2xl space-y-3 text-xs">
-                      <h4 className="font-extrabold text-amber-300 text-xs uppercase tracking-wider">
-                        Añadir Publicidad al Carrusel 01 (Formulario)
-                      </h4>
-
-                      <div>
-                        <label className="block text-[10px] font-bold text-white/70 mb-1">
-                          Subir imagen para Carrusel 01 *
-                        </label>
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="text"
-                            required
-                            value={c1Image}
-                            onChange={e => setC1Image(e.target.value)}
-                            placeholder="Pega la URL o elige de tu galería..."
-                            className="flex-1 bg-white/10 text-white placeholder-white/40 px-3 py-2 rounded-xl border border-white/20 focus:outline-none focus:ring-1 focus:ring-amber-400 text-xs"
-                          />
-                          <label className="px-3 py-2 bg-amber-400 hover:bg-amber-300 text-neutral-950 font-black rounded-xl flex items-center gap-1.5 shrink-0 cursor-pointer shadow-md transition-all active:scale-95 text-xs">
-                            <Upload className="w-3.5 h-3.5" />
-                            <span>Galería</span>
-                            <input
-                              type="file"
-                              accept="image/*"
-                              className="hidden"
-                              onChange={e => handleFileSelect(e, setC1Image)}
-                            />
-                          </label>
-                        </div>
-                      </div>
-
-                      {c1Image && (
-                        <div className="space-y-2">
-                          <div className="relative w-full h-36 rounded-xl overflow-hidden border border-white/20 group">
-                            <img src={c1Image} alt="Preview" className="w-full h-full object-cover" />
-                            <span className="absolute bottom-2 left-2 bg-black/70 px-2 py-0.5 rounded text-[10px] text-amber-300 font-bold">
-                              Vista Previa Carrusel 01
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => setC1Image('')}
-                              className="absolute top-2 right-2 p-1 bg-rose-600 hover:bg-rose-500 text-white rounded-lg transition-colors"
-                              title="Quitar imagen"
-                            >
-                              <X className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => handleAddCarrusel01()}
-                            className="w-full py-2 bg-emerald-500 hover:bg-emerald-400 text-white font-black text-xs rounded-xl shadow-md transition-all active:scale-95 flex items-center justify-center gap-1.5 cursor-pointer"
-                          >
-                            <Check className="w-4 h-4 stroke-[3]" />
-                            <span>Publicar Imagen Inmediatamente en Carrusel 01</span>
-                          </button>
-                        </div>
-                      )}
-
-                      <div>
-                        <label className="block text-[10px] font-bold text-white/70 mb-1">
-                          Título (Opcional)
-                        </label>
-                        <input
-                          type="text"
-                          value={c1Title}
-                          onChange={e => setC1Title(e.target.value)}
-                          placeholder="ej. Promo Especial Restaurante La Candelaria"
-                          className="w-full bg-white/10 text-white placeholder-white/40 px-3 py-2 rounded-xl border border-white/20 focus:outline-none focus:ring-1 focus:ring-amber-400"
-                        />
-                      </div>
-
-                      <div>
-                        <div className="flex items-center justify-between mb-1">
-                          <label className="block text-[10px] font-bold text-white/70">
-                            Descripción (Opcional - Máximo 100 caracteres)
-                          </label>
-                          <span className={`text-[10px] font-bold ${c1Description.length > 100 ? 'text-rose-400' : 'text-amber-300'}`}>
-                            {c1Description.length}/100
-                          </span>
-                        </div>
-                        <input
-                          type="text"
-                          maxLength={100}
-                          value={c1Description}
-                          onChange={e => setC1Description(e.target.value)}
-                          placeholder="ej. Ven y prueba la mejor bandeja paisa con postre gratis los fines de semana."
-                          className="w-full bg-white/10 text-white placeholder-white/40 px-3 py-2 rounded-xl border border-white/20 focus:outline-none focus:ring-1 focus:ring-amber-400"
-                        />
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <label className="block text-[10px] font-bold text-white/70 mb-1">
-                            Patrocinador
-                          </label>
-                          <input
-                            type="text"
-                            value={c1Sponsor}
-                            onChange={e => setC1Sponsor(e.target.value)}
-                            placeholder="ej. La Candelaria Madrid"
-                            className="w-full bg-white/10 text-white placeholder-white/40 px-3 py-2 rounded-xl border border-white/20 focus:outline-none focus:ring-1 focus:ring-amber-400"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-[10px] font-bold text-white/70 mb-1">
-                            Categoría
-                          </label>
-                          <select
-                            value={c1Category}
-                            onChange={e => setC1Category(e.target.value as AdCategory)}
-                            className="w-full bg-[#002466] text-white px-3 py-2 rounded-xl border border-white/20 focus:outline-none focus:ring-1 focus:ring-amber-400"
-                          >
-                            <option value="Evento">Evento</option>
-                            <option value="Restaurante/Comida">Restaurante/Comida</option>
-                            <option value="Servicio">Servicio</option>
-                            <option value="Tienda">Tienda</option>
-                            <option value="Otro">Otro</option>
-                          </select>
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <label className="block text-[10px] font-bold text-white/70 mb-1">
-                            Texto botón CTA
-                          </label>
-                          <input
-                            type="text"
-                            value={c1CtaText}
-                            onChange={e => setC1CtaText(e.target.value)}
-                            placeholder="ej. Reservar Mesa"
-                            className="w-full bg-white/10 text-white placeholder-white/40 px-3 py-2 rounded-xl border border-white/20 focus:outline-none focus:ring-1 focus:ring-amber-400"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-[10px] font-bold text-white/70 mb-1">
-                            URL de destino
-                          </label>
-                          <input
-                            type="text"
-                            value={c1CtaUrl}
-                            onChange={e => setC1CtaUrl(e.target.value)}
-                            placeholder="https://... o enlace"
-                            className="w-full bg-white/10 text-white placeholder-white/40 px-3 py-2 rounded-xl border border-white/20 focus:outline-none focus:ring-1 focus:ring-amber-400"
-                          />
-                        </div>
-                      </div>
-
-                      <button
-                        type="submit"
-                        className="w-full py-2.5 bg-amber-400 hover:bg-amber-300 text-neutral-950 font-black text-xs rounded-xl shadow-md transition-all active:scale-95 flex items-center justify-center gap-1.5"
-                      >
-                        <Plus className="w-4 h-4 stroke-[3]" />
-                        <span>Añadir a Carrusel 01 (Inicio)</span>
-                      </button>
-                    </form>
-                  </div>
-                )}
-
-                {/* TAB 3: CARRUSEL 02 (EXPLORAR) */}
+                {/* TAB 2: CARRUSEL (EXPLORAR) */}
                 {adminMainTab === 'carrusel_02' && (
                   <div className="space-y-5">
                     <div className="p-3.5 bg-white/5 border border-white/10 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                       <div>
                         <h4 className="text-xs font-black text-amber-300 uppercase tracking-wider">
-                          Gestionar Carrusel 02 (Carrusel de Explorar)
+                          Gestionar Carrusel de Anuncios (Explorar)
                         </h4>
                         <p className="text-[11px] text-white/70">
                           Banners publicitarios independientes mostrados arriba de Parceros Sugeridos en la pestaña Explorar.
