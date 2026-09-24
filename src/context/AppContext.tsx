@@ -103,6 +103,9 @@ interface AppContextType {
   setIsStaffMode: (val: boolean | ((prev: boolean) => boolean)) => void;
   isStaffAdminOpen: boolean;
   setIsStaffAdminOpen: (open: boolean) => void;
+  staffAdminTab: 'carrusel_01' | 'carrusel_02' | 'feed_post' | 'popup_emergente' | 'administracion' | 'soporte';
+  setStaffAdminTab: (tab: 'carrusel_01' | 'carrusel_02' | 'feed_post' | 'popup_emergente' | 'administracion' | 'soporte') => void;
+  openStaffAdminWithTab: (tab: 'carrusel_01' | 'carrusel_02' | 'feed_post' | 'popup_emergente' | 'administracion' | 'soporte') => void;
 
   // Support & Administration
   supportTickets: SupportTicket[];
@@ -704,6 +707,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const savedStaffMode = localStorage.getItem('latierrita_staff_mode') === 'true';
     return isAdminSlug || savedAdminOpen || savedStaffMode;
   });
+
+  const [staffAdminTab, setStaffAdminTab] = useState<'carrusel_01' | 'carrusel_02' | 'feed_post' | 'popup_emergente' | 'administracion' | 'soporte'>('carrusel_01');
+
+  const openStaffAdminWithTab = (tab: 'carrusel_01' | 'carrusel_02' | 'feed_post' | 'popup_emergente' | 'administracion' | 'soporte') => {
+    setStaffAdminTab(tab);
+    setIsStaffAdminOpen(true);
+  };
 
   useEffect(() => {
     try {
@@ -4009,6 +4019,9 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
         setIsStaffMode,
         isStaffAdminOpen,
         setIsStaffAdminOpen,
+        staffAdminTab,
+        setStaffAdminTab,
+        openStaffAdminWithTab,
 
         supportTickets,
         createSupportTicket,

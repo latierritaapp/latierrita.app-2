@@ -7,12 +7,13 @@ interface AdCarouselProps {
 }
 
 export const AdCarousel: React.FC<AdCarouselProps> = ({ type }) => {
-  const { adBanners, isStaffMode, setIsStaffAdminOpen, openReportModal, currentUser } = useApp();
+  const { adBanners, isStaffMode, openStaffAdminWithTab, openReportModal, currentUser } = useApp();
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isHovered, setIsHovered] = useState(false);
   const [selectedZoomImage, setSelectedZoomImage] = useState<string | null>(null);
 
   const isAdmin = isStaffMode || currentUser?.staffRole === 'ADMIN' || currentUser?.username === 'latierrita_app' || currentUser?.id === 'user-staff';
+  const targetTab = type === 'explorar' ? 'carrusel_02' : 'carrusel_01';
 
   const activeBanners = adBanners.filter(
     b => b && (type === 'explorar' 
@@ -49,7 +50,7 @@ export const AdCarousel: React.FC<AdCarouselProps> = ({ type }) => {
           </div>
           {isAdmin ? (
             <button
-              onClick={() => setIsStaffAdminOpen(true)}
+              onClick={() => openStaffAdminWithTab(targetTab)}
               className="px-4 py-2 bg-amber-400 hover:bg-amber-300 text-neutral-950 font-black text-xs rounded-xl shadow-md transition-all active:scale-95 flex items-center gap-1.5 shrink-0 cursor-pointer"
             >
               <Plus className="w-4 h-4 stroke-[3]" />
@@ -151,7 +152,7 @@ export const AdCarousel: React.FC<AdCarouselProps> = ({ type }) => {
               {isAdmin && (
                 <button
                   id="btn-staff-quick-edit-banner"
-                  onClick={() => setIsStaffAdminOpen(true)}
+                  onClick={() => openStaffAdminWithTab(targetTab)}
                   className="flex items-center gap-1 text-[11px] font-bold bg-neutral-900/90 hover:bg-neutral-800 text-amber-300 border border-amber-500/40 px-2.5 py-1 rounded-lg backdrop-blur-md transition-all shadow-md cursor-pointer"
                   title="Administrar publicidad como STAFF"
                 >

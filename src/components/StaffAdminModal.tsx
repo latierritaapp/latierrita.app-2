@@ -85,8 +85,13 @@ export const StaffAdminModal: React.FC<{ isFullScreenRoute?: boolean }> = ({ isF
     triggerPlushNotification,
     startupAdConfig,
     updateStartupAdConfig,
-    simulateAppRestart
+    simulateAppRestart,
+    staffAdminTab,
+    setStaffAdminTab
   } = useApp();
+
+  const adminMainTab = staffAdminTab;
+  const setAdminMainTab = setStaffAdminTab;
 
   // Role perspective selector inside panel
   const [activeRole, setActiveRole] = useState<StaffRole>(() => {
@@ -135,9 +140,6 @@ export const StaffAdminModal: React.FC<{ isFullScreenRoute?: boolean }> = ({ isF
       setUnlockPinError(true);
     }
   };
-
-  // Main navigation tab for ADMIN perspective
-  const [adminMainTab, setAdminMainTab] = useState<'carrusel_01' | 'carrusel_02' | 'feed_post' | 'administracion' | 'soporte' | 'popup_emergente'>('carrusel_01');
 
   // Subtabs for Administracion
   const [adminSubTab, setAdminSubTab] = useState<'usuarios' | 'verificacion' | 'staff' | 'popup_emergente' | 'documentacion'>('usuarios');
