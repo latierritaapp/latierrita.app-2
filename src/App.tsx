@@ -39,7 +39,7 @@ const AppContent: React.FC = () => {
         id="app-root-gradient"
         className="min-h-screen text-neutral-100 flex flex-col font-sans transition-colors duration-200 antialiased selection:bg-amber-400 selection:text-neutral-950 bg-[#001845]"
       >
-        <StaffAdminModal />
+        <StaffAdminModal isFullScreenRoute={true} />
         <PlushNotificationToast />
       </div>
     );

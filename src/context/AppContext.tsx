@@ -659,8 +659,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       localStorage.setItem('latierrita_ad_banners', JSON.stringify(adBanners));
     }
   }, [adBanners]);
-  const [isStaffMode, setIsStaffMode] = useState<boolean>(false);
-  const [isStaffAdminOpen, setIsStaffAdminOpen] = useState<boolean>(false);
+  const [isStaffMode, setIsStaffMode] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    const saved = localStorage.getItem('latierrita_staff_mode');
+    return saved === 'true';
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('latierrita_staff_mode', isStaffMode ? 'true' : 'false');
+    } catch {}
+  }, [isStaffMode]);
+
+  const [isStaffAdminOpen, setIsStaffAdminOpen] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    const isAdminSlug = window.location.pathname === '/admin' || window.location.pathname === '/administracion';
+    const savedAdminOpen = localStorage.getItem('latierrita_staff_admin_open') === 'true';
+    const savedStaffMode = localStorage.getItem('latierrita_staff_mode') === 'true';
+    return isAdminSlug || savedAdminOpen || savedStaffMode;
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('latierrita_staff_admin_open', isStaffAdminOpen ? 'true' : 'false');
+    } catch {}
+  }, [isStaffAdminOpen]);
 
   // Default config for the startup popup ad
   const DEFAULT_STARTUP_AD: StartupAdConfig = {
