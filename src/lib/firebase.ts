@@ -74,6 +74,15 @@ function formatRowData(tableName: string, data: any): any {
       tiktok: item.tiktok || '',
       x: item.x || ''
     };
+  } else if (tableName === 'banners') {
+    item.active = item.active !== undefined ? item.active : true;
+    item.carouselType = item.carouselType || item.carousel_type || 'inicio';
+    item.imageUrl = item.imageUrl || item.image_url || '';
+    item.sponsorName = item.sponsorName || item.sponsor_name || '';
+    item.sponsorCity = item.sponsorCity || item.sponsor_city || '';
+    item.ctaText = item.ctaText || item.cta_text || '';
+    item.ctaLink = item.ctaLink || item.cta_link || '';
+    item.discountBadge = item.discountBadge || item.discount_badge || '';
   } else if (tableName === 'chat_rooms') {
     // 1. Process messages column (Postgres JSONB or stringified JSON)
     if (typeof item.messages === 'string') {
@@ -356,11 +365,13 @@ export function onSnapshot(
           exists: () => true
         }));
 
-        callback({
-          empty: docs.length === 0,
-          forEach: (cb: any) => docs.forEach(cb),
-          docs
-        });
+        if (!isUnsubscribed) {
+          callback({
+            empty: docs.length === 0,
+            forEach: (cb: any) => docs.forEach(cb),
+            docs
+          });
+        }
       } else if (ref.type === 'document') {
         const { data, error } = await supabase
           .from(ref.collection)
@@ -370,40 +381,56 @@ export function onSnapshot(
 
         if (error) throw error;
 
-        callback({
-          exists: () => !!data,
-          data: () => data ? formatRowData(ref.collection, data) : null,
-          id: ref.id
-        });
+        if (!isUnsubscribed) {
+          callback({
+            exists: () => !!data,
+            data: () => data ? formatRowData(ref.collection, data) : null,
+            id: ref.id
+          });
+        }
       }
     } catch (err) {
       if (errorCallback) errorCallback(err);
-      else console.error('Error in emulated onSnapshot:', err);
+      else console.warn('Note in emulated onSnapshot fetch:', err);
     }
   };
 
   // Carga inicial
   fetchData();
 
-  // Configurar suscripción en tiempo real con Supabase Realtime
-  const targetTable = ref.type === 'collection' ? ref.name : ref.collection;
-  const channelName = ref.type === 'collection' ? ref.name : `${ref.collection}-${ref.id}`;
-  const channel = supabase.channel(`realtime-shim:${channelName}`);
+  // Configurar suscripción en tiempo real con Supabase Realtime con canal único para evitar colisiones
+  let channel: any = null;
+  try {
+    const targetTable = ref.type === 'collection' ? ref.name : ref.collection;
+    const channelName = ref.type === 'collection' ? ref.name : `${ref.collection}-${ref.id}`;
+    const uniqueChannelId = `realtime-shim:${channelName}-${Math.random().toString(36).slice(2, 9)}-${Date.now()}`;
+    channel = supabase.channel(uniqueChannelId);
 
-  channel
-    .on('postgres_changes', { 
-      event: '*', 
-      schema: 'public', 
-      table: targetTable,
-      filter: ref.type === 'document' ? `id=eq.${ref.id}` : undefined
-    }, () => {
-      fetchData();
-    })
-    .subscribe();
+    channel
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: targetTable,
+        filter: ref.type === 'document' ? `id=eq.${ref.id}` : undefined
+      }, () => {
+        fetchData();
+      })
+      .subscribe();
+  } catch (err) {
+    console.warn('Realtime channel subscription note:', err);
+  }
 
   return () => {
     isUnsubscribed = true;
-    channel.unsubscribe();
+    if (channel) {
+      try {
+        supabase.removeChannel(channel);
+      } catch (e) {
+        try {
+          channel.unsubscribe();
+        } catch {}
+      }
+    }
   };
 }
 
