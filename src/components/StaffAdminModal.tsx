@@ -52,6 +52,7 @@ export const StaffAdminModal: React.FC = () => {
     isStaffAdminOpen,
     setIsStaffAdminOpen,
     adBanners,
+    refreshBanners,
     addAdBanner,
     deleteAdBanner,
     addStaffPost,
@@ -243,6 +244,19 @@ export const StaffAdminModal: React.FC = () => {
   );
 
   // File upload helper from device gallery with automatic lightweight compression
+  const [isRefreshingBanners, setIsRefreshingBanners] = useState(false);
+
+  const handleRefreshBanners = async () => {
+    setIsRefreshingBanners(true);
+    try {
+      await refreshBanners();
+    } finally {
+      setTimeout(() => {
+        setIsRefreshingBanners(false);
+      }, 500);
+    }
+  };
+
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>, setter: (url: string) => void) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -1464,7 +1478,7 @@ export const StaffAdminModal: React.FC = () => {
                 {/* TAB 2: CARRUSEL 01 (INICIO) */}
                 {adminMainTab === 'carrusel_01' && (
                   <div className="space-y-5">
-                    <div className="p-3.5 bg-white/5 border border-white/10 rounded-2xl flex items-center justify-between">
+                    <div className="p-3.5 bg-white/5 border border-white/10 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                       <div>
                         <h4 className="text-xs font-black text-amber-300 uppercase tracking-wider">
                           Gestionar Carrusel 01 (Carrusel de Inicio)
@@ -1473,9 +1487,22 @@ export const StaffAdminModal: React.FC = () => {
                           Banners publicitarios superiores que se muestran en el Feed de Inicio.
                         </p>
                       </div>
-                      <span className="px-2.5 py-1 bg-amber-400 text-neutral-950 text-xs font-black rounded-lg">
-                        {bannersC1.length} Activos
-                      </span>
+                      <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+                        <button
+                          id="btn-refresh-carrusel-01"
+                          type="button"
+                          onClick={handleRefreshBanners}
+                          disabled={isRefreshingBanners}
+                          className="px-3 py-1.5 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 active:scale-95 text-neutral-950 font-black text-xs rounded-xl flex items-center gap-1.5 transition-all shadow-md cursor-pointer disabled:opacity-50"
+                          title="Sincronizar y actualizar inmediatamente el Carrusel 01 en toda la app"
+                        >
+                          <RefreshCw className={`w-3.5 h-3.5 stroke-[2.5] ${isRefreshingBanners ? 'animate-spin' : ''}`} />
+                          <span>{isRefreshingBanners ? 'Actualizando...' : 'Actualizar Carrusel'}</span>
+                        </button>
+                        <span className="px-2.5 py-1.5 bg-white/10 border border-white/20 text-amber-300 text-xs font-black rounded-xl">
+                          {bannersC1.length} Activos
+                        </span>
+                      </div>
                     </div>
 
                     {/* Banners List */}
@@ -1676,7 +1703,7 @@ export const StaffAdminModal: React.FC = () => {
                 {/* TAB 3: CARRUSEL 02 (EXPLORAR) */}
                 {adminMainTab === 'carrusel_02' && (
                   <div className="space-y-5">
-                    <div className="p-3.5 bg-white/5 border border-white/10 rounded-2xl flex items-center justify-between">
+                    <div className="p-3.5 bg-white/5 border border-white/10 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                       <div>
                         <h4 className="text-xs font-black text-amber-300 uppercase tracking-wider">
                           Gestionar Carrusel 02 (Carrusel de Explorar)
@@ -1685,9 +1712,22 @@ export const StaffAdminModal: React.FC = () => {
                           Banners publicitarios independientes mostrados arriba de Parceros Sugeridos en la pestaña Explorar.
                         </p>
                       </div>
-                      <span className="px-2.5 py-1 bg-amber-400 text-neutral-950 text-xs font-black rounded-lg">
-                        {bannersC2.length} Activos
-                      </span>
+                      <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+                        <button
+                          id="btn-refresh-carrusel-02"
+                          type="button"
+                          onClick={handleRefreshBanners}
+                          disabled={isRefreshingBanners}
+                          className="px-3 py-1.5 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 active:scale-95 text-neutral-950 font-black text-xs rounded-xl flex items-center gap-1.5 transition-all shadow-md cursor-pointer disabled:opacity-50"
+                          title="Sincronizar y actualizar inmediatamente el Carrusel 02 en toda la app"
+                        >
+                          <RefreshCw className={`w-3.5 h-3.5 stroke-[2.5] ${isRefreshingBanners ? 'animate-spin' : ''}`} />
+                          <span>{isRefreshingBanners ? 'Actualizando...' : 'Actualizar Carrusel'}</span>
+                        </button>
+                        <span className="px-2.5 py-1.5 bg-white/10 border border-white/20 text-amber-300 text-xs font-black rounded-xl">
+                          {bannersC2.length} Activos
+                        </span>
+                      </div>
                     </div>
 
                     {/* Banners List */}

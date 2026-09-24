@@ -89,6 +89,7 @@ interface AppContextType {
 
   // Ads & Staff
   adBanners: AdBanner[];
+  refreshBanners: () => Promise<void>;
   addAdBanner: (banner: Omit<AdBanner, 'id' | 'active'>) => void;
   deleteAdBanner: (id: string) => void;
   addStaffPost: (post: { title: string; description: string; imageUrl: string; ctaText: string; ctaUrl: string; sponsorName: string }) => void;
@@ -2705,6 +2706,66 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
     }
   };
 
+  // Manual / On-demand Refresh of Banners from Database & Local Storage
+  const refreshBanners = async () => {
+    try {
+      const snap = await getDocs(collection(db, 'banners'));
+      const list: AdBanner[] = [];
+      if (!snap.empty) {
+        snap.forEach((docSnap: any) => {
+          const data = docSnap.data() || {};
+          list.push({ id: docSnap.id, ...data } as AdBanner);
+        });
+      }
+
+      // Merge locally stored banners
+      try {
+        const localBannersRaw = localStorage.getItem('latierrita_local_banners');
+        if (localBannersRaw) {
+          const localBanners = JSON.parse(localBannersRaw);
+          if (Array.isArray(localBanners)) {
+            localBanners.forEach((lb: AdBanner) => {
+              if (!list.some(b => b.id === lb.id)) {
+                list.unshift(lb);
+              }
+            });
+          }
+        }
+      } catch (e) {}
+
+      const finalList = list.length > 0 ? list : INITIAL_AD_BANNERS;
+      setAdBanners(finalList);
+      try {
+        localStorage.setItem('latierrita_ad_banners', JSON.stringify(finalList));
+      } catch {}
+
+      triggerPlushNotification({
+        type: 'system',
+        title: 'Carruseles Actualizados',
+        message: `Se han sincronizado ${finalList.length} anuncios activos en los carruseles.`,
+        avatar: 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=200&auto=format&fit=crop&q=80'
+      });
+    } catch (err) {
+      console.warn('Manual refresh banners note, checking local storage:', err);
+      const cached = localStorage.getItem('latierrita_ad_banners');
+      let fallbackList = INITIAL_AD_BANNERS;
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            fallbackList = parsed;
+          }
+        } catch {}
+      }
+      setAdBanners(fallbackList);
+      triggerPlushNotification({
+        type: 'system',
+        title: 'Carruseles Actualizados',
+        message: 'Se ha restaurado y actualizado la lista de anuncios correctamente.'
+      });
+    }
+  };
+
   const deleteAdBanner = async (id: string) => {
     // 1. Immediate local state update
     setAdBanners(prev => prev.filter(b => b.id !== id));
@@ -3680,6 +3741,7 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
         setIsCreateMenuOpen,
 
         adBanners,
+        refreshBanners,
         addAdBanner,
         deleteAdBanner,
         addStaffPost,

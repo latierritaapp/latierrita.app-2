@@ -26,7 +26,9 @@ export const AdCarousel: React.FC<AdCarouselProps> = ({ type }) => {
 
   if (activeBanners.length === 0) return null;
 
-  const currentBanner = activeBanners[currentIndex];
+  const safeIndex = (currentIndex < activeBanners.length && currentIndex >= 0) ? currentIndex : 0;
+  const currentBanner = activeBanners[safeIndex];
+  if (!currentBanner) return null;
 
   const handlePrev = () => {
     setCurrentIndex(prev => (prev === 0 ? activeBanners.length - 1 : prev - 1));
