@@ -10,7 +10,8 @@ import {
   ShieldAlert,
   UserX,
   MapPin,
-  Share2
+  Share2,
+  Flag
 } from 'lucide-react';
 
 interface PostCardProps {
@@ -147,14 +148,17 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
                     openReportModal({
                       id: post.id,
                       type: 'post',
-                      title: `Publicación de @${post.username}`
+                      title: post.isStaffAd ? `Anuncio: ${post.adTitle || post.sponsorName || 'Patrocinado'}` : `Publicación de @${post.username}`,
+                      reportedUserId: post.userId,
+                      reportedUserName: post.isStaffAd ? (post.sponsorName || post.username) : post.username,
+                      initialTicketType: post.isStaffAd ? 'TRA' : 'TRP'
                     });
                     setShowOptions(false);
                   }}
                   className="w-full text-left px-4 py-2.5 text-xs text-rose-400 hover:bg-white/10 flex items-center gap-2"
                 >
                   <ShieldAlert className="w-4 h-4" />
-                  <span>Reportar contenido o spam</span>
+                  <span>{post.isStaffAd ? 'Reportar anuncio (TRA)' : 'Reportar publicación (TRP)'}</span>
                 </button>
 
                 {post.userId !== currentUser.id && (
@@ -206,15 +210,34 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
               {post.adDescription}
             </span>
           </div>
-          <a
-            href={post.adCtaUrl || '#'}
-            target="_blank"
-            rel="noreferrer"
-            className="shrink-0 flex items-center gap-1.5 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-neutral-950 font-bold text-xs px-3 py-1.5 rounded-xl shadow transition-all active:scale-95"
-          >
-            <span>{post.adCtaText}</span>
-            <ExternalLink className="w-3.5 h-3.5" />
-          </a>
+          <div className="shrink-0 flex items-center gap-2">
+            <button
+              onClick={() => {
+                openReportModal({
+                  id: post.id,
+                  type: 'post',
+                  title: `Anuncio: ${post.adTitle || post.sponsorName || 'Patrocinado'}`,
+                  reportedUserId: post.userId,
+                  reportedUserName: post.sponsorName || post.username,
+                  initialTicketType: 'TRA'
+                });
+              }}
+              className="p-2 text-white/60 hover:text-rose-400 bg-white/10 hover:bg-white/20 rounded-xl transition-all cursor-pointer flex items-center gap-1 text-[11px] font-bold"
+              title="Reportar este anuncio (TRA)"
+            >
+              <Flag className="w-3.5 h-3.5 text-rose-400" />
+              <span className="hidden sm:inline">Reportar anuncio</span>
+            </button>
+            <a
+              href={post.adCtaUrl || '#'}
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center gap-1.5 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-neutral-950 font-bold text-xs px-3 py-1.5 rounded-xl shadow transition-all active:scale-95"
+            >
+              <span>{post.adCtaText}</span>
+              <ExternalLink className="w-3.5 h-3.5" />
+            </a>
+          </div>
         </div>
       )}
 

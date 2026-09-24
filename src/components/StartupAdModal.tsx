@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
-import { X, Sparkles, ExternalLink, ShieldCheck } from 'lucide-react';
+import { X, Sparkles, ExternalLink, ShieldCheck, Flag } from 'lucide-react';
 
 export const StartupAdModal: React.FC = () => {
-  const { startupAdOpen, dismissStartupAd, startupAdConfig } = useApp();
+  const { startupAdOpen, dismissStartupAd, startupAdConfig, openReportModal } = useApp();
   const [countdown, setCountdown] = useState(5);
 
   useEffect(() => {
@@ -121,9 +121,29 @@ export const StartupAdModal: React.FC = () => {
             </button>
           </div>
 
-          <div className="mt-3 pt-3 border-t border-neutral-800 flex items-center justify-center gap-1.5 text-[11px] text-neutral-500 text-center">
-            <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
-            <span>Publicidad verificada por el STAFF de La Tierrita España</span>
+          <div className="mt-3 pt-3 border-t border-neutral-800 flex items-center justify-between text-[11px] text-neutral-500">
+            <div className="flex items-center gap-1.5">
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+              <span>Publicidad verificada STAFF</span>
+            </div>
+            <button
+              id="btn-report-startup-ad"
+              type="button"
+              onClick={() => {
+                dismissStartupAd();
+                openReportModal({
+                  id: startupAdConfig.id || 'startup-ad',
+                  type: 'support',
+                  title: `Anuncio de inicio: ${startupAdConfig.title}`,
+                  initialTicketType: 'TRA'
+                });
+              }}
+              className="flex items-center gap-1 text-neutral-400 hover:text-rose-400 transition-colors font-medium cursor-pointer"
+              title="Reportar este anuncio (TRA)"
+            >
+              <Flag className="w-3 h-3 text-rose-400" />
+              <span>Reportar anuncio (TRA)</span>
+            </button>
           </div>
         </div>
       </div>

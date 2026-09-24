@@ -200,5 +200,67 @@ export const TICKET_CATEGORIES: Record<TicketType, TicketCategoryConfig> = {
         text: 'Cualquier otra vulneración a la convivencia.'
       }
     ]
+  },
+  TRA: {
+    type: 'TRA',
+    code: 'TRA',
+    label: 'Reporte de Anuncio (TRA)',
+    shortLabel: 'TRA',
+    fullTitle: 'Reportar Anuncio de Empleo o Alquiler',
+    badgeColor: 'bg-teal-500 text-white border-teal-400',
+    description: 'Reportar irregularidades, estafas, falsedad o contenido indebido en anuncios clasificados (empleo, vivienda/alquileres, compra/venta o servicios).',
+    options: [
+      {
+        id: 'tra-estafa',
+        title: 'Estafa, Fraude o Engaño',
+        text: 'Oferta falsa, cobro por adelantado, suplantación o información engañosa.'
+      },
+      {
+        id: 'tra-inapropiado',
+        title: 'Contenido Inapropiado o Sensible',
+        text: 'Imágenes o textos ofensivos, ilegales o contrarios a las normas.'
+      },
+      {
+        id: 'tra-acoso',
+        title: 'Acoso u Ofensas',
+        text: 'Trato discriminatorio, insultos, explotación o amenazas en el anuncio.'
+      },
+      {
+        id: 'tra-otro',
+        title: 'Otro Motivo',
+        text: 'Cualquier otra irregularidad en el anuncio o incumplimiento de normas.'
+      }
+    ]
+  },
+  TRI: {
+    type: 'TRI',
+    code: 'TRI',
+    label: 'Informar de un fallo en la app (TRI)',
+    shortLabel: 'TRI',
+    fullTitle: 'Informar de un fallo en la app',
+    badgeColor: 'bg-amber-500 text-neutral-950 border-amber-400',
+    description: 'Informar sobre errores técnicos, fallos de visualización o problemas en la aplicación.',
+    options: [
+      {
+        id: 'tri-fallo-general',
+        title: 'Fallo general o bloqueo',
+        text: 'La app se congela, se cierra o no responde adecuadamente.'
+      },
+      {
+        id: 'tri-fallo-visual',
+        title: 'Error visual o de carga',
+        text: 'Imágenes, publicaciones o elementos no se cargan o se ven distorsionados.'
+      },
+      {
+        id: 'tri-fallo-mensajes',
+        title: 'Error en chat o mensajes',
+        text: 'Problemas al enviar mensajes, audios o recibir notificaciones.'
+      },
+      {
+        id: 'tri-otro',
+        title: 'Otro Motivo',
+        text: 'Cualquier otro fallo o problema técnico experimentado.'
+      }
+    ]
   }
 };

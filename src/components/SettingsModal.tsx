@@ -202,7 +202,8 @@ export const SettingsModal: React.FC = () => {
     openReportModal({
       id: `report-app-${Date.now()}`,
       type: 'support',
-      title: 'Aplicación La Tierrita (Reporte General)'
+      title: 'Informar de un fallo en la app',
+      initialTicketType: 'TRI'
     });
   };
 
@@ -420,7 +421,15 @@ export const SettingsModal: React.FC = () => {
               {/* 6. Soporte */}
               <button
                 id="opt-support"
-                onClick={() => setSubView('support')}
+                onClick={() => {
+                  handleClose();
+                  openReportModal({
+                    id: 'support-tierrita',
+                    type: 'support',
+                    title: 'Atención y Soporte La Tierrita',
+                    initialTicketType: 'TS'
+                  });
+                }}
                 className="w-full flex items-center justify-between px-3 py-2 rounded-xl hover:bg-white/10 transition-colors text-left group"
               >
                 <div className="flex items-center gap-2.5">
@@ -429,20 +438,28 @@ export const SettingsModal: React.FC = () => {
                   </div>
                   <div>
                     <span className="text-xs font-bold text-white block">
-                      Soporte
+                      Soporte (TS)
                     </span>
                     <span className="text-[10px] text-white/60">
-                      Centro de ayuda y contacto directo
+                      Abrir ticket de atención y ayuda personalizada
                     </span>
                   </div>
                 </div>
                 <ChevronRight className="w-3.5 h-3.5 text-white/50 group-hover:translate-x-0.5 transition-transform" />
               </button>
 
-              {/* 7. Reportar */}
+              {/* 7. Informar de un fallo en la app (TRI) */}
               <button
                 id="opt-report"
-                onClick={() => setSubView('report')}
+                onClick={() => {
+                  handleClose();
+                  openReportModal({
+                    id: `bug-report-${Date.now()}`,
+                    type: 'support',
+                    title: 'Informar de un fallo en la app',
+                    initialTicketType: 'TRI'
+                  });
+                }}
                 className="w-full flex items-center justify-between px-3 py-2 rounded-xl hover:bg-white/10 transition-colors text-left group"
               >
                 <div className="flex items-center gap-2.5">
@@ -451,10 +468,10 @@ export const SettingsModal: React.FC = () => {
                   </div>
                   <div>
                     <span className="text-xs font-bold text-white block">
-                      Reportar
+                      Informar de un fallo en la app (TRI)
                     </span>
                     <span className="text-[10px] text-white/60">
-                      Informar de un fallo o infracción
+                      Reportar errores técnicos, bugs o cierres inesperados
                     </span>
                   </div>
                 </div>

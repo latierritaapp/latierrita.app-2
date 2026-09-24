@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
-import { ChevronLeft, ChevronRight, ExternalLink, Plus, Settings } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ExternalLink, Plus, Settings, Flag } from 'lucide-react';
 
 interface AdCarouselProps {
   type?: 'inicio' | 'explorar';
 }
 
 export const AdCarousel: React.FC<AdCarouselProps> = ({ type }) => {
-  const { adBanners, isStaffMode, setIsStaffAdminOpen } = useApp();
+  const { adBanners, isStaffMode, setIsStaffAdminOpen, openReportModal } = useApp();
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isHovered, setIsHovered] = useState(false);
 
@@ -97,6 +97,23 @@ export const AdCarousel: React.FC<AdCarouselProps> = ({ type }) => {
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
+            <button
+              id={`btn-report-banner-${currentBanner.id}`}
+              type="button"
+              onClick={() => {
+                openReportModal({
+                  id: currentBanner.id,
+                  type: 'support',
+                  title: `Anuncio: ${currentBanner.title} (${currentBanner.sponsorName})`,
+                  initialTicketType: 'TRA'
+                });
+              }}
+              className="p-2 text-white/70 hover:text-rose-400 bg-black/50 hover:bg-black/80 rounded-xl border border-white/20 transition-all cursor-pointer flex items-center gap-1 text-[11px] font-bold backdrop-blur-md"
+              title="Reportar este anuncio (TRA)"
+            >
+              <Flag className="w-3.5 h-3.5 text-rose-400" />
+              <span className="hidden sm:inline">Reportar</span>
+            </button>
             <a
               id={`btn-carousel-cta-${currentBanner.id}`}
               href={currentBanner.ctaLink}

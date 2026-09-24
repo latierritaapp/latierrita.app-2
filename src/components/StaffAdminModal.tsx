@@ -1017,6 +1017,26 @@ export const StaffAdminModal: React.FC = () => {
                             >
                               Grupo (TRG)
                             </button>
+                            <button
+                              onClick={() => setTicketTypeFilter('TRA')}
+                              className={`px-2.5 py-1 rounded-lg text-xs font-extrabold transition-all ${
+                                ticketTypeFilter === 'TRA'
+                                  ? 'bg-amber-500 text-neutral-950 shadow'
+                                  : 'text-white/70 hover:bg-white/10'
+                              }`}
+                            >
+                              Anuncio (TRA)
+                            </button>
+                            <button
+                              onClick={() => setTicketTypeFilter('TRI')}
+                              className={`px-2.5 py-1 rounded-lg text-xs font-extrabold transition-all ${
+                                ticketTypeFilter === 'TRI'
+                                  ? 'bg-violet-500 text-white shadow'
+                                  : 'text-white/70 hover:bg-white/10'
+                              }`}
+                            >
+                              Fallo App (TRI)
+                            </button>
                           </div>
 
                           {/* Status filter with counts */}

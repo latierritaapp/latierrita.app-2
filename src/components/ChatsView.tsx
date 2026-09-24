@@ -1160,7 +1160,10 @@ export const ChatsView: React.FC = () => {
                                           id: room.targetUserId,
                                           type: 'user',
                                           title: `Usuario: ${room.name}`,
-                                          chatId: room.id
+                                          chatId: room.id,
+                                          reportedUserId: room.targetUserId,
+                                          reportedUserName: room.name,
+                                          initialTicketType: 'TRU'
                                         });
                                       }
                                       setActiveMinimizedMenuId(null);
@@ -1222,9 +1225,10 @@ export const ChatsView: React.FC = () => {
                                       e.stopPropagation();
                                       openReportModal({
                                         id: room.id,
-                                        type: 'post',
+                                        type: 'group',
                                         title: `Grupo: ${room.name}`,
-                                        chatId: room.id
+                                        chatId: room.id,
+                                        initialTicketType: 'TRG'
                                       });
                                       setActiveMinimizedMenuId(null);
                                     }}
@@ -1441,9 +1445,10 @@ export const ChatsView: React.FC = () => {
                                 onClick={() => {
                                   openReportModal({
                                     id: activeChat.id,
-                                    type: 'post',
+                                    type: 'group',
                                     title: `Grupo: ${activeChat.name}`,
-                                    chatId: activeChat.id
+                                    chatId: activeChat.id,
+                                    initialTicketType: 'TRG'
                                   });
                                   setShowChatOptions(false);
                                 }}
@@ -1499,7 +1504,10 @@ export const ChatsView: React.FC = () => {
                                       id: activeChat.targetUserId,
                                       type: 'user',
                                       title: `Usuario: ${activeChat.name}`,
-                                      chatId: activeChat.id
+                                      chatId: activeChat.id,
+                                      reportedUserId: activeChat.targetUserId,
+                                      reportedUserName: activeChat.name,
+                                      initialTicketType: 'TRU'
                                     });
                                   }
                                   setShowChatOptions(false);
@@ -2482,7 +2490,10 @@ export const ChatsView: React.FC = () => {
                     id: activeMessageMenu.message.id,
                     type: 'message',
                     title: `Mensaje de ${activeMessageMenu.message.senderName}`,
-                    chatId: activeMessageMenu.chatId
+                    chatId: activeMessageMenu.chatId,
+                    reportedUserId: activeMessageMenu.message.senderId,
+                    reportedUserName: activeMessageMenu.message.senderName,
+                    initialTicketType: 'TRM'
                   });
                   setActiveMessageMenu(null);
                   setShowExtendedEmojis(false);
@@ -2618,7 +2629,10 @@ export const ChatsView: React.FC = () => {
                   openReportModal({
                     id: activeUserMenu.userId,
                     type: 'user',
-                    title: `Usuario: ${activeUserMenu.userName}`
+                    title: `Usuario: ${activeUserMenu.userName}`,
+                    reportedUserId: activeUserMenu.userId,
+                    reportedUserName: activeUserMenu.userName,
+                    initialTicketType: 'TRU'
                   });
                   setActiveUserMenu(null);
                 }}
@@ -2866,9 +2880,10 @@ export const ChatsView: React.FC = () => {
                 onClick={() => {
                   openReportModal({
                     id: groupInfoTarget.id,
-                    type: 'post',
+                    type: 'group',
                     title: `Grupo: ${groupInfoTarget.name}`,
-                    chatId: groupInfoTarget.id
+                    chatId: groupInfoTarget.id,
+                    initialTicketType: 'TRG'
                   });
                 }}
                 className="w-full py-3 bg-neutral-900 hover:bg-neutral-950 text-amber-400 font-bold text-xs rounded-2xl flex items-center justify-center gap-2 border border-neutral-700/80 transition-colors cursor-pointer"

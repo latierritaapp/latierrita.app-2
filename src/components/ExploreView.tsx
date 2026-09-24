@@ -14,7 +14,9 @@ import {
   TrendingUp,
   Search,
   ArrowLeft,
-  Clock
+  Clock,
+  MoreHorizontal,
+  ShieldAlert
 } from 'lucide-react';
 import { PostItem, UserProfile } from '../types';
 
@@ -30,11 +32,13 @@ export const ExploreView: React.FC = () => {
     addComment,
     setSelectedUserProfile,
     setActiveTab,
-    triggerPlushNotification
+    triggerPlushNotification,
+    openReportModal
   } = useApp();
 
   // State to track if full feed mode is open and which post was clicked
   const [openedFeedPostId, setOpenedFeedPostId] = useState<string | null>(null);
+  const [activePostMenuId, setActivePostMenuId] = useState<string | null>(null);
   const [commentInputs, setCommentInputs] = useState<Record<string, string>>({});
   const [expandedComments, setExpandedComments] = useState<Record<string, boolean>>({});
   const [heartAnimPostId, setHeartAnimPostId] = useState<string | null>(null);
@@ -355,6 +359,63 @@ export const ExploreView: React.FC = () => {
                           #{topRankIndex + 1}
                         </span>
                       )}
+
+                      {/* 3-dots menu button */}
+                      <div className="relative">
+                        <button
+                          onClick={() => setActivePostMenuId(activePostMenuId === post.id ? null : post.id)}
+                          className="p-1.5 text-white/70 hover:text-white rounded-full hover:bg-white/10 transition-colors"
+                          title="Opciones de publicación"
+                        >
+                          <MoreHorizontal className="w-4 h-4" />
+                        </button>
+
+                        {activePostMenuId === post.id && (
+                          <>
+                            <div
+                              className="fixed inset-0 z-30"
+                              onClick={() => setActivePostMenuId(null)}
+                            />
+                            <div className="absolute right-0 mt-1 w-48 bg-[#0d224d] border border-white/15 rounded-2xl shadow-2xl z-40 py-1.5 overflow-hidden animate-in fade-in zoom-in-95">
+                              <button
+                                onClick={() => {
+                                  if (navigator.clipboard) {
+                                    navigator.clipboard.writeText(window.location.href);
+                                  }
+                                  triggerPlushNotification({
+                                    type: 'system',
+                                    title: 'Enlace copiado',
+                                    message: 'El enlace de la foto se copió al portapapeles.'
+                                  });
+                                  setActivePostMenuId(null);
+                                }}
+                                className="w-full text-left px-4 py-2.5 text-xs text-white/90 hover:bg-white/10 flex items-center gap-2"
+                              >
+                                <Share2 className="w-4 h-4 text-blue-400" />
+                                <span>Compartir publicación</span>
+                              </button>
+
+                              <button
+                                onClick={() => {
+                                  openReportModal({
+                                    id: post.id,
+                                    type: 'post',
+                                    title: `Publicación de @${post.username}`,
+                                    reportedUserId: post.userId,
+                                    reportedUserName: post.username,
+                                    initialTicketType: 'TRP'
+                                  });
+                                  setActivePostMenuId(null);
+                                }}
+                                className="w-full text-left px-4 py-2.5 text-xs text-rose-400 hover:bg-white/10 flex items-center gap-2"
+                              >
+                                <ShieldAlert className="w-4 h-4 text-rose-400" />
+                                <span>Reportar publicación (TRP)</span>
+                              </button>
+                            </div>
+                          </>
+                        )}
+                      </div>
                     </div>
                   </div>
 

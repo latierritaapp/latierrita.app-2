@@ -390,7 +390,10 @@ export const StoryViewerModal: React.FC = () => {
                       openReportModal({
                         id: currentStory.id,
                         type: 'story',
-                        title: `Historia de @${currentStory.username}`
+                        title: `Historia de @${currentStory.username}`,
+                        reportedUserId: currentStory.userId,
+                        reportedUserName: currentStory.username,
+                        initialTicketType: 'TRH'
                       });
                     }}
                     className="w-full flex items-center gap-2.5 px-3 py-2.5 text-amber-400 hover:bg-amber-500/10 rounded-xl text-left text-xs font-semibold transition-all cursor-pointer"

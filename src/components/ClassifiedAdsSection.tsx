@@ -20,7 +20,9 @@ import {
   MessageCircle,
   MessageSquare,
   User,
-  ExternalLink
+  ExternalLink,
+  Flag,
+  ShieldAlert
 } from 'lucide-react';
 import { ClassifiedAdItem, ClassifiedCategory, SpanishCity, UserProfile } from '../types';
 import { DEFAULT_SILHOUETTE_AVATAR } from '../context/AuthContext';
@@ -44,7 +46,8 @@ export const ClassifiedAdsSection: React.FC = () => {
     setActiveTab,
     setChatTypeTab,
     startPrivateChat,
-    triggerPlushNotification
+    triggerPlushNotification,
+    openReportModal
   } = useApp();
 
   const [ads, setAds] = useState<ClassifiedAdItem[]>(() => {
@@ -555,6 +558,29 @@ export const ClassifiedAdsSection: React.FC = () => {
                     <span>Llamar</span>
                   </a>
                 )}
+
+                {/* Boton de reportar anuncio (TRA) */}
+                <button
+                  type="button"
+                  id="btn-report-modal-ad"
+                  onClick={() => {
+                    const currentDetail = selectedAdDetail;
+                    setSelectedAdDetail(null);
+                    openReportModal({
+                      id: currentDetail.id,
+                      type: 'support',
+                      title: `Anuncio: ${currentDetail.title} (${currentDetail.category} · ${currentDetail.city})`,
+                      reportedUserId: `user-${getAuthorUsername(currentDetail)}`,
+                      reportedUserName: currentDetail.contactName || getAuthorUsername(currentDetail),
+                      initialTicketType: 'TRA'
+                    });
+                  }}
+                  title="Reportar este anuncio (TRA)"
+                  aria-label="Reportar Anuncio"
+                  className="w-10 h-10 rounded-xl bg-white/10 hover:bg-rose-500/20 hover:text-rose-400 text-white/70 border border-white/10 flex items-center justify-center transition-all active:scale-95 shadow shrink-0 cursor-pointer"
+                >
+                  <Flag className="w-4 h-4" />
+                </button>
               </div>
             </div>
           </div>

@@ -152,7 +152,7 @@ export interface StartupAdConfig {
   active: boolean;
 }
 
-export type TicketType = 'TS' | 'TRU' | 'TRP' | 'TRH' | 'TRM' | 'TRG';
+export type TicketType = 'TS' | 'TRU' | 'TRP' | 'TRH' | 'TRM' | 'TRG' | 'TRA' | 'TRI';
 
 export interface SupportTicket {
   id: string;

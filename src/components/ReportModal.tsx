@@ -95,13 +95,13 @@ export const ReportModal: React.FC = () => {
             </div>
             <div>
               <h3 className="text-sm font-black text-white flex items-center gap-2">
-                <span>Generar Ticket de Reporte</span>
+                <span>{currentCategory.fullTitle}</span>
                 <span className={`text-[10px] px-2 py-0.5 rounded-full border font-mono font-bold ${currentCategory.badgeColor}`}>
                   {currentCategory.code}
                 </span>
               </h3>
               <p className="text-[11px] text-white/60">
-                {currentCategory.label}
+                {currentCategory.description}
               </p>
             </div>
           </div>
@@ -169,49 +169,24 @@ export const ReportModal: React.FC = () => {
               <div className="bg-white/5 border border-white/10 p-3 rounded-2xl flex items-center justify-between text-xs">
                 <div className="min-w-0 pr-2">
                   <span className="text-[10px] uppercase font-bold text-white/40 block">
-                    Elemento Reportado:
+                    {activeType === 'TS'
+                      ? 'Solicitud de Soporte:'
+                      : activeType === 'TRI'
+                      ? 'Reporte de Fallo Técnico:'
+                      : activeType === 'TRA'
+                      ? 'Anuncio Reportado (Empleo / Alquiler / Clasificado):'
+                      : 'Elemento Reportado:'}
                   </span>
                   <span className="font-bold text-white truncate block">
                     {reportTarget.title}
                   </span>
-                  <span className="text-[10px] text-amber-400/80 capitalize">
-                    Tipo: {reportTarget.type}
+                  <span className="text-[10px] text-amber-400/80">
+                    Tipo de Ticket: {currentCategory.fullTitle} ({currentCategory.code})
                   </span>
                 </div>
                 <span className={`text-[10px] px-2.5 py-1 rounded-full border font-mono font-bold shrink-0 ${currentCategory.badgeColor}`}>
                   {currentCategory.code}
                 </span>
-              </div>
-
-              {/* Category selector pills */}
-              <div>
-                <label className="block text-[11px] font-bold text-white/70 uppercase tracking-wider mb-1.5">
-                  Categoría de Ticket
-                </label>
-                <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5">
-                  {(Object.keys(TICKET_CATEGORIES) as TicketType[]).map(tKey => {
-                    const cat = TICKET_CATEGORIES[tKey];
-                    const isSelected = activeType === tKey;
-                    return (
-                      <button
-                        key={tKey}
-                        type="button"
-                        onClick={() => {
-                          setActiveType(tKey);
-                          setSelectedOptionIndex(0);
-                        }}
-                        className={`px-2 py-1.5 rounded-xl text-xs font-mono font-bold transition-all text-center border cursor-pointer ${
-                          isSelected
-                            ? 'bg-amber-400 text-neutral-950 border-amber-300 shadow-md shadow-amber-500/20 scale-102'
-                            : 'bg-white/5 text-white/70 border-white/10 hover:bg-white/10 hover:text-white'
-                        }`}
-                        title={cat.label}
-                      >
-                        {cat.code}
-                      </button>
-                    );
-                  })}
-                </div>
               </div>
 
               {/* Options list for selected ticket type */}

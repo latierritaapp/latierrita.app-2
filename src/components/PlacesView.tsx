@@ -27,7 +27,8 @@ import {
   Facebook,
   Twitter,
   MessageCircle,
-  Upload
+  Upload,
+  Flag
 } from 'lucide-react';
 import { PlaceCategory, PlaceItem, SpanishCity } from '../types';
 import { SPANISH_CITIES } from '../data/mockData';
@@ -46,7 +47,7 @@ const CATEGORIES: { label: PlaceCategory | 'Todos'; icon: React.FC<{ className?:
 ];
 
 export const PlacesView: React.FC = () => {
-  const { places, addPlace, currentUser, placesSubTab } = useApp();
+  const { places, addPlace, currentUser, placesSubTab, openReportModal } = useApp();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCity, setSelectedCity] = useState<SpanishCity | 'Todas'>(currentUser.city || 'Todas');
@@ -359,12 +360,33 @@ export const PlacesView: React.FC = () => {
               />
               <div className="absolute inset-0 bg-gradient-to-t from-[#0d224d] via-black/25 to-black/50" />
 
-              <button
-                onClick={() => setSelectedPlace(null)}
-                className="absolute top-2.5 right-2.5 p-1.5 rounded-full bg-black/60 text-white hover:bg-black/90 transition-colors z-10"
-              >
-                <X className="w-4 h-4" />
-              </button>
+              <div className="absolute top-2.5 right-2.5 flex items-center gap-1.5 z-10">
+                <button
+                  type="button"
+                  id={`btn-report-place-${selectedPlace.id}`}
+                  onClick={() => {
+                    const currentPlace = selectedPlace;
+                    setSelectedPlace(null);
+                    openReportModal({
+                      id: currentPlace.id,
+                      type: 'support',
+                      title: `Lugar: ${currentPlace.name} (${currentPlace.category} · ${currentPlace.city})`,
+                      initialTicketType: 'TRA'
+                    });
+                  }}
+                  className="p-1.5 rounded-full bg-black/60 text-white/70 hover:text-rose-400 hover:bg-black/90 transition-colors cursor-pointer"
+                  title="Reportar este lugar o negocio (TRA)"
+                >
+                  <Flag className="w-4 h-4" />
+                </button>
+
+                <button
+                  onClick={() => setSelectedPlace(null)}
+                  className="p-1.5 rounded-full bg-black/60 text-white hover:bg-black/90 transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
 
               {/* 2. Categoría / Ciudad */}
               <div className="absolute top-2.5 left-2.5">

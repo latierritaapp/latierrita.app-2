@@ -64,6 +64,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userToDisplay }) => {
   
   // Feed viewer state: opened post ID when clicking a grid photo to scroll up/down
   const [openedFeedPostId, setOpenedFeedPostId] = useState<string | null>(null);
+  const [activePostMenuId, setActivePostMenuId] = useState<string | null>(null);
   const [commentInputs, setCommentInputs] = useState<Record<string, string>>({});
   const [heartAnimPostId, setHeartAnimPostId] = useState<string | null>(null);
   const [showUserMenu, setShowUserMenu] = useState(false);
@@ -228,7 +229,10 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userToDisplay }) => {
                     openReportModal({
                       id: user.id,
                       type: 'user',
-                      title: `Usuario @${user.username}`
+                      title: `Usuario @${user.username}`,
+                      reportedUserId: user.id,
+                      reportedUserName: user.name,
+                      initialTicketType: 'TRU'
                     });
                   }}
                   className="w-full px-3.5 py-2 text-left text-xs font-medium text-amber-300 hover:bg-white/10 flex items-center gap-2"
@@ -751,19 +755,78 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userToDisplay }) => {
                       <Clock className="w-3 h-3 text-amber-400" />
                       <span>{post.timestamp}</span>
                     </span>
-                    {isMe && (
+
+                    {/* 3-dots menu button for post */}
+                    <div className="relative">
                       <button
-                        onClick={() => {
-                          if (window.confirm('¿Deseas eliminar esta publicación?')) {
-                            deletePostByAdmin(post.id);
-                          }
-                        }}
-                        className="p-1.5 text-white/50 hover:text-rose-400 rounded-full hover:bg-white/10 transition-colors"
-                        title="Eliminar publicación"
+                        onClick={() => setActivePostMenuId(activePostMenuId === post.id ? null : post.id)}
+                        className="p-1.5 text-white/70 hover:text-white rounded-full hover:bg-white/10 transition-colors"
+                        title="Opciones de publicación"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <MoreHorizontal className="w-4 h-4" />
                       </button>
-                    )}
+
+                      {activePostMenuId === post.id && (
+                        <>
+                          <div
+                            className="fixed inset-0 z-30"
+                            onClick={() => setActivePostMenuId(null)}
+                          />
+                          <div className="absolute right-0 mt-1 w-48 bg-[#0d224d] border border-white/15 rounded-2xl shadow-2xl z-40 py-1.5 overflow-hidden animate-in fade-in zoom-in-95">
+                            <button
+                              onClick={() => {
+                                if (navigator.clipboard) {
+                                  navigator.clipboard.writeText(window.location.href);
+                                }
+                                triggerPlushNotification({
+                                  type: 'system',
+                                  title: 'Enlace copiado',
+                                  message: 'El enlace de la foto se copió al portapapeles.'
+                                });
+                                setActivePostMenuId(null);
+                              }}
+                              className="w-full text-left px-4 py-2.5 text-xs text-white/90 hover:bg-white/10 flex items-center gap-2"
+                            >
+                              <Share2 className="w-4 h-4 text-blue-400" />
+                              <span>Compartir publicación</span>
+                            </button>
+
+                            <button
+                              onClick={() => {
+                                openReportModal({
+                                  id: post.id,
+                                  type: 'post',
+                                  title: `Publicación de @${post.username}`,
+                                  reportedUserId: post.userId,
+                                  reportedUserName: post.username,
+                                  initialTicketType: 'TRP'
+                                });
+                                setActivePostMenuId(null);
+                              }}
+                              className="w-full text-left px-4 py-2.5 text-xs text-rose-400 hover:bg-white/10 flex items-center gap-2"
+                            >
+                              <ShieldAlert className="w-4 h-4 text-rose-400" />
+                              <span>Reportar publicación (TRP)</span>
+                            </button>
+
+                            {isMe && (
+                              <button
+                                onClick={() => {
+                                  setActivePostMenuId(null);
+                                  if (window.confirm('¿Deseas eliminar esta publicación?')) {
+                                    deletePostByAdmin(post.id);
+                                  }
+                                }}
+                                className="w-full text-left px-4 py-2.5 text-xs text-rose-400 hover:bg-white/10 flex items-center gap-2 border-t border-white/10"
+                              >
+                                <Trash2 className="w-4 h-4 text-rose-400" />
+                                <span>Eliminar publicación</span>
+                              </button>
+                            )}
+                          </div>
+                        </>
+                      )}
+                    </div>
                   </div>
                 </div>
 
