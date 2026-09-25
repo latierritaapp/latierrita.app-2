@@ -1,12 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import {
-  ChevronLeft,
-  ChevronRight,
   ExternalLink,
   Plus,
   Settings,
-  Flag,
   Maximize2,
   X,
   Upload,
@@ -14,7 +11,7 @@ import {
   Check
 } from 'lucide-react';
 import { optimizeBannerImage } from '../lib/imageOptimizer';
-import { AdCategory } from '../types';
+import { AdCategory, AD_CAROUSEL_CATEGORIES } from '../types';
 
 interface AdCarouselProps {
   type?: 'inicio' | 'explorar';
@@ -43,7 +40,7 @@ export const AdCarousel: React.FC<AdCarouselProps> = ({ type = 'inicio' }) => {
   const [quickSponsor, setQuickSponsor] = useState('');
   const [quickCtaText, setQuickCtaText] = useState('Ver detalles');
   const [quickCtaUrl, setQuickCtaUrl] = useState('');
-  const [quickCategory, setQuickCategory] = useState<AdCategory>('Evento');
+  const [quickCategory, setQuickCategory] = useState<AdCategory>('Restaurante');
   const [quickTargetType, setQuickTargetType] = useState<'inicio' | 'explorar' | 'ambos'>(type || 'inicio');
 
   const isAdmin =
@@ -263,11 +260,9 @@ export const AdCarousel: React.FC<AdCarouselProps> = ({ type = 'inicio' }) => {
                 onChange={e => setQuickCategory(e.target.value as AdCategory)}
                 className="w-full bg-[#002855] text-white px-3 py-2 rounded-xl border border-white/20 focus:outline-none focus:ring-1 focus:ring-amber-400"
               >
-                <option value="Evento">Evento</option>
-                <option value="Restaurante/Comida">Restaurante/Comida</option>
-                <option value="Servicio">Servicio</option>
-                <option value="Tienda">Tienda</option>
-                <option value="Otro">Otro</option>
+                {AD_CAROUSEL_CATEGORIES.map(cat => (
+                  <option key={cat} value={cat}>{cat}</option>
+                ))}
               </select>
             </div>
           </div>
@@ -522,23 +517,6 @@ export const AdCarousel: React.FC<AdCarouselProps> = ({ type = 'inicio' }) => {
               </div>
 
               <div className="flex items-center gap-2 shrink-0">
-                <button
-                  id={`btn-report-banner-${currentBanner.id}`}
-                  type="button"
-                  onClick={() => {
-                    openReportModal({
-                      id: currentBanner.id,
-                      type: 'support',
-                      title: `Anuncio: ${currentBanner.title || 'Publicidad'} (${currentBanner.sponsorName || 'Staff'})`,
-                      initialTicketType: 'TRA'
-                    });
-                  }}
-                  className="p-2 text-white/70 hover:text-rose-400 bg-black/60 hover:bg-black/90 rounded-xl border border-white/20 transition-all cursor-pointer flex items-center gap-1 text-[11px] font-bold backdrop-blur-md"
-                  title="Reportar este anuncio (TRA)"
-                >
-                  <Flag className="w-3.5 h-3.5 text-rose-400" />
-                  <span className="hidden sm:inline">Reportar</span>
-                </button>
                 {currentBanner.ctaLink && currentBanner.ctaText && (
                   <a
                     id={`btn-carousel-cta-${currentBanner.id}`}
@@ -555,43 +533,7 @@ export const AdCarousel: React.FC<AdCarouselProps> = ({ type = 'inicio' }) => {
             </div>
           )}
 
-          {/* Carousel Navigation Arrows */}
-          {activeBanners.length > 1 && (
-            <>
-              <button
-                id="btn-carousel-prev"
-                onClick={handlePrev}
-                className="absolute left-2.5 top-1/2 -translate-y-1/2 z-20 w-9 h-9 rounded-full bg-black/60 hover:bg-black/90 text-white flex items-center justify-center transition-all backdrop-blur-sm border border-white/20 shadow-lg cursor-pointer"
-                title="Anuncio anterior"
-              >
-                <ChevronLeft className="w-5 h-5 stroke-[2.5]" />
-              </button>
-              <button
-                id="btn-carousel-next"
-                onClick={handleNext}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 z-20 w-9 h-9 rounded-full bg-black/60 hover:bg-black/90 text-white flex items-center justify-center transition-all backdrop-blur-sm border border-white/20 shadow-lg cursor-pointer"
-                title="Siguiente anuncio"
-              >
-                <ChevronRight className="w-5 h-5 stroke-[2.5]" />
-              </button>
-            </>
-          )}
 
-          {/* Pagination Indicators */}
-          {activeBanners.length > 1 && (
-            <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1.5 bg-black/50 backdrop-blur-md px-2.5 py-1 rounded-full border border-white/10">
-              {activeBanners.map((banner, i) => (
-                <button
-                  key={banner.id}
-                  onClick={() => setCurrentIndex(i)}
-                  className={`h-2 rounded-full transition-all cursor-pointer ${
-                    i === currentIndex ? 'w-6 bg-amber-400' : 'w-2 bg-white/40 hover:bg-white/70'
-                  }`}
-                  title={`Ir a imagen ${i + 1}`}
-                />
-              ))}
-            </div>
-          )}
         </div>
 
         {/* Thumbnail Preview Strip if multiple images */}

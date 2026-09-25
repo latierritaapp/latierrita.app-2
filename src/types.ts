@@ -120,7 +120,39 @@ export interface PostItem {
   taggedUsernames?: string[];
 }
 
-export type AdCategory = 'Evento' | 'Restaurante/Comida' | 'Servicio' | 'Tienda' | 'Otro' | 'Restaurante' | 'Trámites' | 'Envíos' | 'Vuelos';
+export type AdCategory =
+  | 'Restaurante'
+  | 'Cafe'
+  | 'Bar'
+  | 'Pub'
+  | 'Discoteca'
+  | 'Hotel'
+  | 'Tienda'
+  | 'Spa'
+  | 'Belleza'
+  | 'S. de interes'
+  | 'Otros'
+  | 'Evento'
+  | 'Restaurante/Comida'
+  | 'Servicio'
+  | 'Otro'
+  | 'Trámites'
+  | 'Envíos'
+  | 'Vuelos';
+
+export const AD_CAROUSEL_CATEGORIES: AdCategory[] = [
+  'Restaurante',
+  'Cafe',
+  'Bar',
+  'Pub',
+  'Discoteca',
+  'Hotel',
+  'Tienda',
+  'Spa',
+  'Belleza',
+  'S. de interes',
+  'Otros'
+];
 
 export interface AdBanner {
   id: string;

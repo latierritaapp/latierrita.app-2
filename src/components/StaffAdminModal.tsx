@@ -43,7 +43,7 @@ import {
   Send,
   ArrowLeft
 } from 'lucide-react';
-import { AdCategory, StaffRole, TicketType, UserProfile, SpanishCity, SupportTicket } from '../types';
+import { AdCategory, AD_CAROUSEL_CATEGORIES, StaffRole, TicketType, UserProfile, SpanishCity, SupportTicket } from '../types';
 import { SPANISH_CITIES } from '../data/citiesData';
 import { optimizeBannerImage } from '../lib/imageOptimizer';
 
@@ -210,7 +210,7 @@ export const StaffAdminModal: React.FC<{ isFullScreenRoute?: boolean }> = ({ isF
   const [c1Description, setC1Description] = useState('');
   const [c1Image, setC1Image] = useState('');
   const [c1Sponsor, setC1Sponsor] = useState('');
-  const [c1Category, setC1Category] = useState<AdCategory>('Evento');
+  const [c1Category, setC1Category] = useState<AdCategory>('Restaurante');
   const [c1CtaText, setC1CtaText] = useState('Ver detalles');
   const [c1CtaUrl, setC1CtaUrl] = useState('');
   const [c1TargetType, setC1TargetType] = useState<'inicio' | 'explorar' | 'ambos'>('inicio');
@@ -220,7 +220,7 @@ export const StaffAdminModal: React.FC<{ isFullScreenRoute?: boolean }> = ({ isF
   const [c2Description, setC2Description] = useState('');
   const [c2Image, setC2Image] = useState('');
   const [c2Sponsor, setC2Sponsor] = useState('');
-  const [c2Category, setC2Category] = useState<AdCategory>('Restaurante/Comida');
+  const [c2Category, setC2Category] = useState<AdCategory>('Restaurante');
   const [c2CtaText, setC2CtaText] = useState('Ver oferta');
   const [c2CtaUrl, setC2CtaUrl] = useState('');
 
@@ -1550,11 +1550,9 @@ export const StaffAdminModal: React.FC<{ isFullScreenRoute?: boolean }> = ({ isF
                             onChange={e => setC1Category(e.target.value as AdCategory)}
                             className="w-full bg-[#002466] text-white px-3 py-2 rounded-xl border border-white/20 focus:outline-none focus:ring-1 focus:ring-amber-400"
                           >
-                            <option value="Evento">Evento</option>
-                            <option value="Restaurante/Comida">Restaurante/Comida</option>
-                            <option value="Servicio">Servicio</option>
-                            <option value="Tienda">Tienda</option>
-                            <option value="Otro">Otro</option>
+                            {AD_CAROUSEL_CATEGORIES.map(cat => (
+                              <option key={cat} value={cat}>{cat}</option>
+                            ))}
                           </select>
                         </div>
                       </div>
@@ -1962,11 +1960,9 @@ export const StaffAdminModal: React.FC<{ isFullScreenRoute?: boolean }> = ({ isF
                             onChange={e => setC2Category(e.target.value as AdCategory)}
                             className="w-full bg-[#002466] text-white px-3 py-2 rounded-xl border border-white/20 focus:outline-none focus:ring-1 focus:ring-amber-400"
                           >
-                            <option value="Evento">Evento</option>
-                            <option value="Restaurante/Comida">Restaurante/Comida</option>
-                            <option value="Servicio">Servicio</option>
-                            <option value="Tienda">Tienda</option>
-                            <option value="Otro">Otro</option>
+                            {AD_CAROUSEL_CATEGORIES.map(cat => (
+                              <option key={cat} value={cat}>{cat}</option>
+                            ))}
                           </select>
                         </div>
                       </div>
