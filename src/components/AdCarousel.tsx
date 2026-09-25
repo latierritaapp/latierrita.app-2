@@ -59,12 +59,12 @@ export const AdCarousel: React.FC<AdCarouselProps> = ({ type = 'inicio' }) => {
         : b.carouselType === 'inicio' || b.carouselType === 'ambos' || !b.carouselType)
   );
 
-  // Auto-play carousel every 6 seconds if not hovered
+  // Auto-play carousel every 3 seconds if not hovered
   useEffect(() => {
     if (activeBanners.length <= 1 || isHovered) return;
     const interval = setInterval(() => {
       setCurrentIndex(prev => (prev + 1) % activeBanners.length);
-    }, 6000);
+    }, 3000);
     return () => clearInterval(interval);
   }, [activeBanners.length, isHovered]);
 
@@ -383,42 +383,48 @@ export const AdCarousel: React.FC<AdCarouselProps> = ({ type = 'inicio' }) => {
   };
 
   const hasBottomDetails = Boolean(
-    currentBanner.title ||
-      currentBanner.subtitle ||
-      currentBanner.sponsorName ||
-      (currentBanner.ctaText && currentBanner.ctaLink)
+    (currentBanner.title && currentBanner.title.trim().length > 0) ||
+      (currentBanner.subtitle && currentBanner.subtitle.trim().length > 0) ||
+      (currentBanner.ctaText && currentBanner.ctaText.trim().length > 0 && currentBanner.ctaLink && currentBanner.ctaLink.trim().length > 0)
   );
 
   return (
     <>
       <section
         aria-label="Carrusel de anuncios destacados"
-        className="w-full max-w-2xl mx-auto px-4 py-3"
+        className="w-full max-w-2xl mx-auto px-0 sm:px-4 py-3"
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
       >
-        <div className="relative rounded-2xl overflow-hidden shadow-xl border border-white/15 bg-neutral-950 group">
+        <div className="relative rounded-none sm:rounded-2xl overflow-hidden shadow-xl border-y sm:border border-white/15 bg-neutral-950 group">
           {/* Main Banner Image Container */}
-          <div className="relative w-full h-56 sm:h-72 md:h-80 overflow-hidden bg-neutral-900 flex items-center justify-center">
-            {currentBanner.imageUrl ? (
-              <img
-                src={currentBanner.imageUrl}
-                alt={currentBanner.title || 'Anuncio oficial'}
-                loading="eager"
-                decoding="sync"
-                className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-[1.02] cursor-pointer block"
-                onClick={() => setSelectedZoomImage(currentBanner.imageUrl)}
-              />
-            ) : (
-              <div className="w-full h-full bg-neutral-900 flex items-center justify-center text-white/40 text-xs">
-                Sin imagen
-              </div>
-            )}
-
-            {/* Subtle Gradient only if bottom text details exist */}
-            {hasBottomDetails && (
-              <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent pointer-events-none"></div>
-            )}
+          <div className="relative w-full h-56 sm:h-72 md:h-80 overflow-hidden bg-neutral-900">
+            <div
+              className="flex w-full h-full transition-transform duration-500 ease-out"
+              style={{ transform: `translateX(-${safeIndex * 100}%)` }}
+            >
+              {activeBanners.map((banner, idx) => (
+                <div
+                  key={banner.id || idx}
+                  className="w-full h-full shrink-0 relative flex items-center justify-center"
+                >
+                  {banner.imageUrl ? (
+                    <img
+                      src={banner.imageUrl}
+                      alt={banner.title || 'Anuncio oficial'}
+                      loading="eager"
+                      decoding="sync"
+                      className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-[1.02] cursor-pointer block"
+                      onClick={() => setSelectedZoomImage(banner.imageUrl)}
+                    />
+                  ) : (
+                    <div className="w-full h-full bg-neutral-900 flex items-center justify-center text-white/40 text-xs">
+                      Sin imagen
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
 
           {/* Top Controls: Badges, Zoom, Direct Quick Add & Delete */}
@@ -493,52 +499,44 @@ export const AdCarousel: React.FC<AdCarouselProps> = ({ type = 'inicio' }) => {
               )}
             </div>
           </div>
-
-          {/* Bottom Details & CTA */}
-          {hasBottomDetails && (
-            <div className="absolute bottom-3 left-3 right-3 z-20 text-white flex flex-col sm:flex-row sm:items-end justify-between gap-3 pointer-events-auto">
-              <div className="max-w-md drop-shadow-md">
-                {currentBanner.sponsorName && (
-                  <span className="text-xs text-amber-300 font-semibold block mb-0.5">
-                    {currentBanner.sponsorName}{' '}
-                    {currentBanner.sponsorCity ? `· ${currentBanner.sponsorCity}` : ''}
-                  </span>
-                )}
-                {currentBanner.title && (
-                  <h4 className="text-base sm:text-lg font-black leading-tight drop-shadow">
-                    {currentBanner.title}
-                  </h4>
-                )}
-                {currentBanner.subtitle && (
-                  <p className="text-xs text-neutral-200 line-clamp-1 mt-0.5">
-                    {currentBanner.subtitle}
-                  </p>
-                )}
-              </div>
-
-              <div className="flex items-center gap-2 shrink-0">
-                {currentBanner.ctaLink && currentBanner.ctaText && (
-                  <a
-                    id={`btn-carousel-cta-${currentBanner.id}`}
-                    href={currentBanner.ctaLink}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex items-center gap-1.5 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-neutral-950 font-black text-xs px-3.5 py-2 rounded-xl shadow-lg transition-all active:scale-95"
-                  >
-                    <span>{currentBanner.ctaText}</span>
-                    <ExternalLink className="w-3.5 h-3.5 stroke-[2.5]" />
-                  </a>
-                )}
-              </div>
-            </div>
-          )}
-
-
         </div>
+
+        {/* Bottom Details & CTA outside image container */}
+        {hasBottomDetails && (
+          <div className="mt-2.5 mx-3 sm:mx-0 px-3.5 py-3 bg-neutral-900/90 rounded-2xl border border-white/10 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-md">
+            <div className="max-w-md">
+              {currentBanner.title && (
+                <h4 className="text-sm sm:text-base font-black leading-tight text-white">
+                  {currentBanner.title}
+                </h4>
+              )}
+              {currentBanner.subtitle && (
+                <p className="text-xs text-neutral-300 line-clamp-2 mt-0.5">
+                  {currentBanner.subtitle}
+                </p>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto">
+              {currentBanner.ctaLink && currentBanner.ctaText && (
+                <a
+                  id={`btn-carousel-cta-${currentBanner.id}`}
+                  href={currentBanner.ctaLink}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center gap-1.5 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-neutral-950 font-black text-xs px-3.5 py-2 rounded-xl shadow-lg transition-all active:scale-95"
+                >
+                  <span>{currentBanner.ctaText}</span>
+                  <ExternalLink className="w-3.5 h-3.5 stroke-[2.5]" />
+                </a>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Thumbnail Preview Strip if multiple images */}
         {activeBanners.length > 1 && (
-          <div className="flex items-center gap-2 mt-2 overflow-x-auto pb-1 scrollbar-none">
+          <div className="flex items-center gap-2 mt-2 px-3 sm:px-0 overflow-x-auto pb-1 scrollbar-none">
             {activeBanners.map((b, idx) => (
               <button
                 key={`thumb-${b.id}`}

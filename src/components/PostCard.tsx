@@ -211,23 +211,6 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
             </span>
           </div>
           <div className="shrink-0 flex items-center gap-2">
-            <button
-              onClick={() => {
-                openReportModal({
-                  id: post.id,
-                  type: 'post',
-                  title: `Anuncio: ${post.adTitle || post.sponsorName || 'Patrocinado'}`,
-                  reportedUserId: post.userId,
-                  reportedUserName: post.sponsorName || post.username,
-                  initialTicketType: 'TRA'
-                });
-              }}
-              className="p-2 text-white/60 hover:text-rose-400 bg-white/10 hover:bg-white/20 rounded-xl transition-all cursor-pointer flex items-center gap-1 text-[11px] font-bold"
-              title="Reportar este anuncio (TRA)"
-            >
-              <Flag className="w-3.5 h-3.5 text-rose-400" />
-              <span className="hidden sm:inline">Reportar anuncio</span>
-            </button>
             <a
               href={post.adCtaUrl || '#'}
               target="_blank"
