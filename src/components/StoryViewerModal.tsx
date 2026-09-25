@@ -7,14 +7,16 @@ const QUICK_EMOJIS = ['🔥', '❤️', '😂', '👏', '🇨🇴', '☕', '😍
 
 const formatInstagramTime = (story: StoryItem): string => {
   try {
-    const idMatch = story.id.match(/story-(\d+)/);
-    let ms = 0;
-    if (idMatch) {
-      ms = parseInt(idMatch[1], 10);
-    } else {
-      const numMatch = story.id.match(/\d{10,13}/);
-      if (numMatch) {
-        ms = parseInt(numMatch[0], 10);
+    let ms = story.createdAt || 0;
+    if (!ms) {
+      const idMatch = story.id.match(/story-(\d+)/);
+      if (idMatch) {
+        ms = parseInt(idMatch[1], 10);
+      } else {
+        const numMatch = story.id.match(/\d{10,13}/);
+        if (numMatch) {
+          ms = parseInt(numMatch[0], 10);
+        }
       }
     }
 

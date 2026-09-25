@@ -2870,17 +2870,21 @@ export const StaffAdminModal: React.FC<{ isFullScreenRoute?: boolean }> = ({ isF
                             Para resolverlo de forma inmediata, entra al panel de tu Supabase (SQL Editor) o accede por terminal y ejecuta la siguiente consulta SQL:
                           </p>
                           <pre className="p-3 bg-black/50 border border-white/10 rounded-xl font-mono text-[10px] text-emerald-300 overflow-x-auto whitespace-pre leading-normal">
-{`-- 1. Políticas de escritura (INSERT) libre para posts e historias
-CREATE POLICY "Permitir inserciones públicas posts" ON posts FOR INSERT WITH CHECK (true);
-CREATE POLICY "Permitir inserciones públicas stories" ON stories FOR INSERT WITH CHECK (true);
+{`-- 1. Habilitar Row Level Security (RLS) en las tablas
+ALTER TABLE public.stories ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.posts ENABLE ROW LEVEL SECURITY;
 
--- 2. Asegurar lectura pública (SELECT) para todos
-CREATE POLICY "Permitir lectura pública posts" ON posts FOR SELECT USING (true);
-CREATE POLICY "Permitir lectura pública stories" ON stories FOR SELECT USING (true);
+-- 2. Permitir lectura pública (SELECT)
+CREATE POLICY "Permitir lectura pública posts" ON public.posts FOR SELECT USING (true);
+CREATE POLICY "Permitir lectura pública stories" ON public.stories FOR SELECT USING (true);
 
--- 3. Opcional: Desactivar RLS por completo si quieres máxima compatibilidad
-ALTER TABLE posts DISABLE ROW LEVEL SECURITY;
-ALTER TABLE stories DISABLE ROW LEVEL SECURITY;`}
+-- 3. Permitir inserciones (INSERT)
+CREATE POLICY "Permitir inserciones posts" ON public.posts FOR INSERT WITH CHECK (true);
+CREATE POLICY "Permitir inserciones stories" ON public.stories FOR INSERT WITH CHECK (true);
+
+-- 4. Permitir actualización (UPDATE) y eliminación (DELETE)
+CREATE POLICY "Permitir actualización stories" ON public.stories FOR UPDATE USING (true);
+CREATE POLICY "Permitir eliminación stories" ON public.stories FOR DELETE USING (true);`}
                           </pre>
                           <p className="text-white/60">
                             *Nota: Al aplicar este SQL, el bloqueo se levantará inmediatamente en tiempo real y todas las publicaciones quedarán grabadas de forma permanente para todos los usuarios.*

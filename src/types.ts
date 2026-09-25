@@ -78,6 +78,7 @@ export interface StoryItem {
   mediaUrl: string;
   caption?: string;
   timestamp: string;
+  createdAt?: number;
   viewed?: boolean;
   reactions?: {
     emoji: string;

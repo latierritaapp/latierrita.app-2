@@ -4,7 +4,6 @@ import {
   ExternalLink,
   Plus,
   Settings,
-  Maximize2,
   X,
   Upload,
   Trash2,
@@ -30,7 +29,6 @@ export const AdCarousel: React.FC<AdCarouselProps> = ({ type = 'inicio' }) => {
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isHovered, setIsHovered] = useState(false);
-  const [selectedZoomImage, setSelectedZoomImage] = useState<string | null>(null);
 
   // Quick Inline Upload State for direct management on Inicio
   const [isQuickUploadOpen, setIsQuickUploadOpen] = useState(false);
@@ -414,8 +412,7 @@ export const AdCarousel: React.FC<AdCarouselProps> = ({ type = 'inicio' }) => {
                       alt={banner.title || 'Anuncio oficial'}
                       loading="eager"
                       decoding="sync"
-                      className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-[1.02] cursor-pointer block"
-                      onClick={() => setSelectedZoomImage(banner.imageUrl)}
+                      className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-[1.02] block select-none pointer-events-none"
                     />
                   ) : (
                     <div className="w-full h-full bg-neutral-900 flex items-center justify-center text-white/40 text-xs">
@@ -427,7 +424,7 @@ export const AdCarousel: React.FC<AdCarouselProps> = ({ type = 'inicio' }) => {
             </div>
           </div>
 
-          {/* Top Controls: Badges, Zoom, Direct Quick Add & Delete */}
+          {/* Top Controls: Badges, Direct Quick Add & Delete */}
           <div className="absolute top-3 left-3 right-3 flex items-center justify-between z-20 pointer-events-auto">
             <div className="flex items-center gap-1.5">
               {currentBanner.category && (
@@ -443,17 +440,6 @@ export const AdCarousel: React.FC<AdCarouselProps> = ({ type = 'inicio' }) => {
             </div>
 
             <div className="flex items-center gap-1.5">
-              {currentBanner.imageUrl && (
-                <button
-                  type="button"
-                  onClick={() => setSelectedZoomImage(currentBanner.imageUrl)}
-                  className="p-1.5 bg-black/60 hover:bg-black/90 text-white/90 hover:text-white rounded-lg border border-white/20 backdrop-blur-md transition-all cursor-pointer shadow-md"
-                  title="Ver imagen completa"
-                >
-                  <Maximize2 className="w-3.5 h-3.5" />
-                </button>
-              )}
-
               {isAdmin && (
                 <>
                   <button
@@ -561,31 +547,6 @@ export const AdCarousel: React.FC<AdCarouselProps> = ({ type = 'inicio' }) => {
       {/* Quick Upload Modal */}
       {isQuickUploadOpen && renderQuickUploadModal()}
 
-      {/* Full-Screen Zoom Modal for Flyers & Posters */}
-      {selectedZoomImage && (
-        <div
-          className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4"
-          onClick={() => setSelectedZoomImage(null)}
-        >
-          <div
-            className="relative max-w-3xl max-h-[90vh] w-full rounded-2xl overflow-hidden border border-white/20 bg-neutral-950 flex items-center justify-center shadow-2xl"
-            onClick={e => e.stopPropagation()}
-          >
-            <button
-              onClick={() => setSelectedZoomImage(null)}
-              className="absolute top-3 right-3 z-30 p-2 bg-black/70 hover:bg-black text-white rounded-full border border-white/20 transition-all cursor-pointer"
-              title="Cerrar vista completa"
-            >
-              <X className="w-5 h-5" />
-            </button>
-            <img
-              src={selectedZoomImage}
-              alt="Anuncio en pantalla completa"
-              className="max-h-[85vh] w-auto object-contain"
-            />
-          </div>
-        </div>
-      )}
     </>
   );
 };

@@ -887,6 +887,61 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [posts, currentUser]);
 
   // Load Banners from IndexedDB and Sync with Firestore
+  // Sync Deleted Banners Globally from Firestore
+  useEffect(() => {
+    try {
+      const unsubDeleted = onSnapshot(collection(db, 'deleted_banners'), (deletedSnap) => {
+        const globalDeletedIds: string[] = [];
+        if (!deletedSnap.empty) {
+          deletedSnap.forEach((docSnap: any) => {
+            if (docSnap.id) globalDeletedIds.push(docSnap.id);
+          });
+        }
+
+        try {
+          const localDeletedRaw = localStorage.getItem('latierrita_deleted_banners') || '[]';
+          const localDeleted: string[] = JSON.parse(localDeletedRaw);
+          const combinedDeleted = Array.from(new Set([...localDeleted, ...globalDeletedIds]));
+          localStorage.setItem('latierrita_deleted_banners', JSON.stringify(combinedDeleted));
+
+          // Immediately remove deleted banners from state
+          setAdBanners(prev => prev.filter(b => b && !combinedDeleted.includes(b.id)));
+
+          // Purge deleted banners from local caches
+          combinedDeleted.forEach(delId => {
+            deleteBannerFromIndexedDB(delId).catch(() => {});
+          });
+
+          const localBannersRaw = localStorage.getItem('latierrita_local_banners');
+          if (localBannersRaw) {
+            const localBanners = JSON.parse(localBannersRaw);
+            if (Array.isArray(localBanners)) {
+              const cleaned = localBanners.filter((b: AdBanner) => b && !combinedDeleted.includes(b.id));
+              localStorage.setItem('latierrita_local_banners', JSON.stringify(cleaned));
+            }
+          }
+
+          const adBannersRaw = localStorage.getItem('latierrita_ad_banners');
+          if (adBannersRaw) {
+            const adBannersList = JSON.parse(adBannersRaw);
+            if (Array.isArray(adBannersList)) {
+              const cleaned = adBannersList.filter((b: AdBanner) => b && !combinedDeleted.includes(b.id));
+              localStorage.setItem('latierrita_ad_banners', JSON.stringify(cleaned));
+            }
+          }
+        } catch (e) {
+          console.warn('Error syncing deleted banners:', e);
+        }
+      }, (error) => {
+        console.warn('deleted_banners listener note:', error);
+      });
+
+      return () => unsubDeleted();
+    } catch (e) {
+      console.warn('Failed to listen to deleted_banners:', e);
+    }
+  }, []);
+
   useEffect(() => {
     let isMounted = true;
 
@@ -1020,29 +1075,66 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Sync Stories
   useEffect(() => {
+    const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
+
+    const getStoryCreationTime = (story: any): number => {
+      if (typeof story.createdAt === 'number' && !isNaN(story.createdAt)) {
+        return story.createdAt;
+      }
+      if (story.createdAt && typeof story.createdAt === 'string') {
+        const parsed = new Date(story.createdAt).getTime();
+        if (!isNaN(parsed)) return parsed;
+      }
+      if (typeof story.id === 'string' && story.id.startsWith('story-')) {
+        const parts = story.id.split('-');
+        if (parts.length >= 2) {
+          const ts = parseInt(parts[1], 10);
+          if (!isNaN(ts) && ts > 1600000000000) {
+            return ts;
+          }
+        }
+      }
+      return Date.now();
+    };
+
+    const isStoryExpired = (story: any): boolean => {
+      const creationTime = getStoryCreationTime(story);
+      return (Date.now() - creationTime) > TWENTY_FOUR_HOURS_MS;
+    };
+
     try {
       const unsub = onSnapshot(collection(db, 'stories'), (snapshot) => {
         const list: StoryItem[] = [];
         if (!snapshot.empty) {
           snapshot.forEach((docSnap: any) => {
             const data = docSnap.data() || {};
-            list.push({
+            const storyObj = {
               id: docSnap.id,
               ...data,
               userAvatar: data.userAvatar || data.avatarUrl || '',
-              timestamp: data.timestamp || data.createdAt || 'Reciente',
+              timestamp: data.timestamp || 'Reciente',
+              createdAt: data.createdAt || (typeof data.timestamp === 'number' ? data.timestamp : undefined),
               reactions: Array.isArray(data.reactions) ? data.reactions : []
-            } as StoryItem);
+            } as StoryItem;
+
+            if (isStoryExpired(storyObj)) {
+              // Auto-eliminar de Firestore si tiene más de 24 horas
+              deleteDoc(doc(db, 'stories', docSnap.id)).catch(() => {});
+            } else {
+              list.push(storyObj);
+            }
           });
         }
 
-        // Incorporar historias guardadas localmente (fallback por RLS)
+        // Incorporar historias guardadas localmente (fallback por RLS/offline)
         try {
           const localStoriesRaw = localStorage.getItem('latierrita_local_stories');
           if (localStoriesRaw) {
             const localStories = JSON.parse(localStoriesRaw);
             if (Array.isArray(localStories)) {
-              localStories.forEach((ls: StoryItem) => {
+              const unexpiredLocal = localStories.filter((s: StoryItem) => !isStoryExpired(s));
+              localStorage.setItem('latierrita_local_stories', JSON.stringify(unexpiredLocal));
+              unexpiredLocal.forEach((ls: StoryItem) => {
                 if (!list.some(s => s.id === ls.id)) {
                   list.push(ls);
                 }
@@ -1051,24 +1143,39 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           }
         } catch (e) {}
 
-        list.sort((a, b) => b.id.localeCompare(a.id));
+        list.sort((a, b) => getStoryCreationTime(b) - getStoryCreationTime(a));
         setStories(list);
       }, (error) => {
-        // En caso de error, mostrar al menos las historias locales
+        // En caso de error, mostrar al menos las historias locales no expiradas
         const list: StoryItem[] = [];
         try {
           const localStoriesRaw = localStorage.getItem('latierrita_local_stories');
           if (localStoriesRaw) {
             const localStories = JSON.parse(localStoriesRaw);
             if (Array.isArray(localStories)) {
-              list.push(...localStories);
+              const unexpiredLocal = localStories.filter((s: StoryItem) => !isStoryExpired(s));
+              localStorage.setItem('latierrita_local_stories', JSON.stringify(unexpiredLocal));
+              list.push(...unexpiredLocal);
             }
           }
         } catch (e) {}
+        list.sort((a, b) => getStoryCreationTime(b) - getStoryCreationTime(a));
         setStories(list);
         console.log('Stories sync: offline or guest mode fallback loaded.');
       });
-      return () => unsub();
+
+      // Timer para re-verificar caducidad de 24h en tiempo real mientras la app está abierta
+      const timer = setInterval(() => {
+        setStories(prev => {
+          const active = prev.filter(s => !isStoryExpired(s));
+          return active.length !== prev.length ? active : prev;
+        });
+      }, 30000);
+
+      return () => {
+        unsub();
+        clearInterval(timer);
+      };
     } catch (e) {
       setStories([]);
       console.log('Failed to listen to stories in DB:', e);
@@ -2555,7 +2662,8 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
 
   // Stories
   const addStory = async (data: { mediaUrl: string; caption?: string }) => {
-    const newStoryId = `story-${Date.now()}`;
+    const now = Date.now();
+    const newStoryId = `story-${now}`;
     const newStory: StoryItem = {
       id: newStoryId,
       userId: currentUser.id,
@@ -2565,6 +2673,7 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
       mediaUrl: data.mediaUrl,
       caption: data.caption,
       timestamp: 'Justo ahora',
+      createdAt: now,
       viewed: false,
       reactions: []
     };
@@ -3002,11 +3111,21 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
       message: 'El anuncio ha sido removido del carrusel.'
     });
 
-    // 5. Delete from Firestore
+    // 5. Delete from Firestore 'banners' collection
     try {
       await deleteDoc(doc(db, 'banners', id));
     } catch (error) {
       console.warn('Firestore deleteDoc banners note:', error);
+    }
+
+    // 6. Record global deletion entry in Firestore 'deleted_banners' collection
+    try {
+      await setDoc(doc(db, 'deleted_banners', id), {
+        id: id,
+        deletedAt: Date.now()
+      });
+    } catch (error) {
+      console.warn('Firestore setDoc deleted_banners note:', error);
     }
   };
 
