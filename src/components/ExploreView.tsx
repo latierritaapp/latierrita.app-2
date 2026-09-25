@@ -97,7 +97,7 @@ export const ExploreView: React.FC = () => {
 
   // Set of top 3 post IDs for fast checking
   const top3Ids = useMemo(() => {
-    return trendingPosts.slice(0, 3).map(p => p.id);
+    return (trendingPosts || []).slice(0, 3).map(p => p.id);
   }, [trendingPosts]);
 
   // Auto-scroll to the clicked post when entering feed view
@@ -196,9 +196,9 @@ export const ExploreView: React.FC = () => {
       </div>
 
       {/* 3-Column Grid of Trending Profile Posts */}
-      {trendingPosts.length > 0 ? (
+      {(trendingPosts || []).length > 0 ? (
         <div className="grid grid-cols-3 gap-0.5 sm:gap-1 p-0.5 sm:p-1">
-          {trendingPosts.map((post, idx) => {
+          {(trendingPosts || []).map((post, idx) => {
             const isTop3 = idx < 3 && !exploreSearchQuery;
             const author = getAuthorProfile(post);
             const authorAvatar = author?.avatar || post.userAvatar;
@@ -316,7 +316,7 @@ export const ExploreView: React.FC = () => {
 
           {/* Scrollable Feed List - Full Screen Edge-to-Edge */}
           <div className="flex-1 overflow-y-auto overscroll-contain pb-20 divide-y divide-white/10">
-            {trendingPosts.map(post => {
+            {(trendingPosts || []).map(post => {
               const topRankIndex = top3Ids.indexOf(post.id);
               const isTop3 = topRankIndex !== -1 && !exploreSearchQuery;
               const isCommentsOpen = expandedComments[post.id];
@@ -528,12 +528,12 @@ export const ExploreView: React.FC = () => {
                             }
                             className="text-xs text-white/50 hover:text-white/80 font-medium"
                           >
-                            Ver los {post.comments.length} comentarios
+                            Ver los {post.comments?.length || 0} comentarios
                           </button>
                         )}
 
                         <div className="space-y-1.5 max-h-56 overflow-y-auto">
-                          {(isCommentsOpen ? post.comments : post.comments.slice(-1)).map(c => (
+                          {(isCommentsOpen ? (post.comments || []) : (post.comments || []).slice(-1)).map(c => (
                             <div
                               key={c.id}
                               className="text-xs flex items-start gap-2.5 bg-white/[0.03] p-2.5 rounded-xl border border-white/5"

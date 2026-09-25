@@ -717,7 +717,7 @@ export const ChatsView: React.FC = () => {
     if (activeChat) {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [activeChat?.id, activeChat?.messages.length]);
+  }, [activeChat?.id, activeChat?.messages?.length]);
 
   // Unified list of private and group chats for the "messages" session
   const unifiedChatsList = useMemo(() => {
@@ -797,8 +797,8 @@ export const ChatsView: React.FC = () => {
         return false;
       })
       .sort((a, b) => {
-        const lastA = a.messages[a.messages.length - 1];
-        const lastB = b.messages[b.messages.length - 1];
+        const lastA = Array.isArray(a.messages) && a.messages.length > 0 ? a.messages[a.messages.length - 1] : undefined;
+        const lastB = Array.isArray(b.messages) && b.messages.length > 0 ? b.messages[b.messages.length - 1] : undefined;
         const timeA = lastA ? (lastA.timestamp || lastA.id) : a.createdAt;
         const timeB = lastB ? (lastB.timestamp || lastB.id) : b.createdAt;
         return (timeB || '').localeCompare(timeA || '');
@@ -862,7 +862,7 @@ export const ChatsView: React.FC = () => {
   };
 
   // Unread or pending indicators
-  const pendingInvitesCount = groupInvites.filter(i => i.status === 'pending').length;
+  const pendingInvitesCount = (groupInvites || []).filter(i => i.status === 'pending').length;
 
   return (
     <div
@@ -929,7 +929,7 @@ export const ChatsView: React.FC = () => {
               </span>
 
               <div className="space-y-2">
-                {groupInvites
+                {(groupInvites || [])
                   .filter(i => i.status === 'pending')
                   .map(invite => (
                     <div
@@ -992,7 +992,7 @@ export const ChatsView: React.FC = () => {
               </div>
             ) : (
               unifiedChatsList.map(room => {
-                const lastMsg = room.messages[room.messages.length - 1];
+                const lastMsg = Array.isArray(room.messages) && room.messages.length > 0 ? room.messages[room.messages.length - 1] : undefined;
                 const isGroup = room.type === 'group';
                 const isTicket = room.isTicketChat || !!room.ticketCode;
                 const otherUser = room.type === 'private' ? getOtherUserInPrivateChat(room) : undefined;
@@ -1671,7 +1671,7 @@ export const ChatsView: React.FC = () => {
                 </div>
               )}
 
-              {activeChat.messages
+              {(activeChat.messages || [])
                 .map(msg => {
                   const isMe = msg.senderId === currentUser.id;
                   const isSystem = msg.senderId === 'system';
@@ -1836,10 +1836,10 @@ export const ChatsView: React.FC = () => {
                         </div>
 
                         {/* Reactions List */}
-                        {msg.reactions && msg.reactions.length > 0 && (
+                        {Array.isArray(msg.reactions) && msg.reactions.length > 0 && (
                           <div className={`flex flex-wrap gap-1 mt-1 ${isMe ? 'justify-end' : 'justify-start'}`}>
                             {msg.reactions.map((r, idx) => {
-                              const hasMyReaction = r.users.includes(currentUser.id);
+                              const hasMyReaction = Array.isArray(r.users) && r.users.includes(currentUser.id);
                               return (
                                 <button
                                   key={idx}
@@ -2211,7 +2211,7 @@ export const ChatsView: React.FC = () => {
             </p>
 
             <div className="space-y-2 max-h-64 overflow-y-auto">
-              {otherUsers.map(user => (
+              {(otherUsers || []).map(user => (
                 <div
                   key={user.id}
                   onClick={() => {
@@ -2293,7 +2293,7 @@ export const ChatsView: React.FC = () => {
               Los usuarios invitados recibirán una solicitud de ingreso que podrán aceptar o rechazar.
             </p>
             <div className="space-y-2 max-h-60 overflow-y-auto mb-4">
-              {otherUsers.map(user => (
+              {(otherUsers || []).map(user => (
                 <div
                   key={user.id}
                   className="flex items-center justify-between p-2 rounded-xl hover:bg-neutral-100 dark:hover:bg-neutral-800"
@@ -2752,9 +2752,9 @@ export const ChatsView: React.FC = () => {
               <div className="space-y-2.5">
                 {(() => {
                   const admins = groupInfoTarget.admins || (groupInfoTarget.createdBy ? [groupInfoTarget.createdBy] : [currentUser.id]);
-                  const isCurrentAppAdmin = admins.includes(currentUser.id) || groupInfoTarget.createdBy === currentUser.id;
+                  const isCurrentAppAdmin = (admins || []).includes(currentUser.id) || groupInfoTarget.createdBy === currentUser.id;
 
-                  const allMembersList = groupInfoTarget.members.map(memberId => {
+                  const allMembersList = (groupInfoTarget.members || []).map(memberId => {
                     if (memberId === currentUser.id) return currentUser;
                     return (
                       otherUsers.find(u => u.id === memberId) || {
@@ -2769,7 +2769,7 @@ export const ChatsView: React.FC = () => {
                     );
                   });
 
-                  return allMembersList.map(m => {
+                  return (allMembersList || []).map(m => {
                     const isCreator = m.id === groupInfoTarget.createdBy;
                     const isAdmin = admins.includes(m.id) || isCreator;
 
@@ -2949,8 +2949,8 @@ export const ChatsView: React.FC = () => {
             </div>
 
             <div className="space-y-2 max-h-60 overflow-y-auto mb-4 custom-scrollbar">
-              {otherUsers
-                .filter(u => !groupInfoTarget.members.includes(u.id))
+              {(otherUsers || [])
+                .filter(u => !(groupInfoTarget.members || []).includes(u.id))
                 .filter(u =>
                   u.name.toLowerCase().includes(addMembersSearchQuery.toLowerCase()) ||
                   u.username.toLowerCase().includes(addMembersSearchQuery.toLowerCase())

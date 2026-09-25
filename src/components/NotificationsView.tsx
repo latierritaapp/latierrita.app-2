@@ -98,7 +98,7 @@ export const NotificationsView: React.FC = () => {
             </p>
           </div>
         ) : (
-          notifications.map(notif => {
+          (notifications || []).map(notif => {
             const senderUser = notif.data?.userId
               ? (notif.data.userId === currentUser.id ? currentUser : otherUsers.find(u => u.id === notif.data?.userId))
               : null;

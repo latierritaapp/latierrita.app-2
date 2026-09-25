@@ -628,7 +628,7 @@ export const SettingsModal: React.FC = () => {
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {blockedUserIds.map(uid => (
+                  {(blockedUserIds || []).map(uid => (
                     <div
                       key={uid}
                       className="flex items-center justify-between p-2.5 rounded-xl bg-white/5 border border-white/10"
@@ -918,7 +918,7 @@ export const SettingsModal: React.FC = () => {
                   </p>
 
                   <div className="space-y-2">
-                    {TICKET_CATEGORIES.TS.options.map((opt, idx) => {
+                    {(TICKET_CATEGORIES?.TS?.options || []).map((opt, idx) => {
                       const isSelected = selectedTSOptionIdx === idx;
                       return (
                         <label

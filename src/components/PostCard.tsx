@@ -299,9 +299,9 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
       </div>
 
       {/* Comments List */}
-      {post.comments.length > 0 && (
+      {post.comments && post.comments.length > 0 && (
         <div className="px-4 pt-2 space-y-1">
-          {post.comments.map(c => (
+          {(post.comments || []).map(c => (
             <div key={c.id} className="text-xs flex items-start gap-2">
               <span className="font-bold text-white">{c.username}</span>
               <span className="text-white/80 flex-1">{c.text}</span>

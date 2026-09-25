@@ -54,7 +54,7 @@ export const AdCarousel: React.FC<AdCarouselProps> = ({ type = 'inicio' }) => {
 
   const targetTab = type === 'explorar' ? 'carrusel_02' : 'carrusel_01';
 
-  const activeBanners = adBanners.filter(
+  const activeBanners = (adBanners || []).filter(
     b =>
       b &&
       (type === 'explorar'

@@ -562,7 +562,7 @@ export const CreatePostModal: React.FC = () => {
                 </button>
 
                 {/* Device Photos */}
-                {devicePhotos.map((imgUrl, idx) => (
+                {(devicePhotos || []).map((imgUrl, idx) => (
                   <button
                     key={idx}
                     type="button"
@@ -690,9 +690,9 @@ export const CreatePostModal: React.FC = () => {
                       </button>
                     </div>
 
-                    {showLocationSuggestions && filteredLocations.length > 0 && (
+                    {showLocationSuggestions && (filteredLocations || []).length > 0 && (
                       <div className="absolute top-full left-0 right-0 z-30 mt-1 bg-[#001f52] border border-white/20 rounded-xl shadow-xl max-h-40 overflow-y-auto">
-                        {filteredLocations.map(city => (
+                        {(filteredLocations || []).map(city => (
                           <button
                             key={city}
                             type="button"
@@ -721,7 +721,7 @@ export const CreatePostModal: React.FC = () => {
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <label className="block text-xs font-bold text-white/90">
-                    Etiquetar parceros seguidores ({taggedUsernames.length})
+                    Etiquetar parceros seguidores ({(taggedUsernames || []).length})
                   </label>
                   <button
                     type="button"
@@ -732,9 +732,9 @@ export const CreatePostModal: React.FC = () => {
                   </button>
                 </div>
 
-                {taggedUsernames.length > 0 && (
+                {(taggedUsernames || []).length > 0 && (
                   <div className="flex flex-wrap gap-1.5 pt-1">
-                    {taggedUsernames.map(username => (
+                    {(taggedUsernames || []).map(username => (
                       <span key={username} className="inline-flex items-center gap-1 bg-amber-400/20 border border-amber-400/40 text-amber-300 px-2.5 py-1 rounded-full text-[10px] font-bold">
                         <span>@{username}</span>
                         <button type="button" onClick={() => toggleTagUser(username)} className="hover:text-white cursor-pointer">
@@ -758,7 +758,7 @@ export const CreatePostModal: React.FC = () => {
                       />
                     </div>
                     <div className="max-h-36 overflow-y-auto space-y-1">
-                      {followedUsersForTagging.map(u => {
+                      {(followedUsersForTagging || []).map(u => {
                         const isSelected = taggedUsernames.includes(u.username);
                         return (
                           <div

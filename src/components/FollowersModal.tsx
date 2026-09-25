@@ -259,7 +259,7 @@ export const FollowersModal: React.FC<FollowersModalProps> = ({ type, user, onCl
         ) : (
           /* Users List */
           <div className="space-y-2.5">
-            {filtered.map(item => {
+            {(filtered || []).map(item => {
               const displayItem = item.id === currentUser.id || item.username === currentUser.username
                 ? currentUser
                 : (otherUsers.find(u => u.id === item.id || u.username === item.username || (item.email && u.email === item.email)) || item);

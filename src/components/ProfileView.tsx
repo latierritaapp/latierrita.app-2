@@ -562,7 +562,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userToDisplay }) => {
             )}
 
             {/* User's featured highlights */}
-            {user.featuredStoryHighlight && user.featuredStoryHighlight.map(hl => (
+            {Array.isArray(user.featuredStoryHighlight) && user.featuredStoryHighlight.map(hl => (
               <div
                 key={hl.id}
                 onClick={() => {
@@ -628,7 +628,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userToDisplay }) => {
 
       {/* 5. Clean 3-Column Photo Grid */}
       <div className="grid grid-cols-3 gap-1 sm:gap-1.5 p-1">
-        {activeDisplayList.map(post => (
+        {(activeDisplayList || []).map(post => (
           <div
             key={post.id}
             onClick={() => setOpenedFeedPostId(post.id)}
@@ -718,7 +718,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userToDisplay }) => {
 
           {/* Scrollable Feed Container - Full screen edge-to-edge on mobile */}
           <div className="flex-1 overflow-y-auto overscroll-contain pb-16 divide-y divide-white/10">
-            {activeDisplayList.map(post => (
+            {(activeDisplayList || []).map(post => (
               <article
                 key={post.id}
                 id={`profile-feed-post-${post.id}`}
@@ -906,9 +906,9 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userToDisplay }) => {
                   )}
 
                   {/* Comments List */}
-                  {post.comments.length > 0 && (
+                  {post.comments && post.comments.length > 0 && (
                     <div className="pt-2 space-y-2 max-h-56 overflow-y-auto">
-                      {post.comments.map(c => (
+                      {(post.comments || []).map(c => (
                         <div key={c.id} className="text-xs flex items-start gap-2.5 bg-white/[0.03] p-2.5 rounded-xl border border-white/5">
                           <img
                             src={c.userAvatar || undefined}

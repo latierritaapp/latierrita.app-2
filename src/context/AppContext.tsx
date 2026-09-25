@@ -959,21 +959,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
         const cleanList = list.filter(b => b && b.id !== 'banner-init-1' && !deletedIds.includes(b.id));
 
-        // Preserve current user-added banners if remote is empty
-        if (cleanList.length === 0) {
-          setAdBanners(prev => {
-            const userCreated = prev.filter(b => b && b.id !== 'banner-init-1' && !deletedIds.includes(b.id) && b.id !== 'banner-oficial-latierrita');
-            return userCreated.length > 0 ? userCreated : INITIAL_AD_BANNERS;
-          });
-        } else {
-          setAdBanners(cleanList);
-          // Persist back to IndexedDB for offline resilience
-          cleanList.forEach(b => {
-            if (b.id !== 'banner-oficial-latierrita' && b.id !== 'banner-init-1') {
-              saveBannerToIndexedDB(b);
-            }
-          });
-        }
+        // Always include default initial banners if they haven't been deleted by admin
+        INITIAL_AD_BANNERS.forEach(initB => {
+          if (!cleanList.some(b => b.id === initB.id) && !deletedIds.includes(initB.id)) {
+            cleanList.push(initB);
+          }
+        });
+
+        setAdBanners(cleanList.length > 0 ? cleanList : INITIAL_AD_BANNERS);
+        cleanList.forEach(b => {
+          if (b.id !== 'banner-oficial-latierrita' && b.id !== 'banner-init-1') {
+            saveBannerToIndexedDB(b);
+          }
+        });
       }, async (error) => {
         // Fallback on network/permission error
         const list: AdBanner[] = [];
@@ -1663,7 +1661,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     try {
       const unsub = onSnapshot(doc(db, 'config', 'startup_ad'), async (docSnap) => {
-        if (docSnap.exists() && docSnap.data()) {
+        const isExists = docSnap && (typeof docSnap.exists === 'function' ? docSnap.exists() : Boolean(docSnap.exists));
+        if (isExists && docSnap.data()) {
           setStartupAdConfig({ id: docSnap.id, ...docSnap.data() } as StartupAdConfig);
         } else {
           setStartupAdConfig(DEFAULT_STARTUP_AD);
@@ -2798,9 +2797,17 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
   const addAdBanner = async (banner: Omit<AdBanner, 'id' | 'active'>) => {
     const newBannerId = `banner-${Date.now()}`;
     const newBanner: AdBanner = {
-      ...banner,
       id: newBannerId,
-      active: true
+      active: true,
+      title: banner.title || '',
+      subtitle: banner.subtitle || '',
+      imageUrl: banner.imageUrl || 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=600&auto=format&fit=crop&q=80',
+      sponsorName: banner.sponsorName || 'La Tierrita',
+      sponsorCity: banner.sponsorCity || 'España',
+      ctaText: banner.ctaText || 'Ver detalles',
+      ctaLink: banner.ctaLink || '',
+      category: banner.category || 'Evento',
+      carouselType: banner.carouselType || 'inicio'
     };
 
     // Ensure this new banner is not in the deleted set
@@ -2811,9 +2818,9 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
       localStorage.setItem('latierrita_deleted_banners', JSON.stringify(updatedDeleted));
     } catch {}
 
-    // 1. Immediate optimistic UI update (prioritizing user banner)
+    // 1. Immediate optimistic UI update
     setAdBanners(prev => {
-      const filtered = prev.filter(b => b.id !== newBannerId && b.id !== 'banner-init-1' && b.id !== 'banner-oficial-latierrita');
+      const filtered = (prev || []).filter(b => b.id !== newBannerId);
       return [newBanner, ...filtered];
     });
 
@@ -2824,33 +2831,36 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
     try {
       const localBannersRaw = localStorage.getItem('latierrita_local_banners') || '[]';
       const localBanners = JSON.parse(localBannersRaw);
-      const updatedLocal = [newBanner, ...localBanners.filter((b: any) => b.id !== newBannerId && b.id !== 'banner-init-1' && b.id !== 'banner-oficial-latierrita')];
+      const updatedLocal = [newBanner, ...localBanners.filter((b: any) => b && b.id !== newBannerId && b.id !== 'banner-init-1' && b.id !== 'banner-oficial-latierrita')];
       localStorage.setItem('latierrita_local_banners', JSON.stringify(updatedLocal));
 
       const allBannersRaw = localStorage.getItem('latierrita_ad_banners') || '[]';
       const allBanners = JSON.parse(allBannersRaw);
-      const updatedAll = [newBanner, ...allBanners.filter((b: any) => b.id !== newBannerId && b.id !== 'banner-init-1' && b.id !== 'banner-oficial-latierrita')];
+      const updatedAll = [newBanner, ...allBanners.filter((b: any) => b && b.id !== newBannerId && b.id !== 'banner-init-1' && b.id !== 'banner-oficial-latierrita')];
       localStorage.setItem('latierrita_ad_banners', JSON.stringify(updatedAll));
     } catch (e) {
       console.warn('Local banner storage note (preserved in IndexedDB):', e);
     }
 
-    // 4. Write to Firestore banners collection
+    // 4. Clean object to prevent Firestore "undefined" property errors
+    const firestoreBanner = JSON.parse(JSON.stringify(newBanner));
+
+    // 5. Write to Firestore banners collection for all users
     try {
-      await setDoc(doc(db, 'banners', newBannerId), newBanner);
+      await setDoc(doc(db, 'banners', newBannerId), firestoreBanner);
       triggerPlushNotification({
         type: 'system',
         title: 'STAFF: Anuncio añadido al carrusel',
-        message: `El banner "${banner.title}" ya está activo en el carrusel ${banner.carouselType === 'explorar' ? 'de Explorar' : 'de Inicio'}.`,
-        avatar: banner.imageUrl || 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=200&auto=format&fit=crop&q=80'
+        message: `El banner "${newBanner.title || 'Anuncio'}" ya está activo en el carrusel ${newBanner.carouselType === 'explorar' ? 'de Explorar' : 'de Inicio'}.`,
+        avatar: newBanner.imageUrl
       });
     } catch (error) {
-      console.warn('Firestore banners write fallback to local state:', error);
+      console.warn('Firestore banners write error:', error);
       triggerPlushNotification({
         type: 'system',
-        title: 'STAFF: Anuncio guardado',
-        message: `El banner "${banner.title}" se ha guardado y está visible en el carrusel ${banner.carouselType === 'explorar' ? 'de Explorar' : 'de Inicio'}.`,
-        avatar: banner.imageUrl || 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=200&auto=format&fit=crop&q=80'
+        title: 'STAFF: Anuncio guardado localmente',
+        message: `El banner "${newBanner.title || 'Anuncio'}" se ha guardado localmente en tu navegador.`,
+        avatar: newBanner.imageUrl
       });
     }
   };
@@ -3183,8 +3193,8 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
       const roomRef = doc(db, 'chat_rooms', chatId);
       const docSnap = await getDoc(roomRef);
       let firestoreMessages: any[] = [];
-      
-      if (docSnap.exists()) {
+      const isExists = docSnap && (typeof docSnap.exists === 'function' ? docSnap.exists() : Boolean(docSnap.exists));
+      if (isExists) {
         const roomData = docSnap.data();
         if (Array.isArray(roomData.messages)) {
           firestoreMessages = roomData.messages;
@@ -3439,17 +3449,17 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
     const targetRoom = chatRooms.find(r => r.id === chatId);
     if (!targetRoom) return;
 
-    const updatedMessages = targetRoom.messages.map(msg => {
+    const updatedMessages = (targetRoom.messages || []).map(msg => {
       if (msg.id !== messageId) return msg;
       const currentReactions = msg.reactions || [];
 
       // 1. Check if user already reacted with THIS exact emoji
-      const existingSameEmoji = currentReactions.find(r => r.emoji === emoji && r.users.includes(currentUser.id));
+      const existingSameEmoji = currentReactions.find(r => r.emoji === emoji && (r.users || []).includes(currentUser.id));
 
       // Remove currentUser.id from ALL existing reactions on this message
       let cleanedReactions = currentReactions.map(r => {
-        if (r.users.includes(currentUser.id)) {
-          const filteredUsers = r.users.filter(u => u !== currentUser.id);
+        if ((r.users || []).includes(currentUser.id)) {
+          const filteredUsers = (r.users || []).filter(u => u !== currentUser.id);
           return {
             ...r,
             count: filteredUsers.length,
@@ -3538,7 +3548,7 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
     const targetRoom = chatRooms.find(r => r.id === chatId);
     if (!targetRoom) return;
 
-    const updatedMessages = targetRoom.messages.map(msg => {
+    const updatedMessages = (targetRoom.messages || []).map(msg => {
       if (msg.id !== messageId) return msg;
       return {
         ...msg,

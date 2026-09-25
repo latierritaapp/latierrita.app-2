@@ -906,7 +906,7 @@ export const StaffAdminModal: React.FC<{ isFullScreenRoute?: boolean }> = ({ isF
 
                           {/* Live Chat Message Feed */}
                           <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-[#001224] no-scrollbar">
-                            {(!linkedRoom || linkedRoom.messages.length === 0) ? (
+                            {(!linkedRoom || !linkedRoom.messages || linkedRoom.messages.length === 0) ? (
                               <div className="p-8 text-center text-white/50 text-xs space-y-2">
                                 <MessageSquare className="w-8 h-8 mx-auto text-white/30" />
                                 <p>No hay mensajes aún en la conversación de este ticket.</p>
@@ -915,7 +915,7 @@ export const StaffAdminModal: React.FC<{ isFullScreenRoute?: boolean }> = ({ isF
                                 </p>
                               </div>
                             ) : (
-                              linkedRoom.messages.map(msg => {
+                              (linkedRoom.messages || []).map(msg => {
                                 const isMe = msg.senderId === currentUser.id;
                                 const isSystem = msg.senderId === 'system';
 
@@ -1169,7 +1169,7 @@ export const StaffAdminModal: React.FC<{ isFullScreenRoute?: boolean }> = ({ isF
                               <p className="text-[11px]">En esta categoría ({ticketTypeFilter}) con estado "{ticketStatusFilter}".</p>
                             </div>
                           ) : (
-                            filteredTickets.map(t => {
+                            (filteredTickets || []).map(t => {
                               return (
                                 <div
                                   key={t.id}
@@ -1320,7 +1320,7 @@ export const StaffAdminModal: React.FC<{ isFullScreenRoute?: boolean }> = ({ isF
                             No hay publicaciones o usuarios reportados pendientes de revisión.
                           </div>
                         ) : (
-                          reports.map(rep => (
+                          (reports || []).map(rep => (
                             <div
                               key={rep.id}
                               className="p-3 bg-white/10 rounded-xl border border-white/10 flex items-center justify-between gap-3 text-xs"
@@ -1394,7 +1394,7 @@ export const StaffAdminModal: React.FC<{ isFullScreenRoute?: boolean }> = ({ isF
                           No hay anuncios cargados en el Carrusel de Inicio.
                         </p>
                       ) : (
-                        bannersC1.map(ad => (
+                        (bannersC1 || []).map(ad => (
                           <div
                             key={ad.id}
                             className="p-3 bg-white/5 border border-white/10 rounded-2xl flex items-center justify-between gap-3"
@@ -1622,7 +1622,7 @@ export const StaffAdminModal: React.FC<{ isFullScreenRoute?: boolean }> = ({ isF
                         <span className="text-xs font-black uppercase text-amber-300 block">
                           Publicaciones de Feed Activas ({staffPosts.length})
                         </span>
-                        {staffPosts.map(sp => (
+                        {(staffPosts || []).map(sp => (
                           <div
                             key={sp.id}
                             className="p-3 bg-white/5 border border-white/10 rounded-2xl flex items-center justify-between gap-3"
@@ -1820,7 +1820,7 @@ export const StaffAdminModal: React.FC<{ isFullScreenRoute?: boolean }> = ({ isF
                           No hay anuncios cargados en el Carrusel 02.
                         </p>
                       ) : (
-                        bannersC2.map(ad => (
+                        (bannersC2 || []).map(ad => (
                           <div
                             key={ad.id}
                             className="p-3 bg-white/5 border border-white/10 rounded-2xl flex items-center justify-between gap-3"
@@ -2329,7 +2329,7 @@ export const StaffAdminModal: React.FC<{ isFullScreenRoute?: boolean }> = ({ isF
                             </p>
 
                             <div className="space-y-2">
-                              {filteredUsers.map(u => (
+                              {(filteredUsers || []).map(u => (
                                 <div
                                   key={u.id}
                                   onClick={() => handleOpenUserEditor(u)}
@@ -2405,7 +2405,7 @@ export const StaffAdminModal: React.FC<{ isFullScreenRoute?: boolean }> = ({ isF
                               </p>
                             ) : (
                               <div className="space-y-2">
-                                {deletedAccounts.map(d => {
+                                {(deletedAccounts || []).map(d => {
                                   let daysRemainingText = '7 días';
                                   let isExpired = false;
                                   if (d.retentionExpiresAt) {
@@ -2508,7 +2508,7 @@ export const StaffAdminModal: React.FC<{ isFullScreenRoute?: boolean }> = ({ isF
                             No hay solicitudes de verificación pendientes.
                           </div>
                         ) : (
-                          verificationRequests.map(v => (
+                          (verificationRequests || []).map(v => (
                             <div
                               key={v.id}
                               className="p-3.5 bg-white/5 border border-white/10 rounded-2xl space-y-2 text-xs"
@@ -2590,7 +2590,7 @@ export const StaffAdminModal: React.FC<{ isFullScreenRoute?: boolean }> = ({ isF
                         </div>
 
                         <div className="space-y-2">
-                          {staffMembers.map(st => (
+                          {(staffMembers || []).map(st => (
                             <div
                               key={st.id}
                               className="p-3 bg-white/5 border border-white/10 rounded-2xl flex items-center justify-between gap-3 text-xs"
@@ -3469,7 +3469,7 @@ ALTER TABLE stories DISABLE ROW LEVEL SECURITY;`}
                 className="w-full bg-[#001845] text-white px-3 py-2 rounded-xl border border-white/20 text-xs focus:ring-1 focus:ring-amber-400"
               >
                 <option value="">-- Elige un usuario registrado --</option>
-                {allSystemUsers.map(u => (
+                {(allSystemUsers || []).map(u => (
                   <option key={u.id} value={u.id}>
                     {u.name} (@{u.username}) - {u.city}
                   </option>

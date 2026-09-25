@@ -66,7 +66,7 @@ export async function optimizeAvatarImage(file: File, maxDimension = 400, qualit
  * Optimizes banner or landscape images (preserving aspect ratio, max width 1280px, ~60-120KB)
  * to comply with Firestore 1MB document limit and ensure instant local rendering.
  */
-export async function optimizeBannerImage(file: File, maxWidth = 1280, maxHeight = 720, quality = 0.82): Promise<string> {
+export async function optimizeBannerImage(file: File, maxWidth = 1000, maxHeight = 600, quality = 0.78): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onerror = () => reject(new Error('Error al leer el archivo de imagen.'));
@@ -102,7 +102,16 @@ export async function optimizeBannerImage(file: File, maxWidth = 1280, maxHeight
 
           ctx.drawImage(img, 0, 0, width, height);
 
-          const compressedDataUrl = canvas.toDataURL('image/jpeg', quality);
+          let compressedDataUrl = canvas.toDataURL('image/jpeg', quality);
+
+          // Guarantee image string size is under 350KB for Cloud Firestore document limit
+          if (compressedDataUrl.length > 350000) {
+            compressedDataUrl = canvas.toDataURL('image/jpeg', 0.6);
+          }
+          if (compressedDataUrl.length > 350000) {
+            compressedDataUrl = canvas.toDataURL('image/jpeg', 0.45);
+          }
+
           resolve(compressedDataUrl);
         } catch (err) {
           console.warn('Canvas banner optimization error, falling back:', err);

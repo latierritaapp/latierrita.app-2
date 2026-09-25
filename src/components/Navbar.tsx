@@ -52,7 +52,7 @@ export const Navbar: React.FC = () => {
         : (otherUsers.find(u => u.id === selectedUserProfile.id || u.username === selectedUserProfile.username || (selectedUserProfile.email && u.email === selectedUserProfile.email)) || selectedUserProfile))
     : currentUser;
 
-  const pendingInvitesCount = groupInvites.filter(i => i.status === 'pending').length;
+  const pendingInvitesCount = (groupInvites || []).filter(i => i.status === 'pending').length;
 
   return (
     <header className="sticky top-0 z-40 glass-header shadow-lg transition-all text-white">

@@ -195,7 +195,7 @@ export const ReportModal: React.FC = () => {
                   Selecciona el Motivo del Ticket
                 </label>
                 <div className="space-y-2">
-                  {currentOptions.map((opt, idx) => {
+                  {(currentOptions || []).map((opt, idx) => {
                     const isSelected = selectedOptionIndex === idx;
                     return (
                       <label

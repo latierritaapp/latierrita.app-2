@@ -22,12 +22,12 @@ export const FeedView: React.FC = () => {
 
       {/* 3. Posts Stream (Only Staff Publications) */}
       <div className="divide-y divide-white/10">
-        {staffPosts.map(post => (
+        {(staffPosts || []).map(post => (
           <PostCard key={post.id} post={post} />
         ))}
       </div>
 
-      {staffPosts.length === 0 && (
+      {(staffPosts || []).length === 0 && (
         <div className="py-16 px-4 text-center text-white/60">
           <p className="text-xs">No hay publicaciones oficiales de staff disponibles en este momento.</p>
         </div>

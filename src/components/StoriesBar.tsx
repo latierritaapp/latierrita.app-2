@@ -137,7 +137,7 @@ export const StoriesBar: React.FC = () => {
           </div>
 
           {/* Círculos de historias de contactos (Un círculo por usuario) */}
-          {otherGroups.map((group) => {
+          {(otherGroups || []).map((group) => {
             const representativeStory = group[0];
             const hasUnviewed = group.some(s => !s.viewed);
             const globalIndex = stories.findIndex(s => s.id === representativeStory.id);

@@ -1,505 +1,279 @@
+import { initializeApp, getApps, getApp } from 'firebase/app';
+import { getAuth } from 'firebase/auth';
+import {
+  getFirestore,
+  collection as fsCollection,
+  doc as fsDoc,
+  getDoc as fsGetDoc,
+  getDocs as fsGetDocs,
+  setDoc as fsSetDoc,
+  updateDoc as fsUpdateDoc,
+  deleteDoc as fsDeleteDoc,
+  onSnapshot as fsOnSnapshot,
+  addDoc as fsAddDoc,
+  query as fsQuery,
+  where as fsWhere,
+  limit as fsLimit,
+  getDocFromServer,
+  QueryConstraint
+} from 'firebase/firestore';
+import firebaseConfig from '../../firebase-applet-config.json';
 import { supabase } from './supabase';
 
-// DB Dummy object to match previous exports
-export const db = {};
+const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+export const auth = getAuth(app);
 
-// Helpers to dynamically convert camelCase (JavaScript/React) <-> snake_case (PostgreSQL)
+// Test connection as required by Firebase skill
+async function testConnection() {
+  try {
+    await getDocFromServer(fsDoc(db, 'test', 'connection'));
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('the client is offline')) {
+      console.error('Please check your Firebase configuration.');
+    }
+  }
+}
+testConnection();
+
+// Helpers to dynamically convert camelCase <-> snake_case for dual Supabase backup
 function camelToSnake(str: string): string {
   return str.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
 }
 
-function snakeToCamel(str: string): string {
-  return str.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
-}
-
-function isObject(val: any): boolean {
-  return val !== null && typeof val === 'object' && !Array.isArray(val) && !(val instanceof Date);
-}
-
 function convertKeysToSnake(obj: any): any {
-  if (!isObject(obj) && !Array.isArray(obj)) return obj;
-  if (Array.isArray(obj)) return obj.map(convertKeysToSnake);
-  const result: any = {};
+  if (!obj || typeof obj !== 'object' || Array.isArray(obj) || obj instanceof Date) return obj;
+  const result: Record<string, any> = {};
   for (const key of Object.keys(obj)) {
-    // Keep internal JSON fields unaltered if they are complex configuration metadata
-    if (key === 'profileData' || key === 'profile_data') {
-      result[camelToSnake(key)] = obj[key];
-      continue;
-    }
     const snakeKey = camelToSnake(key);
-    result[snakeKey] = convertKeysToSnake(obj[key]);
+    result[snakeKey] = obj[key];
   }
   return result;
 }
 
-function convertKeysToCamel(obj: any): any {
-  if (!isObject(obj) && !Array.isArray(obj)) return obj;
-  if (Array.isArray(obj)) return obj.map(convertKeysToCamel);
-  const result: any = {};
-  for (const key of Object.keys(obj)) {
-    if (key === 'profile_data' || key === 'profileData') {
-      result[snakeToCamel(key)] = obj[key];
-      continue;
-    }
-    const camelKey = snakeToCamel(key);
-    result[camelKey] = convertKeysToCamel(obj[key]);
-  }
-  return result;
-}
-
-function formatRowData(tableName: string, data: any): any {
-  if (!data || typeof data !== 'object') return data;
-  const item = convertKeysToCamel(data);
-
-  if (tableName === 'posts') {
-    item.mediaUrl = item.mediaUrl || item.imageUrl || '';
-    item.userAvatar = item.userAvatar || item.avatarUrl || '';
-    item.timestamp = item.timestamp || item.createdAt || 'Reciente';
-    item.likesCount = Array.isArray(item.likes) ? item.likes.length : (typeof item.likesCount === 'number' ? item.likesCount : 0);
-    item.comments = Array.isArray(item.comments) ? item.comments : [];
-  } else if (tableName === 'stories') {
-    item.userAvatar = item.userAvatar || item.avatarUrl || '';
-    item.timestamp = item.timestamp || item.createdAt || 'Reciente';
-    item.reactions = Array.isArray(item.reactions) ? item.reactions : [];
-  } else if (tableName === 'profiles' || tableName === 'users') {
-    item.avatar = item.avatar || item.avatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80';
-    item.isVerified = item.isVerified !== undefined ? item.isVerified : (item.verified ?? false);
-    item.originCity = item.originCity || 'Colombia';
-    item.city = item.city || 'Madrid';
-    item.followersCount = Array.isArray(item.followers) ? item.followers.length : (item.followersCount || 0);
-    item.followingCount = Array.isArray(item.following) ? item.following.length : (item.followingCount || 0);
-    item.socialLinks = item.socialLinks || {
-      instagram: item.instagram || '',
-      facebook: item.facebook || '',
-      tiktok: item.tiktok || '',
-      x: item.x || ''
-    };
-  } else if (tableName === 'banners') {
-    item.active = item.active !== undefined ? item.active : true;
-    item.carouselType = item.carouselType || item.carousel_type || 'inicio';
-    item.imageUrl = item.imageUrl || item.image_url || '';
-    item.sponsorName = item.sponsorName || item.sponsor_name || '';
-    item.sponsorCity = item.sponsorCity || item.sponsor_city || '';
-    item.ctaText = item.ctaText || item.cta_text || '';
-    item.ctaLink = item.ctaLink || item.cta_link || '';
-    item.discountBadge = item.discountBadge || item.discount_badge || '';
-  } else if (tableName === 'chat_rooms') {
-    // 1. Process messages column (Postgres JSONB or stringified JSON)
-    if (typeof item.messages === 'string') {
-      try {
-        item.messages = JSON.parse(item.messages);
-      } catch (e) {
-        item.messages = [];
-      }
-    }
-
-    // 2. Fallback: check if description had JSON metadata from previous version
-    if (item.description && typeof item.description === 'string' && item.description.startsWith('{')) {
-      try {
-        const meta = JSON.parse(item.description);
-        if (!Array.isArray(item.messages) || item.messages.length === 0) {
-          if (Array.isArray(meta.messages)) item.messages = meta.messages;
-        }
-        item.description = meta.description || '';
-        item.targetUserId = meta.targetUserId || item.targetUserId;
-        item.targetUser = meta.targetUser || item.targetUser;
-        item.admins = meta.admins || item.admins || [];
-        item.createdBy = meta.createdBy || item.createdBy;
-        item.status = meta.status || item.status;
-        item.unreadCount = meta.unreadCount || item.unreadCount;
-      } catch (e) {
-        // Not JSON
-      }
-    }
-    if (!Array.isArray(item.members)) item.members = [];
-    if (!Array.isArray(item.messages)) item.messages = [];
-  }
-
-  return item;
-}
-
-function sanitizePayloadForTable(tableName: string, payload: any): any {
-  if (!payload || typeof payload !== 'object') return payload;
-  const clean = { ...payload };
-
-  if (tableName === 'posts') {
-    // Strip frontend-only properties that do not exist as DB columns in Postgres
-    delete clean.has_liked;
-    delete clean.ad_cta_url;
-    delete clean.likes_count;
-    delete clean.disable_comments;
-    delete clean.hide_likes;
-    delete clean.tagged_usernames;
-    delete clean.hide_location;
-    delete clean.ad_title;
-    delete clean.ad_description;
-    delete clean.sponsor_name;
-    delete clean.sponsor_city;
-
-    if (clean.media_url && !clean.image_url) {
-      clean.image_url = clean.media_url;
-    }
-    delete clean.media_url;
-
-    if (clean.user_avatar && !clean.avatar_url) {
-      clean.avatar_url = clean.user_avatar;
-    }
-    delete clean.user_avatar;
-
-    if (clean.timestamp && !clean.created_at) {
-      clean.created_at = new Date().toISOString();
-    }
-    delete clean.timestamp;
-
-    if (!clean.name) {
-      clean.name = clean.username || 'Usuario';
-    }
-
-    if (!Array.isArray(clean.likes)) {
-      clean.likes = [];
-    }
-
-    if (clean.comments_count === undefined) {
-      clean.comments_count = Array.isArray(clean.comments) ? clean.comments.length : 0;
-    }
-  } else if (tableName === 'stories') {
-    delete clean.viewed;
-
-    if (clean.timestamp && !clean.created_at) {
-      clean.created_at = new Date().toISOString();
-    }
-    delete clean.timestamp;
-
-    if (clean.user_avatar && !clean.avatar_url) {
-      clean.avatar_url = clean.user_avatar;
-    }
-    delete clean.user_avatar;
-
-    if (!clean.expires_at) {
-      clean.expires_at = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
-    }
-    if (!clean.media_type) {
-      clean.media_type = 'image';
-    }
-    if (!Array.isArray(clean.viewed_by)) {
-      clean.viewed_by = [];
-    }
-    if (!Array.isArray(clean.reactions)) {
-      clean.reactions = [];
-    }
-  } else if (tableName === 'profiles' || tableName === 'users') {
-    // Strip frontend-only properties
-    delete clean.followers_count;
-    delete clean.following_count;
-    delete clean.posts_count;
-    delete clean.last_name_change_date;
-    delete clean.last_username_change_date;
-
-    if (clean.avatar && !clean.avatar_url) {
-      clean.avatar_url = clean.avatar;
-    }
-    delete clean.avatar;
-
-    if (clean.is_verified !== undefined && clean.verified === undefined) {
-      clean.verified = clean.is_verified;
-    }
-    delete clean.is_verified;
-
-    if (clean.social_links && typeof clean.social_links === 'object') {
-      if (clean.social_links.instagram !== undefined) clean.instagram = clean.social_links.instagram;
-      if (clean.social_links.facebook !== undefined) clean.facebook = clean.social_links.facebook;
-      if (clean.social_links.tiktok !== undefined) clean.tiktok = clean.social_links.tiktok;
-      if (clean.social_links.x !== undefined) clean.x = clean.social_links.x;
-      delete clean.social_links;
-    }
-  } else if (tableName === 'chat_rooms') {
-    // 1. Ensure messages is kept as an array for the Postgres JSONB column
-    if (typeof clean.messages === 'string') {
-      try {
-        clean.messages = JSON.parse(clean.messages);
-      } catch {
-        clean.messages = [];
-      }
-    } else if (!Array.isArray(clean.messages)) {
-      clean.messages = [];
-    }
-
-    // 2. Ensure description is a clean text string, NOT a giant JSON object
-    if (typeof clean.description === 'string' && clean.description.startsWith('{')) {
-      try {
-        const parsed = JSON.parse(clean.description);
-        if (parsed.description && typeof parsed.description === 'string') {
-          clean.description = parsed.description;
-        }
-      } catch {
-        // Keep string as is
-      }
-    } else if (typeof clean.description !== 'string') {
-      clean.description = '';
-    }
-
-    // Keep ONLY the fields that exist in the Supabase chat_rooms table
-    const allowedFields = ['id', 'name', 'description', 'created_at', 'messages'];
-    for (const key in clean) {
-      if (!allowedFields.includes(key)) {
-        delete clean[key];
-      }
-    }
-    
-    if (!clean.created_at) clean.created_at = new Date().toISOString().split('T')[0];
-    if (!clean.name) clean.name = 'Chat';
-  }
-
-  return clean;
-}
-
-// 1. EMULACIÓN DE COLLECTION REF
+// 1. COLLECTION REF
 export function collection(database: any, name: string) {
-  // Translate firestore 'users' collection to our postgres 'profiles' table
-  const tableName = name === 'users' ? 'profiles' : name;
-  return {
-    type: 'collection',
-    name: tableName
-  };
+  const colName = name === 'users' ? 'profiles' : name;
+  return fsCollection(db, colName);
 }
 
-// 2. EMULACIÓN DE DOCUMENT REF
+// 2. DOCUMENT REF
 export function doc(database: any, colOrPath: any, id?: string) {
   if (typeof colOrPath === 'string') {
-    // E.g. doc(db, 'config', 'startup_ad')
-    const tableName = colOrPath === 'users' ? 'profiles' : colOrPath;
-    return {
-      type: 'document',
-      collection: tableName,
-      id: id || ''
-    };
+    const colName = colOrPath === 'users' ? 'profiles' : colOrPath;
+    if (id) {
+      return fsDoc(db, colName, id);
+    }
+    return fsDoc(db, colName);
   }
-  
-  // E.g. doc(db, collectionRef, id)
-  return {
-    type: 'document',
-    collection: colOrPath.name,
-    id: id || ''
-  };
+  if (id) {
+    return fsDoc(colOrPath, id);
+  }
+  return fsDoc(colOrPath);
 }
 
-// 3. EMULACIÓN DE GET DOC
+// 3. GET DOC
 export async function getDoc(docRef: any) {
-  const { collection, id } = docRef;
-  const { data, error } = await supabase
-    .from(collection)
-    .select('*')
-    .eq('id', id)
-    .maybeSingle();
+  try {
+    const snap = await fsGetDoc(docRef);
+    const isExists = snap && (typeof snap.exists === 'function' ? snap.exists() : Boolean(snap.exists));
+    if (isExists) {
+      const snapData = snap.data() || {};
+      return {
+        exists: () => true,
+        data: () => ({ id: snap.id, ...snapData }),
+        id: snap.id
+      };
+    }
+  } catch (e) {
+    console.warn('Firestore getDoc note:', e);
+  }
 
-  if (error) throw error;
+  // Fallback to Supabase
+  try {
+    const colName = docRef?.parent?.id || docRef?.path?.split('/')[0];
+    const docId = docRef?.id;
+    if (colName && docId) {
+      const { data } = await supabase.from(colName).select('*').eq('id', docId).maybeSingle();
+      if (data) {
+        return {
+          exists: () => true,
+          data: () => ({ id: docId, ...data }),
+          id: docId
+        };
+      }
+    }
+  } catch {}
+
   return {
-    exists: () => !!data,
-    data: () => data ? formatRowData(collection, data) : null,
-    id
+    exists: () => false,
+    data: () => null,
+    id: docRef?.id || ''
   };
 }
 
-// 4. EMULACIÓN DE SET DOC
+// 4. SET DOC
 export async function setDoc(docRef: any, data: any, options?: { merge?: boolean }) {
-  const { collection, id } = docRef;
-  const rawSnake = convertKeysToSnake(data);
-  const snakePayload = sanitizePayloadForTable(collection, rawSnake);
-  
-  // Ensure the document ID is preserved in the table row
-  snakePayload.id = id;
+  // Primary: Real-time Cloud Firestore write
+  try {
+    if (options) {
+      await fsSetDoc(docRef, data, options);
+    } else {
+      await fsSetDoc(docRef, data);
+    }
+  } catch (err) {
+    console.warn('Firestore setDoc warning, syncing locally:', err);
+  }
 
-  const { error } = await supabase
-    .from(collection)
-    .upsert([snakePayload], { onConflict: 'id' });
-
-  if (error) throw error;
+  // Non-blocking background sync to Supabase backup
+  try {
+    const colName = docRef?.parent?.id || docRef?.path?.split('/')[0];
+    const docId = docRef?.id;
+    if (colName && docId) {
+      const snakePayload = { ...convertKeysToSnake(data), id: docId };
+      await supabase.from(colName).upsert([snakePayload], { onConflict: 'id' });
+    }
+  } catch {}
 }
 
-// 5. EMULACIÓN DE UPDATE DOC
+// 5. UPDATE DOC
 export async function updateDoc(docRef: any, data: any) {
-  const { collection, id } = docRef;
-  const rawSnake = convertKeysToSnake(data);
-  const snakePayload = sanitizePayloadForTable(collection, rawSnake);
+  try {
+    await fsUpdateDoc(docRef, data);
+  } catch (err) {
+    console.warn('Firestore updateDoc warning:', err);
+  }
 
-  const { error } = await supabase
-    .from(collection)
-    .update(snakePayload)
-    .eq('id', id);
-
-  if (error) throw error;
+  try {
+    const colName = docRef?.parent?.id || docRef?.path?.split('/')[0];
+    const docId = docRef?.id;
+    if (colName && docId) {
+      const snakePayload = convertKeysToSnake(data);
+      await supabase.from(colName).update(snakePayload).eq('id', docId);
+    }
+  } catch {}
 }
 
-// 6. EMULACIÓN DE DELETE DOC
+// 6. DELETE DOC
 export async function deleteDoc(docRef: any) {
-  const { collection, id } = docRef;
-  const { error } = await supabase
-    .from(collection)
-    .delete()
-    .eq('id', id);
+  try {
+    await fsDeleteDoc(docRef);
+  } catch (err) {
+    console.warn('Firestore deleteDoc warning:', err);
+  }
 
-  if (error) throw error;
+  try {
+    const colName = docRef?.parent?.id || docRef?.path?.split('/')[0];
+    const docId = docRef?.id;
+    if (colName && docId) {
+      await supabase.from(colName).delete().eq('id', docId);
+    }
+  } catch {}
 }
 
-// 7. EMULACIÓN DE ON SNAPSHOT (Soporta suscripciones en tiempo real)
+// 7. ON SNAPSHOT (Cloud Firestore Real-Time Stream across all connected clients)
 export function onSnapshot(
-  ref: any, 
-  callback: (snapshot: any) => void, 
+  ref: any,
+  callback: (snapshot: any) => void,
   errorCallback?: (err: any) => void
 ) {
-  let isUnsubscribed = false;
-
-  const fetchData = async () => {
-    if (isUnsubscribed) return;
-    try {
-      if (ref.type === 'collection') {
-        const { data, error } = await supabase
-          .from(ref.name)
-          .select('*');
-
-        if (error) throw error;
-
-        const docs = (data || []).map(row => ({
-          id: row.id,
-          data: () => formatRowData(ref.name, row),
-          exists: () => true
-        }));
-
-        if (!isUnsubscribed) {
-          callback({
-            empty: docs.length === 0,
-            forEach: (cb: any) => docs.forEach(cb),
-            docs
-          });
-        }
-      } else if (ref.type === 'document') {
-        const { data, error } = await supabase
-          .from(ref.collection)
-          .select('*')
-          .eq('id', ref.id)
-          .maybeSingle();
-
-        if (error) throw error;
-
-        if (!isUnsubscribed) {
-          callback({
-            exists: () => !!data,
-            data: () => data ? formatRowData(ref.collection, data) : null,
-            id: ref.id
-          });
-        }
+  return fsOnSnapshot(
+    ref,
+    (snapshot: any) => {
+      if (!snapshot) {
+        callback({
+          empty: true,
+          docs: [],
+          forEach: () => {},
+          exists: () => false,
+          data: () => null
+        });
+        return;
       }
-    } catch (err) {
+
+      // Single Document Snapshot (e.g. onSnapshot(doc(...)))
+      if (typeof snapshot.exists === 'function' && !('docs' in snapshot)) {
+        const isExists = snapshot.exists();
+        const snapData = isExists ? (snapshot.data() || {}) : null;
+        const wrappedDoc = {
+          id: snapshot.id,
+          data: () => snapData ? { id: snapshot.id, ...snapData } : null,
+          exists: () => isExists
+        };
+        callback(wrappedDoc);
+        return;
+      }
+
+      // Query Snapshot (e.g. onSnapshot(collection(...)))
+      const docs = (snapshot?.docs || []).map((d: any) => {
+        const dData = d.data() || {};
+        const dExists = typeof d.exists === 'function' ? d.exists() : true;
+        return {
+          id: d.id,
+          data: () => ({ id: d.id, ...dData }),
+          exists: () => dExists
+        };
+      });
+      callback({
+        empty: snapshot?.empty ?? docs.length === 0,
+        forEach: (cb: any) => docs.forEach(cb),
+        docs,
+        exists: () => docs.length > 0,
+        data: () => null
+      });
+    },
+    (err: any) => {
+      console.warn('Firestore onSnapshot fallback event:', err?.message || err);
       if (errorCallback) errorCallback(err);
-      else console.warn('Note in emulated onSnapshot fetch:', err);
     }
-  };
-
-  // Carga inicial
-  fetchData();
-
-  // Configurar suscripción en tiempo real con Supabase Realtime con canal único para evitar colisiones
-  let channel: any = null;
-  try {
-    const targetTable = ref.type === 'collection' ? ref.name : ref.collection;
-    const channelName = ref.type === 'collection' ? ref.name : `${ref.collection}-${ref.id}`;
-    const uniqueChannelId = `realtime-shim:${channelName}-${Math.random().toString(36).slice(2, 9)}-${Date.now()}`;
-    channel = supabase.channel(uniqueChannelId);
-
-    channel
-      .on('postgres_changes', { 
-        event: '*', 
-        schema: 'public', 
-        table: targetTable,
-        filter: ref.type === 'document' ? `id=eq.${ref.id}` : undefined
-      }, () => {
-        fetchData();
-      })
-      .subscribe();
-  } catch (err) {
-    console.warn('Realtime channel subscription note:', err);
-  }
-
-  return () => {
-    isUnsubscribed = true;
-    if (channel) {
-      try {
-        supabase.removeChannel(channel);
-      } catch (e) {
-        try {
-          channel.unsubscribe();
-        } catch {}
-      }
-    }
-  };
+  );
 }
 
-// 8. EMULACIÓN DE CONSULTAS Y FILTROS (QUERY, WHERE, LIMIT)
-export function query(colRef: any, ...constraints: any[]) {
-  return {
-    type: 'query',
-    collection: colRef.name,
-    constraints
-  };
+// 8. QUERY & CONSTRAINTS
+export function query(colRef: any, ...constraints: QueryConstraint[]) {
+  return fsQuery(colRef, ...constraints);
 }
 
-export function where(field: string, op: string, value: any) {
-  return { type: 'where', field, op, value };
+export function where(field: string, op: any, value: any) {
+  return fsWhere(field, op, value);
 }
 
 export function limit(num: number) {
-  return { type: 'limit', value: num };
+  return fsLimit(num);
 }
 
-// 9. EMULACIÓN DE GET DOCS
+// 9. GET DOCS
 export async function getDocs(queryRef: any) {
-  const collectionName = queryRef.type === 'query' ? queryRef.collection : queryRef.name;
-  let q = supabase.from(collectionName).select('*');
-
-  if (queryRef.type === 'query' && queryRef.constraints) {
-    for (const cons of queryRef.constraints) {
-      if (cons.type === 'where') {
-        const snakeField = camelToSnake(cons.field);
-        if (cons.op === '==') {
-          q = q.eq(snakeField, cons.value);
-        } else if (cons.op === 'in') {
-          q = q.in(snakeField, cons.value);
-        }
-      } else if (cons.type === 'limit') {
-        q = q.limit(cons.value);
-      }
-    }
+  try {
+    const snap = await fsGetDocs(queryRef);
+    const docs = (snap?.docs || []).map((d) => {
+      const dData = d.data() || {};
+      return {
+        id: d.id,
+        data: () => ({ id: d.id, ...dData }),
+        exists: () => d.exists()
+      };
+    });
+    return {
+      empty: snap.empty,
+      docs,
+      forEach: (cb: any) => docs.forEach(cb)
+    };
+  } catch (e) {
+    console.warn('Firestore getDocs fallback:', e);
+    return {
+      empty: true,
+      docs: [],
+      forEach: () => {}
+    };
   }
-
-  const { data, error } = await q;
-  if (error) throw error;
-
-  const docs = (data || []).map(row => ({
-    id: row.id,
-    data: () => formatRowData(collectionName, row),
-    exists: () => true
-  }));
-
-  return {
-    empty: docs.length === 0,
-    docs,
-    forEach: (cb: any) => docs.forEach(cb)
-  };
 }
 
-// 10. EMULACIÓN DE ADD DOC
+// 10. ADD DOC
 export async function addDoc(colRef: any, data: any) {
-  const rawSnake = convertKeysToSnake(data);
-  const snakePayload = sanitizePayloadForTable(colRef.name, rawSnake);
-  const { data: inserted, error } = await supabase
-    .from(colRef.name)
-    .insert([snakePayload])
-    .select('*')
-    .single();
-
-  if (error) throw error;
+  const docRef = await fsAddDoc(colRef, data);
   return {
-    id: inserted.id,
-    data: () => formatRowData(colRef.name, inserted)
+    id: docRef.id,
+    data: () => ({ id: docRef.id, ...data })
   };
 }

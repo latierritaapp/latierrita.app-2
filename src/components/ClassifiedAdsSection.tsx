@@ -334,7 +334,7 @@ export const ClassifiedAdsSection: React.FC = () => {
             </button>
           </div>
         ) : (
-          filteredAds.map(ad => {
+          (filteredAds || []).map(ad => {
             const authorUsername = getAuthorUsername(ad);
             return (
               <div

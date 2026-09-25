@@ -315,7 +315,7 @@ export const StoryViewerModal: React.FC = () => {
       >
         {/* Progress Bar Segments */}
         <div className="absolute top-3 left-3 right-3 z-30 flex items-center gap-1.5">
-          {userStories.map((story, i) => (
+          {(userStories || []).map((story, i) => (
             <div key={story.id} className="h-1 flex-1 bg-white/30 rounded-full overflow-hidden">
               <div
                 className="h-full bg-white transition-all duration-75"
@@ -488,11 +488,11 @@ export const StoryViewerModal: React.FC = () => {
               >
                 <div className="flex items-center gap-2">
                   <div className="flex -space-x-2">
-                    {viewersList.slice(0, 3).map((v, idx) => (
+                    {(viewersList || []).slice(0, 3).map((v, idx) => (
                       <img key={idx} src={v.userAvatar} alt={v.username} className="w-6 h-6 rounded-full object-cover border border-white" referrerPolicy="no-referrer" />
                     ))}
                   </div>
-                  <span>Visto por {viewersList.length} parceros</span>
+                  <span>Visto por {(viewersList || []).length} parceros</span>
                 </div>
                 <div className="flex items-center gap-1 text-amber-300">
                   <Eye className="w-4 h-4" />
@@ -575,7 +575,7 @@ export const StoryViewerModal: React.FC = () => {
               </div>
             ) : (
               <div className="flex-1 overflow-y-auto py-3 space-y-2.5">
-                {viewersList.map((viewer, idx) => (
+                {(viewersList || []).map((viewer, idx) => (
                   <div key={idx} className="flex items-center justify-between p-2.5 bg-white/5 hover:bg-white/10 rounded-2xl border border-white/10 transition-all">
                     <div className="flex items-center gap-3">
                       <img src={viewer.userAvatar} alt={viewer.username} className="w-9 h-9 rounded-full object-cover border border-amber-400/50" referrerPolicy="no-referrer" />

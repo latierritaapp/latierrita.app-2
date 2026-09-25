@@ -272,7 +272,7 @@ export const PlacesView: React.FC = () => {
             </button>
           </div>
         ) : (
-          filteredPlaces.map(place => (
+          (filteredPlaces || []).map(place => (
             <div
               key={place.id}
               id={`place-card-${place.id}`}
