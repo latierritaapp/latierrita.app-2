@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import {
   Heart,
@@ -12,7 +12,11 @@ import {
   Search,
   X,
   Send,
-  BadgeCheck
+  BadgeCheck,
+  MoreHorizontal,
+  Share2,
+  ShieldAlert,
+  UserX
 } from 'lucide-react';
 import { LaTierritaLogo } from './LaTierritaLogo';
 
@@ -39,8 +43,13 @@ export const Navbar: React.FC = () => {
     selectedUserProfile,
     setSelectedUserProfile,
     setIsSettingsOpen,
-    otherUsers
+    otherUsers,
+    openReportModal,
+    blockUser,
+    triggerPlushNotification
   } = useApp();
+
+  const [showUserMenu, setShowUserMenu] = useState(false);
 
   const isExploreView = activeTab === 'explore';
   const isProfileView = activeTab === 'profile';
@@ -52,7 +61,21 @@ export const Navbar: React.FC = () => {
         : (otherUsers.find(u => u.id === selectedUserProfile.id || u.username === selectedUserProfile.username || (selectedUserProfile.email && u.email === selectedUserProfile.email)) || selectedUserProfile))
     : currentUser;
 
+  const isVisitingOtherProfile = isProfileView && Boolean(selectedUserProfile) && selectedUserProfile?.id !== currentUser.id && selectedUserProfile?.username !== currentUser.username;
+
   const pendingInvitesCount = (groupInvites || []).filter(i => i.status === 'pending').length;
+
+  const handleShareProfile = () => {
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(window.location.href);
+    }
+    triggerPlushNotification({
+      type: 'system',
+      title: 'Enlace copiado',
+      message: `El enlace al perfil de @${displayedUser.username} se copió al portapapeles.`
+    });
+    setShowUserMenu(false);
+  };
 
   return (
     <header className="sticky top-0 z-40 glass-header shadow-lg transition-all text-white">
@@ -185,14 +208,15 @@ export const Navbar: React.FC = () => {
           <>
             {/* 1. Izquierda */}
             <div className="flex items-center min-w-[40px]">
-              {isProfileView && selectedUserProfile ? (
+              {isVisitingOtherProfile ? (
                 <button
                   id="btn-nav-profile-back"
                   onClick={() => setSelectedUserProfile(null)}
-                  className="p-2 text-white hover:bg-white/10 rounded-full transition-all active:scale-95"
+                  className="flex items-center gap-1 text-xs font-bold text-white hover:text-amber-400 transition-colors active:scale-95 py-1 px-2.5 rounded-full bg-white/10 hover:bg-white/20"
                   title="Volver"
                 >
-                  <ArrowLeft className="w-6 h-6 stroke-[2]" />
+                  <ArrowLeft className="w-5 h-5 stroke-[2.5]" />
+                  <span>Volver</span>
                 </button>
               ) : (
                 <button
@@ -215,7 +239,7 @@ export const Navbar: React.FC = () => {
                   </span>
                   {displayedUser.isVerified && (
                     <span title="Usuario Verificado" className="inline-flex shrink-0">
-                      <BadgeCheck className="w-4 h-4 text-blue-500 fill-blue-500/20 shrink-0 inline-block" />
+                      <BadgeCheck className="w-4 h-4 text-sky-400 fill-sky-400/20 shrink-0 inline-block" />
                     </span>
                   )}
                 </div>
@@ -233,7 +257,56 @@ export const Navbar: React.FC = () => {
 
             {/* 3. Derecha */}
             <div className="flex items-center justify-end min-w-[40px] gap-1.5">
-              {isProfileView ? (
+              {isVisitingOtherProfile ? (
+                <div className="relative">
+                  <button
+                    id="btn-nav-profile-options"
+                    onClick={() => setShowUserMenu(prev => !prev)}
+                    className="p-2 text-white/90 hover:text-amber-400 rounded-full hover:bg-white/10 transition-colors active:scale-95"
+                    title="Opciones del usuario"
+                  >
+                    <MoreHorizontal className="w-6 h-6 stroke-[2]" />
+                  </button>
+                  {showUserMenu && (
+                    <div className="absolute right-0 mt-2 w-48 bg-slate-900 border border-white/15 rounded-2xl shadow-2xl py-1 z-50 animate-fade-in-up">
+                      <button
+                        onClick={handleShareProfile}
+                        className="w-full px-3.5 py-2 text-left text-xs font-medium text-white hover:bg-white/10 flex items-center gap-2"
+                      >
+                        <Share2 className="w-4 h-4 text-amber-400" />
+                        <span>Compartir perfil</span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          setShowUserMenu(false);
+                          openReportModal({
+                            id: displayedUser.id,
+                            type: 'user',
+                            title: `Usuario @${displayedUser.username}`,
+                            reportedUserId: displayedUser.id,
+                            reportedUserName: displayedUser.name,
+                            initialTicketType: 'TRU'
+                          });
+                        }}
+                        className="w-full px-3.5 py-2 text-left text-xs font-medium text-amber-300 hover:bg-white/10 flex items-center gap-2"
+                      >
+                        <ShieldAlert className="w-4 h-4 text-amber-400" />
+                        <span>Reportar usuario</span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          setShowUserMenu(false);
+                          blockUser(displayedUser.id, displayedUser.username);
+                        }}
+                        className="w-full px-3.5 py-2 text-left text-xs font-medium text-rose-400 hover:bg-white/10 flex items-center gap-2"
+                      >
+                        <UserX className="w-4 h-4 text-rose-400" />
+                        <span>Bloquear usuario</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ) : isProfileView ? (
                 <button
                   id="btn-nav-settings"
                   onClick={() => setIsSettingsOpen(true)}

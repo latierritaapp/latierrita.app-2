@@ -21,6 +21,7 @@ import { EditProfileModal } from './components/EditProfileModal';
 import { SettingsModal } from './components/SettingsModal';
 import { ReportModal } from './components/ReportModal';
 import { StaffAdminModal } from './components/StaffAdminModal';
+import { ResetPasswordModal } from './components/ResetPasswordModal';
 
 const AppContent: React.FC = () => {
   const { activeTab, selectedUserProfile, isStaffAdminOpen, setIsStaffAdminOpen } = useApp();
@@ -129,14 +130,17 @@ const AppGate: React.FC = () => {
     );
   }
 
-  if (!firebaseUser) {
-    return <AuthView />;
-  }
-
   return (
-    <AppProvider>
-      <AppContent />
-    </AppProvider>
+    <>
+      {!firebaseUser ? (
+        <AuthView />
+      ) : (
+        <AppProvider>
+          <AppContent />
+        </AppProvider>
+      )}
+      <ResetPasswordModal />
+    </>
   );
 };
 

@@ -33,6 +33,9 @@ interface AuthContextType {
   loginWithApple: () => Promise<void>;
   logout: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
+  updatePassword: (newPassword: string) => Promise<void>;
+  isPasswordRecovery: boolean;
+  setIsPasswordRecovery: (val: boolean) => void;
   continueAsGuest: () => void;
   updateUserProfile: (data: Partial<UserProfile>) => Promise<void>;
   deleteAccount: (reason?: string) => Promise<void>;
@@ -201,15 +204,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   });
   const [loading, setLoading] = useState<boolean>(true);
   const [isGuest, setIsGuest] = useState<boolean>(false);
+  const [isPasswordRecovery, setIsPasswordRecovery] = useState<boolean>(false);
 
-  // Clear any existing stale guest session
+  // Clear any existing stale guest session and check if URL indicates password recovery
   useEffect(() => {
     sessionStorage.removeItem('latierrita_guest');
+    const hash = window.location.hash || '';
+    const search = window.location.search || '';
+    const path = window.location.pathname || '';
+    if (hash.includes('type=recovery') || search.includes('type=recovery') || path.includes('reset-password')) {
+      setIsPasswordRecovery(true);
+    }
   }, []);
 
   // Listen to Supabase auth state changes
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        setIsPasswordRecovery(true);
+      }
       const user = session?.user || null;
       
       // Retrieve locally saved user modifications to guarantee data is never overwritten by stale/null fields
@@ -647,6 +660,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (error) throw error;
   };
 
+  const updatePassword = async (newPassword: string) => {
+    const { error } = await supabase.auth.updateUser({
+      password: newPassword
+    });
+    if (error) throw error;
+    setIsPasswordRecovery(false);
+    if (window.location.hash.includes('type=recovery') || window.location.pathname.includes('reset-password')) {
+      window.history.replaceState(null, '', '/');
+    }
+  };
+
   const continueAsGuest = () => {
     // Modo invitado eliminado para obligar registro obligatorio
   };
@@ -791,6 +815,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         loginWithApple,
         logout,
         resetPassword,
+        updatePassword,
+        isPasswordRecovery,
+        setIsPasswordRecovery,
         continueAsGuest,
         updateUserProfile,
         deleteAccount

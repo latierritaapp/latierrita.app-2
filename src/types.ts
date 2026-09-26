@@ -261,6 +261,31 @@ export interface ChatMessageReaction {
   users: string[]; // user IDs who reacted with this emoji
 }
 
+export interface ChatPollOption {
+  id: string;
+  text: string;
+  votes: string[]; // user IDs who voted for this option
+}
+
+export interface ChatPoll {
+  question: string;
+  options: ChatPollOption[];
+  multipleAnswers?: boolean;
+}
+
+export interface ChatEvent {
+  title: string;
+  startDate?: string;
+  hasEndTime?: boolean;
+  endDate?: string;
+  location?: string;
+  description?: string;
+  reminder?: string; // 'none' | '1d' | '1h' | '30m' | '15m'
+  attendees?: string[]; // user IDs attending
+  date?: string;
+  time?: string;
+}
+
 export interface ChatMessage {
   id: string;
   senderId: string;
@@ -283,6 +308,8 @@ export interface ChatMessage {
   audioUrl?: string;
   audioDuration?: number; // duration in seconds
   senderStaffRole?: StaffRole;
+  poll?: ChatPoll;
+  event?: ChatEvent;
 }
 
 export type ChatType = 'general' | 'city' | 'private' | 'group';

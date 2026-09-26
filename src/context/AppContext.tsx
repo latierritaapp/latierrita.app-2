@@ -20,7 +20,9 @@ import {
   DeletedAccount,
   StaffRole,
   StartupAdConfig,
-  TicketType
+  TicketType,
+  ChatPoll,
+  ChatEvent
 } from '../types';
 import {
   INITIAL_CURRENT_USER,
@@ -153,7 +155,16 @@ interface AppContextType {
   chatRooms: ChatRoom[];
   activeChatId: string | null;
   setActiveChatId: (id: string | null) => void;
-  sendMessage: (chatId: string, text: string, replyTo?: { id: string; senderName: string; text: string }, audioData?: { url: string; duration: number }) => Promise<void>;
+  sendMessage: (
+    chatId: string,
+    text: string,
+    replyTo?: { id: string; senderName: string; text: string },
+    audioData?: { url: string; duration: number },
+    poll?: ChatPoll,
+    event?: ChatEvent
+  ) => Promise<void>;
+  voteInPoll: (chatId: string, messageId: string, optionIndex: number) => void;
+  rsvpToEvent: (chatId: string, messageId: string) => void;
   createGroupChat: (name: string, description: string, invitedUserIds: string[], avatar?: string) => Promise<void>;
   startPrivateChat: (targetUserId: string, targetUserName?: string, targetUserAvatar?: string) => string;
   groupInvites: GroupInvite[];
@@ -164,6 +175,7 @@ interface AppContextType {
   deleteMessageForEveryone: (chatId: string, messageId: string) => Promise<void>;
   deletedMessageIdsForMe: string[];
   deleteChatRoom: (chatId: string) => Promise<void>;
+  clearChatMessages: (chatId: string) => Promise<void>;
   leaveGroupChat: (groupId: string) => Promise<void>;
   toggleGroupAdmin: (groupId: string, userId: string) => Promise<void>;
   removeGroupMember: (groupId: string, userId: string) => Promise<void>;
@@ -792,7 +804,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [plushToast, setPlushToast] = useState<AppNotification | null>(null);
 
   // Navigation
-  const [activeTab, setActiveTab] = useState<'feed' | 'explore' | 'chats' | 'notifications' | 'profile' | 'places'>(() => {
+  const [activeTab, setActiveTabState] = useState<'feed' | 'explore' | 'chats' | 'notifications' | 'profile' | 'places'>(() => {
     const saved = localStorage.getItem('latierrita_active_tab');
     if (saved && ['feed', 'explore', 'chats', 'notifications', 'profile', 'places'].includes(saved)) {
       return saved as any;
@@ -800,13 +812,60 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return 'feed';
   });
 
+  type NavHistoryItem = {
+    tab: 'feed' | 'explore' | 'chats' | 'notifications' | 'profile' | 'places';
+    profile: UserProfile | null;
+  };
+
+  const [navHistory, setNavHistory] = useState<NavHistoryItem[]>([]);
+
+  const setActiveTab = (tab: 'feed' | 'explore' | 'chats' | 'notifications' | 'profile' | 'places') => {
+    setNavHistory([]);
+    setActiveTabState(tab);
+  };
+
   useEffect(() => {
     localStorage.setItem('latierrita_active_tab', activeTab);
   }, [activeTab]);
+
   const [exploreSearchQuery, setExploreSearchQuery] = useState('');
   const [placesSubTab, setPlacesSubTab] = useState<'places' | 'ads'>('places');
   const [chatTypeTab, setChatTypeTab] = useState<'general' | 'city' | 'messages'>('general');
-  const [selectedUserProfile, setSelectedUserProfile] = useState<UserProfile | null>(null);
+  const [selectedUserProfile, setSelectedUserProfileState] = useState<UserProfile | null>(null);
+
+  const selectedUserProfileRef = useRef<UserProfile | null>(selectedUserProfile);
+  selectedUserProfileRef.current = selectedUserProfile;
+
+  const setSelectedUserProfile = (user: UserProfile | null | ((prev: UserProfile | null) => UserProfile | null)) => {
+    if (typeof user === 'function') {
+      setSelectedUserProfileState(user);
+      return;
+    }
+    if (user) {
+      // Save current view state before pushing new profile
+      const currentState: NavHistoryItem = {
+        tab: (activeTabRef.current || 'feed') as any,
+        profile: selectedUserProfileRef.current
+      };
+      setNavHistory(prev => [...prev, currentState]);
+      setSelectedUserProfileState(user);
+      setActiveTabState('profile');
+    } else {
+      // Go back in stack
+      setNavHistory(prev => {
+        if (prev.length === 0) {
+          setSelectedUserProfileState(null);
+          return [];
+        }
+        const last = prev[prev.length - 1];
+        const nextStack = prev.slice(0, prev.length - 1);
+        setSelectedUserProfileState(last.profile);
+        setActiveTabState(last.tab);
+        return nextStack;
+      });
+    }
+  };
+
   const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
@@ -3172,19 +3231,112 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
   };
 
   // Chats
+  const clearChatMessages = async (chatId: string) => {
+    const isStaff = (currentUser?.staffRole && currentUser.staffRole !== 'Usuario') ||
+      currentUser?.id === 'user-staff' ||
+      currentUser?.username === 'latierrita_app' ||
+      currentUser?.email === 'latierritaapp@gmail.com';
+
+    if (!isStaff) {
+      triggerPlushNotification({
+        type: 'system',
+        title: 'Acción restringida',
+        message: 'El comando /clear sólo está disponible para el equipo de Moderación, Soporte y Administración.'
+      });
+      return;
+    }
+
+    const targetRoom = chatRooms.find(r => r.id === chatId);
+    if (!targetRoom) return;
+
+    const isTicketRoom = !!(targetRoom.isTicketChat || targetRoom.ticketCode || targetRoom.ticketId);
+    if (targetRoom.type === 'private' || targetRoom.type === 'group' || isTicketRoom) {
+      triggerPlushNotification({
+        type: 'system',
+        title: 'Acción no permitida',
+        message: 'No está permitido vaciar chats privados, grupos ni chats de tickets.'
+      });
+      return;
+    }
+
+    const systemClearMsg: ChatMessage = {
+      id: `msg-clear-${Date.now()}`,
+      senderId: 'system',
+      senderName: 'Sistema La Tierrita',
+      senderAvatar: 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=100&auto=format&fit=crop&q=80',
+      text: `🧹 Chat vaciado por el equipo de STAFF (@${currentUser.username || 'staff'}).`,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      createdAt: Date.now(),
+      isEncrypted: true,
+      encryptedHash: 'SHA256:clear-action'
+    };
+
+    const updatedRoom = {
+      ...targetRoom,
+      messages: [systemClearMsg]
+    };
+
+    setChatRooms(prev => prev.map(r => r.id === chatId ? updatedRoom : r));
+
+    // Realtime broadcast via WebSocket
+    const hasSupabaseUrl = !!(import.meta.env.VITE_SUPABASE_URL || 'https://api.latierrita.tech');
+    const hasSupabaseKey = !!import.meta.env.VITE_SUPABASE_ANON_KEY && import.meta.env.VITE_SUPABASE_ANON_KEY !== 'tu_anon_key_aqui';
+
+    if (hasSupabaseUrl && hasSupabaseKey && chatChannelRef.current) {
+      try {
+        chatChannelRef.current.send({
+          type: 'broadcast',
+          event: 'update_chat_messages',
+          payload: { chatId, messages: [systemClearMsg] }
+        });
+      } catch (e) {
+        console.warn('Realtime clear chat broadcast note:', e);
+      }
+    }
+
+    // Persist into Supabase
+    if (hasSupabaseUrl && hasSupabaseKey) {
+      try {
+        await supabase.from('chat_rooms').update({ messages: [systemClearMsg] }).eq('id', chatId);
+      } catch (err) {
+        console.warn('Supabase clearChatMessages write error:', err);
+      }
+    }
+
+    // Persist into Firestore
+    try {
+      await setDoc(doc(db, 'chat_rooms', chatId), { messages: [systemClearMsg] }, { merge: true });
+    } catch (error) {
+      console.warn('Firestore clearChatMessages write error:', error);
+    }
+
+    triggerPlushNotification({
+      type: 'system',
+      title: 'Chat vaciado con éxito',
+      message: `Se han borrado todos los mensajes del chat "${targetRoom.name}".`
+    });
+  };
+
   const sendMessage = async (
     chatId: string,
     text: string,
     replyTo?: { id: string; senderName: string; text: string },
-    audioData?: { url: string; duration: number }
+    audioData?: { url: string; duration: number },
+    poll?: ChatPoll,
+    event?: ChatEvent
   ) => {
-    if (!text.trim() && !audioData) return;
+    if (!text.trim() && !audioData && !poll && !event) return;
+
+    if (text.trim().toLowerCase() === '/clear') {
+      await clearChatMessages(chatId);
+      return;
+    }
 
     // Simulated SHA-256 E2E Encryption fingerprint
     const simulatedHash = 'SHA256:' + Array.from(crypto.getRandomValues(new Uint8Array(8)))
       .map(b => b.toString(16).padStart(2, '0')).join('');
 
-    const msgText = text.trim() || (audioData ? '🎤 Nota de voz' : '');
+    const msgText = text.trim() || (poll ? `📊 Encuesta: ${poll.question}` : event ? `📅 Evento: ${event.title}` : audioData ? '🎤 Nota de voz' : '');
 
     const newMsg: ChatMessage = {
       id: `msg-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`,
@@ -3203,7 +3355,9 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
         text: replyTo.text
       } : undefined,
       audioUrl: audioData?.url,
-      audioDuration: audioData?.duration
+      audioDuration: audioData?.duration,
+      poll,
+      event
     };
 
     const targetRoom = chatRooms.find(r => r.id === chatId);
@@ -3325,6 +3479,68 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
     } catch (error) {
       console.warn('Firestore sendMessage write error:', error);
     }
+  };
+
+  const voteInPoll = (chatId: string, messageId: string, optionIndex: number) => {
+    if (!currentUser) return;
+    setChatRooms(prev => prev.map(room => {
+      if (room.id !== chatId) return room;
+      const updatedMessages = room.messages.map(msg => {
+        if (msg.id !== messageId || !msg.poll) return msg;
+        const userId = currentUser.id;
+        const isMultiple = msg.poll.multipleAnswers;
+        
+        const newOptions = msg.poll.options.map((opt, idx) => {
+          const hasVoted = Array.isArray(opt.votes) && opt.votes.includes(userId);
+          if (idx === optionIndex) {
+            if (hasVoted) {
+              return { ...opt, votes: opt.votes.filter(id => id !== userId) };
+            } else {
+              return { ...opt, votes: [...(opt.votes || []), userId] };
+            }
+          } else {
+            if (!isMultiple) {
+              return { ...opt, votes: (opt.votes || []).filter(id => id !== userId) };
+            }
+            return opt;
+          }
+        });
+
+        return {
+          ...msg,
+          poll: {
+            ...msg.poll,
+            options: newOptions
+          }
+        };
+      });
+      return { ...room, messages: updatedMessages };
+    }));
+  };
+
+  const rsvpToEvent = (chatId: string, messageId: string) => {
+    if (!currentUser) return;
+    setChatRooms(prev => prev.map(room => {
+      if (room.id !== chatId) return room;
+      const updatedMessages = room.messages.map(msg => {
+        if (msg.id !== messageId || !msg.event) return msg;
+        const userId = currentUser.id;
+        const currentAttendees = Array.isArray(msg.event.attendees) ? msg.event.attendees : [];
+        const isAttending = currentAttendees.includes(userId);
+        const newAttendees = isAttending
+          ? currentAttendees.filter(id => id !== userId)
+          : [...currentAttendees, userId];
+
+        return {
+          ...msg,
+          event: {
+            ...msg.event,
+            attendees: newAttendees
+          }
+        };
+      });
+      return { ...room, messages: updatedMessages };
+    }));
   };
 
   const createGroupChat = async (name: string, description: string, invitedUserIds: string[], avatar?: string) => {
@@ -4090,6 +4306,8 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
         activeChatId,
         setActiveChatId,
         sendMessage,
+        voteInPoll,
+        rsvpToEvent,
         createGroupChat,
         startPrivateChat,
         groupInvites,
@@ -4100,6 +4318,7 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
         deleteMessageForEveryone,
         deletedMessageIdsForMe,
         deleteChatRoom,
+        clearChatMessages,
         leaveGroupChat,
         toggleGroupAdmin,
         removeGroupMember,

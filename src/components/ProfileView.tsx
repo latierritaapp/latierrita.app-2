@@ -67,7 +67,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userToDisplay }) => {
   const [activePostMenuId, setActivePostMenuId] = useState<string | null>(null);
   const [commentInputs, setCommentInputs] = useState<Record<string, string>>({});
   const [heartAnimPostId, setHeartAnimPostId] = useState<string | null>(null);
-  const [showUserMenu, setShowUserMenu] = useState(false);
 
   const isMe = !userToDisplay || userToDisplay.id === currentUser.id || (Boolean(currentUser.username) && userToDisplay.username === currentUser.username);
   const targetOtherUser = !isMe && userToDisplay ? (otherUsers.find(u => u.id === userToDisplay.id || u.username === userToDisplay.username || (userToDisplay.email && u.email === userToDisplay.email)) || userToDisplay) : null;
@@ -130,18 +129,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userToDisplay }) => {
     }
   };
 
-  const handleShareProfile = () => {
-    if (navigator.clipboard) {
-      navigator.clipboard.writeText(window.location.href);
-    }
-    triggerPlushNotification({
-      type: 'system',
-      title: 'Enlace copiado',
-      message: `El enlace al perfil de @${user.username} se copió al portapapeles.`
-    });
-    setShowUserMenu(false);
-  };
-
   const handleFeedDoubleTap = (postId: string, hasLiked: boolean) => {
     if (!hasLiked) {
       likePost(postId);
@@ -189,164 +176,56 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userToDisplay }) => {
 
   return (
     <div id="profile-container" className="w-full text-white">
-      {/* 1. Header Bar for Non-Self Users */}
-      {!isMe && (
-        <div className="px-4 py-3 flex items-center justify-between border-b border-white/10 bg-white/[0.02]">
-          <button
-            id="btn-profile-back"
-            onClick={() => setSelectedUserProfile(null)}
-            className="flex items-center gap-2 text-xs font-bold text-white/80 hover:text-white transition-colors"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            <span>Volver</span>
-          </button>
-          <div className="flex items-center gap-1 font-bold text-sm">
-            <span>@{user.username}</span>
-            {user.isVerified && (
-              <BadgeCheck className="w-4 h-4 text-sky-400 fill-sky-400/20 shrink-0" />
-            )}
+      {/* Main Profile Header Info (Centered Avatar and Stats) */}
+      <div className="px-4 sm:px-6 pt-5 pb-3 flex flex-col items-center text-center space-y-3">
+        {/* Centered Avatar with Story Ring */}
+        <div
+          onClick={handleAvatarClick}
+          className={`relative shrink-0 mx-auto ${hasStory || isMe ? 'cursor-pointer hover:scale-102 transition-transform' : ''}`}
+          title={hasStory ? 'Ver historia' : isMe ? 'Añadir historia' : undefined}
+        >
+          <div className={`w-22 h-22 sm:w-28 sm:h-28 rounded-full p-[3px] ${
+            hasStory
+              ? 'bg-gradient-to-tr from-amber-400 via-rose-500 to-indigo-500 shadow-lg shadow-amber-500/20'
+              : 'bg-white/20'
+          }`}>
+            <img
+              src={user.avatar || undefined}
+              alt={user.name}
+              className="w-full h-full rounded-full object-cover border-2 border-slate-900"
+              referrerPolicy="no-referrer"
+            />
           </div>
-          <div className="relative">
+          {hasStory && (
+            <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 bg-amber-400 text-neutral-950 font-black text-[9px] px-1.5 py-0.2 rounded-full border border-neutral-950 shadow-sm whitespace-nowrap">
+              HISTORIA
+            </span>
+          )}
+          {!hasStory && isMe && (
             <button
-              id="btn-profile-options"
-              onClick={() => setShowUserMenu(prev => !prev)}
-              className="p-1.5 rounded-full hover:bg-white/10 text-white/80 hover:text-white transition-colors"
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsCreateStoryOpen(true);
+              }}
+              className="absolute bottom-0 right-0 w-7 h-7 bg-amber-400 hover:bg-amber-300 text-neutral-950 rounded-full flex items-center justify-center border-2 border-slate-900 shadow-md transition-transform active:scale-90"
+              title="Añadir historia"
             >
-              <MoreHorizontal className="w-5 h-5" />
+              <Plus className="w-4 h-4 stroke-[3]" />
             </button>
-            {showUserMenu && (
-              <div className="absolute right-0 mt-2 w-48 bg-slate-900 border border-white/15 rounded-2xl shadow-2xl py-1 z-30 animate-fade-in-up">
-                <button
-                  onClick={handleShareProfile}
-                  className="w-full px-3.5 py-2 text-left text-xs font-medium text-white hover:bg-white/10 flex items-center gap-2"
-                >
-                  <Share2 className="w-4 h-4 text-amber-400" />
-                  <span>Compartir perfil</span>
-                </button>
-                <button
-                  onClick={() => {
-                    setShowUserMenu(false);
-                    openReportModal({
-                      id: user.id,
-                      type: 'user',
-                      title: `Usuario @${user.username}`,
-                      reportedUserId: user.id,
-                      reportedUserName: user.name,
-                      initialTicketType: 'TRU'
-                    });
-                  }}
-                  className="w-full px-3.5 py-2 text-left text-xs font-medium text-amber-300 hover:bg-white/10 flex items-center gap-2"
-                >
-                  <ShieldAlert className="w-4 h-4 text-amber-400" />
-                  <span>Reportar usuario</span>
-                </button>
-                <button
-                  onClick={() => {
-                    setShowUserMenu(false);
-                    blockUser(user.id, user.username);
-                  }}
-                  className="w-full px-3.5 py-2 text-left text-xs font-medium text-rose-400 hover:bg-white/10 flex items-center gap-2"
-                >
-                  <UserX className="w-4 h-4 text-rose-400" />
-                  <span>Bloquear usuario</span>
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* 2. Main Profile Header Info */}
-      <div className="px-4 sm:px-6 pt-5 pb-3 space-y-4">
-        {/* Avatar & Stats Row */}
-        <div className="flex items-center justify-between gap-4 sm:gap-8">
-          {/* Avatar with Story Ring */}
-          <div
-            onClick={handleAvatarClick}
-            className={`relative shrink-0 ${hasStory || isMe ? 'cursor-pointer hover:scale-102 transition-transform' : ''}`}
-            title={hasStory ? 'Ver historia' : isMe ? 'Añadir historia' : undefined}
-          >
-            <div className={`w-20 h-20 sm:w-24 sm:h-24 rounded-full p-[2.5px] ${
-              hasStory
-                ? 'bg-gradient-to-tr from-amber-400 via-rose-500 to-indigo-500 shadow-md shadow-amber-500/20'
-                : 'bg-white/20'
-            }`}>
-              <img
-                src={user.avatar || undefined}
-                alt={user.name}
-                className="w-full h-full rounded-full object-cover border-2 border-slate-900"
-                referrerPolicy="no-referrer"
-              />
-            </div>
-            {hasStory && (
-              <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 bg-amber-400 text-neutral-950 font-black text-[9px] px-1.5 py-0.2 rounded-full border border-neutral-950 shadow-sm whitespace-nowrap">
-                HISTORIA
-              </span>
-            )}
-            {!hasStory && isMe && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setIsCreateStoryOpen(true);
-                }}
-                className="absolute bottom-0 right-0 w-6 h-6 bg-amber-400 hover:bg-amber-300 text-neutral-950 rounded-full flex items-center justify-center border-2 border-slate-900 shadow-md transition-transform active:scale-90"
-                title="Añadir historia"
-              >
-                <Plus className="w-3.5 h-3.5 stroke-[3]" />
-              </button>
-            )}
-          </div>
-
-          {/* Clean 3-Column Stats */}
-          <div className="flex-1 flex items-center justify-around text-center">
-            <div className="flex flex-col items-center">
-              <span className="text-base sm:text-lg font-extrabold text-white">
-                {userPosts.length}
-              </span>
-              <span className="text-xs text-white/70 font-medium">
-                Publicaciones
-              </span>
-            </div>
-
-            <div
-              onClick={() => setModalFollowType('followers')}
-              className="flex flex-col items-center cursor-pointer hover:opacity-80 transition-opacity"
-              title="Ver seguidores"
-            >
-              <span className="text-base sm:text-lg font-extrabold text-white">
-                {displayFollowersCount}
-              </span>
-              <span className="text-xs text-white/70 font-medium">
-                Seguidores
-              </span>
-            </div>
-
-            <div
-              onClick={() => setModalFollowType('following')}
-              className="flex flex-col items-center cursor-pointer hover:opacity-80 transition-opacity"
-              title="Ver seguidos"
-            >
-              <span className="text-base sm:text-lg font-extrabold text-white">
-                {displayFollowingCount}
-              </span>
-              <span className="text-xs text-white/70 font-medium">
-                Seguidos
-              </span>
-            </div>
-          </div>
+          )}
         </div>
 
-        {/* Bio Details - Strict Order Specified by User */}
-        <div className="space-y-1.5 pt-1">
-          {/* 1. Debajo de la foto: Nombre */}
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <h1 className="text-sm sm:text-base font-bold text-white">
+        {/* Bio Details - Centered directly below avatar */}
+        <div className="space-y-1.5 w-full flex flex-col items-center text-center">
+          {/* 1. Nombre y Badges */}
+          <div className="flex items-center justify-center gap-1.5 flex-wrap">
+            <h1 className="text-base sm:text-lg font-extrabold text-white">
               {user.name && !user.name.includes('@') && user.name.trim().length > 0
                 ? user.name.trim()
                 : (user.username ? user.username.replace(/^@+/, '').split('@')[0] : 'Usuario')}
             </h1>
             {user.isVerified && (
-              <BadgeCheck className="w-4 h-4 text-sky-400 fill-sky-400/20 shrink-0 inline-block" />
+              <BadgeCheck className="w-4.5 h-4.5 text-sky-400 fill-sky-400/20 shrink-0 inline-block" />
             )}
             {user.staffRole && user.staffRole !== 'Usuario' && (
               <span
@@ -368,21 +247,21 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userToDisplay }) => {
             )}
           </div>
 
-          {/* 2. Debajo del nombre: Biografía */}
+          {/* 2. Biografía */}
           {user.bio && (
-            <p className="text-xs sm:text-sm text-white/90 leading-relaxed whitespace-pre-line pt-0.5">
+            <p className="text-xs sm:text-sm text-white/90 leading-relaxed whitespace-pre-line max-w-md pt-0.5">
               {renderTextWithFlags(user.bio)}
             </p>
           )}
 
-          {/* 3. Debajo de biografía: Sitio web */}
+          {/* 3. Sitio web */}
           {user.website && (
             <div className="pt-0.5">
               <a
                 href={user.website.startsWith('http') ? user.website : `https://${user.website}`}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center gap-1.5 text-xs font-semibold text-sky-300 hover:underline"
+                className="inline-flex items-center justify-center gap-1.5 text-xs font-semibold text-sky-300 hover:underline"
               >
                 <LinkIcon className="w-3.5 h-3.5" />
                 <span>{user.website.replace(/^https?:\/\//, '')}</span>
@@ -390,9 +269,9 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userToDisplay }) => {
             </div>
           )}
 
-          {/* 4. Debajo de sitio web: Redes sociales (solo iconos sin texto) */}
+          {/* 4. Redes sociales */}
           {user.socialLinks && (user.socialLinks.instagram || user.socialLinks.tiktok || user.socialLinks.facebook || user.socialLinks.x) && (
-            <div className="flex items-center gap-2.5 pt-1">
+            <div className="flex items-center justify-center gap-2.5 pt-1">
               {user.socialLinks.instagram && (
                 <a
                   href={`https://instagram.com/${user.socialLinks.instagram.replace(/^@/, '')}`}
@@ -440,27 +319,62 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userToDisplay }) => {
             </div>
           )}
 
-          {/* 5. Debajo de redes sociales: Edad y ciudad origen */}
-          <div className="text-xs font-semibold text-white/80 flex items-center gap-1.5 flex-wrap pt-0.5">
+          {/* 5. Edad, ciudad origen y ciudad actual */}
+          <div className="text-xs font-semibold text-white/80 flex items-center justify-center gap-1.5 flex-wrap pt-0.5">
             {user.age && <span>{user.age} años</span>}
             {user.age && <span>·</span>}
             <span className="inline-flex items-center gap-1">
               <span>De {user.originCity || 'Colombia'}</span>
               <FlagColombia size="xs" />
             </span>
-          </div>
-
-          {/* 6. Debajo de ciudad origen: Ciudad actual */}
-          <div className="text-xs font-bold text-amber-300 flex items-center gap-1.5 pt-0.5">
-            <MapPin className="w-3.5 h-3.5 shrink-0 text-amber-400" />
-            <span className="inline-flex items-center gap-1">
-              <span>{user.city}, España</span>
+            <span className="text-white/40">/</span>
+            <span className="inline-flex items-center gap-1 text-amber-300 font-bold">
+              <MapPin className="w-3.5 h-3.5 shrink-0 text-amber-400" />
+              <span>{user.city}</span>
               <FlagSpain size="xs" />
             </span>
           </div>
 
-          {/* 7. Debajo de ciudad actual: Editar perfil y quitar el botón de compartir */}
-          <div className="pt-2">
+          {/* Centered 3-Column Stats Row Below Bio */}
+          <div className="w-full max-w-xs flex items-center justify-around text-center py-1 mt-1 mb-2">
+            <div className="flex flex-col items-center px-2">
+              <span className="text-base sm:text-lg font-extrabold text-white">
+                {userPosts.length}
+              </span>
+              <span className="text-xs text-white/70 font-medium">
+                Publicaciones
+              </span>
+            </div>
+
+            <div
+              onClick={() => setModalFollowType('followers')}
+              className="flex flex-col items-center cursor-pointer hover:opacity-80 transition-opacity px-2"
+              title="Ver seguidores"
+            >
+              <span className="text-base sm:text-lg font-extrabold text-white">
+                {displayFollowersCount}
+              </span>
+              <span className="text-xs text-white/70 font-medium">
+                Seguidores
+              </span>
+            </div>
+
+            <div
+              onClick={() => setModalFollowType('following')}
+              className="flex flex-col items-center cursor-pointer hover:opacity-80 transition-opacity px-2"
+              title="Ver seguidos"
+            >
+              <span className="text-base sm:text-lg font-extrabold text-white">
+                {displayFollowingCount}
+              </span>
+              <span className="text-xs text-white/70 font-medium">
+                Seguidos
+              </span>
+            </div>
+          </div>
+
+          {/* 7. Botones de acción */}
+          <div className="pt-2 w-full max-w-sm">
             {isMe ? (
               <>
                 <button

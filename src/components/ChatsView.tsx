@@ -6,7 +6,9 @@ import {
   ChatRoom,
   ChatMessage,
   SpanishCity,
-  StaffRole
+  StaffRole,
+  ChatPoll,
+  ChatEvent
 } from '../types';
 import {
   MapPin,
@@ -40,7 +42,13 @@ import {
   Pause,
   AtSign,
   Square,
-  Volume2
+  Volume2,
+  BarChart2,
+  Calendar,
+  Clock,
+  Keyboard,
+  Bell,
+  Eraser
 } from 'lucide-react';
 import { SPANISH_CITIES } from '../data/mockData';
 import { FlagColombia, FlagSpain, CountryFlag } from './CountryFlag';
@@ -232,13 +240,21 @@ export const ChatsView: React.FC = () => {
     setSelectedUserProfile,
     setActiveTab,
     deleteChatRoom,
+    clearChatMessages,
     leaveGroupChat,
     toggleGroupAdmin,
     removeGroupMember,
     addMembersToGroup,
     notifications,
-    updateTicketStatus
+    updateTicketStatus,
+    voteInPoll,
+    rsvpToEvent
   } = useApp();
+
+  const isStaffMember = (currentUser?.staffRole && currentUser.staffRole !== 'Usuario') ||
+    currentUser?.id === 'user-staff' ||
+    currentUser?.username === 'latierrita_app' ||
+    currentUser?.email === 'latierritaapp@gmail.com';
 
   const getUserInfo = (userId?: string) => {
     if (!userId) return undefined;
@@ -372,6 +388,116 @@ export const ChatsView: React.FC = () => {
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [showChatOptions, setShowChatOptions] = useState(false);
   const [showE2EModal, setShowE2EModal] = useState(false);
+
+  // Attachment menu and Poll/Event Modal States
+  const [showAttachMenu, setShowAttachMenu] = useState(false);
+  const [showCreatePollModal, setShowCreatePollModal] = useState(false);
+  const [showCreateEventModal, setShowCreateEventModal] = useState(false);
+
+  // Poll Form State
+  const [pollQuestion, setPollQuestion] = useState('');
+  const [pollOptions, setPollOptions] = useState<string[]>(['', '']);
+  const [pollMultiple, setPollMultiple] = useState(false);
+
+  // Event Form State
+  const [eventTitle, setEventTitle] = useState('');
+  const [eventDescription, setEventDescription] = useState('');
+  const [eventStartDate, setEventStartDate] = useState('');
+  const [hasEndTime, setHasEndTime] = useState(false);
+  const [eventEndDate, setEventEndDate] = useState('');
+  const [eventLocation, setEventLocation] = useState('');
+  const [eventReminder, setEventReminder] = useState('none');
+
+  const handleCreatePollSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeChat || !currentUser) return;
+    const cleanQuestion = pollQuestion.trim();
+    const cleanOptions = pollOptions.map(o => o.trim()).filter(Boolean);
+
+    if (!cleanQuestion) {
+      alert('Por favor escribe la pregunta de la encuesta.');
+      return;
+    }
+    if (cleanOptions.length < 2) {
+      alert('Agrega al menos 2 opciones para la encuesta.');
+      return;
+    }
+
+    const pollData: ChatPoll = {
+      question: cleanQuestion,
+      options: cleanOptions.map((optText, index) => ({
+        id: `opt-${index}-${Date.now()}`,
+        text: optText,
+        votes: []
+      })),
+      multipleAnswers: pollMultiple
+    };
+
+    await sendMessage(
+      activeChat.id,
+      `📊 Encuesta: ${cleanQuestion}`,
+      replyingToMessage ? { id: replyingToMessage.id, senderName: replyingToMessage.senderName, text: replyingToMessage.text } : undefined,
+      undefined,
+      pollData
+    );
+
+    setPollQuestion('');
+    setPollOptions(['', '']);
+    setPollMultiple(false);
+    setShowCreatePollModal(false);
+    setShowAttachMenu(false);
+    setReplyingToMessage(null);
+  };
+
+  const handleCreateEventSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeChat || !currentUser) return;
+    const cleanTitle = eventTitle.trim();
+
+    if (!cleanTitle) {
+      alert('Por favor escribe el nombre del evento.');
+      return;
+    }
+    if (!eventStartDate) {
+      alert('Por favor selecciona la fecha y hora de inicio del evento.');
+      return;
+    }
+    if (hasEndTime && !eventEndDate) {
+      alert('Por favor selecciona la fecha y hora de finalización del evento.');
+      return;
+    }
+
+    const eventData: ChatEvent = {
+      title: cleanTitle,
+      startDate: eventStartDate,
+      hasEndTime,
+      endDate: hasEndTime ? eventEndDate : undefined,
+      location: eventLocation.trim() || undefined,
+      description: eventDescription.trim() || undefined,
+      reminder: eventReminder,
+      attendees: [currentUser.id]
+    };
+
+    await sendMessage(
+      activeChat.id,
+      `📅 Evento: ${cleanTitle}`,
+      replyingToMessage ? { id: replyingToMessage.id, senderName: replyingToMessage.senderName, text: replyingToMessage.text } : undefined,
+      undefined,
+      undefined,
+      eventData
+    );
+
+    setEventTitle('');
+    setEventDescription('');
+    setEventStartDate('');
+    setHasEndTime(false);
+    setEventEndDate('');
+    setEventLocation('');
+    setEventReminder('none');
+    setShowCreateEventModal(false);
+    setShowAttachMenu(false);
+    setReplyingToMessage(null);
+  };
 
   // Floating User Menu & Message Context Menu State
   const [activeUserMenu, setActiveUserMenu] = useState<{
@@ -683,6 +809,9 @@ export const ChatsView: React.FC = () => {
     return null;
   }, [chatTypeTab, selectedPrivateOrGroupId, generalChat, currentCityChat, chatRooms]);
 
+  const isTicketRoom = !!(activeChat && (activeChat.isTicketChat || activeChat.ticketCode || activeChat.ticketId));
+  const isClearAllowed = !!activeChat && isStaffMember && (activeChat.type === 'general' || activeChat.type === 'city') && !isTicketRoom;
+
   const activeRepliesToMe = useMemo(() => {
     if (!activeChat || !currentUser) return [];
     const myNameLower = (currentUser.name || '').toLowerCase();
@@ -810,7 +939,36 @@ export const ChatsView: React.FC = () => {
     e.preventDefault();
     if (!inputMessage.trim() || !activeChat) return;
 
-    const isStaffMember = currentUser?.staffRole === 'ADMIN' || currentUser?.staffRole === 'Soporte';
+    const trimmedText = inputMessage.trim();
+
+    // Check for /clear command (only allowed in general and city chats for staff)
+    if (trimmedText.toLowerCase() === '/clear') {
+      if (!isStaffMember) {
+        triggerPlushNotification({
+          type: 'system',
+          title: 'Acción restringida',
+          message: 'El comando /clear sólo está disponible para el equipo de Moderación, Soporte y Administración.'
+        });
+        setInputMessage('');
+        return;
+      }
+
+      if (!isClearAllowed) {
+        triggerPlushNotification({
+          type: 'system',
+          title: 'Comando no permitido',
+          message: 'El comando /clear no está disponible en chats privados, grupos ni chats de tickets.'
+        });
+        setInputMessage('');
+        return;
+      }
+
+      clearChatMessages(activeChat.id);
+      setInputMessage('');
+      setReplyingToMessage(null);
+      return;
+    }
+
     const isTicketLocked = activeChat.isTicketChat && !isStaffMember && (activeChat.ticketStatus === 'pendientes' || activeChat.ticketLockedForUser);
     if (isTicketLocked) {
       triggerPlushNotification({
@@ -865,10 +1023,11 @@ export const ChatsView: React.FC = () => {
   const pendingInvitesCount = (groupInvites || []).filter(i => i.status === 'pending').length;
 
   return (
-    <div
-      id="chats-root-container"
-      className="fixed top-14 bottom-15 left-0 right-0 max-w-2xl mx-auto flex flex-col bg-[#001428] border-x border-white/10 z-20 overflow-hidden"
-    >
+    <>
+      <div
+        id="chats-root-container"
+        className="fixed top-14 bottom-15 left-0 right-0 max-w-2xl mx-auto flex flex-col bg-[#001428] border-x border-white/10 z-20 overflow-hidden"
+      >
       {/* RENDER CONTENT BASED ON TAB */}
       {chatTypeTab === 'messages' && !selectedPrivateOrGroupId ? (
         /* ========================================================================= */
@@ -1398,7 +1557,24 @@ export const ChatsView: React.FC = () => {
               </div>
 
               {/* Chat options & Encryption info */}
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-1.5">
+                {/* Clear chat button: only allowed in General and City chats; NOT in private chats, groups, or ticket chats */}
+                {isClearAllowed && (
+                  <button
+                    id="btn-clear-chat-header"
+                    onClick={() => {
+                      if (confirm(`¿Vaciar todos los mensajes del chat "${activeChat.name}"?`)) {
+                        clearChatMessages(activeChat.id);
+                      }
+                    }}
+                    className="px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-full transition-all flex items-center gap-1 text-[11px] font-black active:scale-95 cursor-pointer shadow-xs"
+                    title="Vaciar este chat (Comando /clear)"
+                  >
+                    <Eraser className="w-3.5 h-3.5 text-amber-400" />
+                    <span>/clear</span>
+                  </button>
+                )}
+
                 <button
                   id="btn-e2e-info"
                   onClick={() => setShowE2EModal(true)}
@@ -1814,7 +1990,213 @@ export const ChatsView: React.FC = () => {
                                     </div>
                                   </div>
                                 )}
-                                {msg.audioUrl ? (
+                                {msg.poll ? (
+                                  /* Poll Card Component */
+                                  <div className="my-1 p-3 rounded-xl bg-black/20 dark:bg-white/5 border border-white/15 w-full max-w-sm space-y-2.5 text-left">
+                                    <div className="flex items-start gap-2">
+                                      <div className="p-1.5 rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shrink-0">
+                                        <BarChart2 className="w-4 h-4" />
+                                      </div>
+                                      <div>
+                                        <h4 className={`font-bold text-xs sm:text-sm leading-snug ${isMe ? 'text-neutral-950' : 'text-white'}`}>
+                                          {msg.poll.question}
+                                        </h4>
+                                        <span className={`text-[10px] ${isMe ? 'text-neutral-950/70' : 'text-white/60'}`}>
+                                          {msg.poll.multipleAnswers ? 'Selección múltiple' : 'Selecciona una opción'}
+                                        </span>
+                                      </div>
+                                    </div>
+
+                                    {/* Options list */}
+                                    <div className="space-y-1.5 pt-1">
+                                      {(() => {
+                                        const totalVotes = msg.poll.options.reduce((acc, opt) => acc + (opt.votes?.length || 0), 0);
+                                        return msg.poll.options.map((opt, optIdx) => {
+                                          const optVotesCount = opt.votes?.length || 0;
+                                          const percentage = totalVotes > 0 ? Math.round((optVotesCount / totalVotes) * 100) : 0;
+                                          const userHasVoted = Array.isArray(opt.votes) && opt.votes.includes(currentUser.id);
+
+                                          return (
+                                            <button
+                                              key={opt.id || optIdx}
+                                              type="button"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                if (activeChat) {
+                                                  voteInPoll(activeChat.id, msg.id, optIdx);
+                                                }
+                                              }}
+                                              className={`w-full relative overflow-hidden rounded-xl p-2 text-xs transition-all text-left flex items-center justify-between border cursor-pointer ${
+                                                userHasVoted
+                                                  ? isMe
+                                                    ? 'bg-neutral-950/20 border-neutral-950 text-neutral-950 font-bold'
+                                                    : 'bg-emerald-500/20 border-emerald-500/50 text-emerald-300 font-bold'
+                                                  : isMe
+                                                  ? 'bg-black/10 border-neutral-950/20 hover:bg-black/20 text-neutral-950'
+                                                  : 'bg-white/5 border-white/10 hover:bg-white/10 text-white'
+                                              }`}
+                                            >
+                                              {/* Progress bar background */}
+                                              <div
+                                                className={`absolute left-0 top-0 bottom-0 transition-all duration-300 pointer-events-none opacity-25 ${
+                                                  userHasVoted ? 'bg-emerald-400' : 'bg-amber-400'
+                                                }`}
+                                                style={{ width: `${percentage}%` }}
+                                              />
+
+                                              <div className="relative z-10 flex items-center gap-2 truncate pr-2">
+                                                <div className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 text-[10px] ${
+                                                  userHasVoted
+                                                    ? 'bg-emerald-500 text-neutral-950 border-emerald-400 font-black'
+                                                    : 'border-white/30'
+                                                }`}>
+                                                  {userHasVoted && <Check className="w-3 h-3 stroke-[3]" />}
+                                                </div>
+                                                <span className="truncate font-medium">{opt.text}</span>
+                                              </div>
+
+                                              <div className="relative z-10 text-[11px] font-bold shrink-0 opacity-80 pl-2">
+                                                {optVotesCount > 0 ? `${percentage}% (${optVotesCount})` : ''}
+                                              </div>
+                                            </button>
+                                          );
+                                        });
+                                      })()}
+                                    </div>
+
+                                    <div className={`text-[10px] font-semibold pt-1 flex items-center justify-between border-t border-white/10 ${
+                                      isMe ? 'text-neutral-950/70' : 'text-white/50'
+                                    }`}>
+                                      <span>{msg.poll.options.reduce((acc, opt) => acc + (opt.votes?.length || 0), 0)} votos en total</span>
+                                      <span className="text-[9px] uppercase tracking-wider font-bold text-amber-400">Encuesta</span>
+                                    </div>
+                                  </div>
+                                ) : msg.event ? (
+                                  /* Event Card Component */
+                                  <div className="my-1 p-3 rounded-xl bg-gradient-to-br from-blue-900/40 to-indigo-900/40 border border-blue-500/30 w-full max-w-sm space-y-2.5 text-left shadow-lg">
+                                    <div className="flex items-start justify-between gap-2">
+                                      <div className="flex items-center gap-2">
+                                        <div className="p-2 rounded-xl bg-blue-500/20 text-blue-400 border border-blue-500/30 shrink-0">
+                                          <Calendar className="w-5 h-5" />
+                                        </div>
+                                        <div>
+                                          <span className="text-[9px] uppercase font-black tracking-wider text-blue-400 block">
+                                            Evento del Parcero
+                                          </span>
+                                          <h4 className="font-black text-sm text-white leading-snug">
+                                            {msg.event.title}
+                                          </h4>
+                                        </div>
+                                      </div>
+                                    </div>
+
+                                    {(() => {
+                                      const formatDateTime = (val?: string) => {
+                                        if (!val) return '';
+                                        try {
+                                          const d = new Date(val);
+                                          if (isNaN(d.getTime())) return val;
+                                          return d.toLocaleString('es-ES', {
+                                            day: '2-digit',
+                                            month: 'short',
+                                            year: 'numeric',
+                                            hour: '2-digit',
+                                            minute: '2-digit'
+                                          });
+                                        } catch {
+                                          return val;
+                                        }
+                                      };
+
+                                      const reminderTextMap: Record<string, string> = {
+                                        '1d': '1 Día antes',
+                                        '1h': '1 Hora antes',
+                                        '30m': '30 Minutos antes',
+                                        '15m': '15 Minutos antes'
+                                      };
+
+                                      const startText = msg.event.startDate ? formatDateTime(msg.event.startDate) : `${msg.event.date || ''} ${msg.event.time || ''}`.trim();
+                                      const endText = msg.event.hasEndTime && msg.event.endDate ? formatDateTime(msg.event.endDate) : '';
+
+                                      return (
+                                        <div className="space-y-1.5 text-xs text-white/90 bg-black/20 p-2.5 rounded-xl border border-white/10">
+                                          <div className="flex items-start gap-2 text-amber-300 font-bold">
+                                            <Clock className="w-3.5 h-3.5 shrink-0 text-amber-400 mt-0.5" />
+                                            <div className="space-y-0.5">
+                                              <div><span className="text-white/60 font-normal text-[11px]">Empieza:</span> {startText}</div>
+                                              {endText && (
+                                                <div><span className="text-white/60 font-normal text-[11px]">Finaliza:</span> {endText}</div>
+                                              )}
+                                            </div>
+                                          </div>
+
+                                          {msg.event.location && (
+                                            <div className="flex items-center gap-2 text-white/80">
+                                              <MapPin className="w-3.5 h-3.5 shrink-0 text-blue-400" />
+                                              <span className="truncate">{msg.event.location}</span>
+                                            </div>
+                                          )}
+
+                                          {msg.event.reminder && msg.event.reminder !== 'none' && reminderTextMap[msg.event.reminder] && (
+                                            <div className="flex items-center gap-2 text-emerald-300 text-[11px]">
+                                              <Bell className="w-3.5 h-3.5 shrink-0 text-emerald-400" />
+                                              <span>Recordatorio: {reminderTextMap[msg.event.reminder]}</span>
+                                            </div>
+                                          )}
+
+                                          {msg.event.description && (
+                                            <p className="text-[11px] text-white/70 pt-1 border-t border-white/10 whitespace-pre-wrap break-words max-h-32 overflow-y-auto">
+                                              {msg.event.description}
+                                            </p>
+                                          )}
+                                        </div>
+                                      );
+                                    })()}
+
+                                    {/* RSVP Attendance Button */}
+                                    {(() => {
+                                      const attendees = Array.isArray(msg.event.attendees) ? msg.event.attendees : [];
+                                      const isAttending = attendees.includes(currentUser.id);
+
+                                      return (
+                                        <div className="space-y-1.5 pt-0.5">
+                                          <button
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              if (activeChat) {
+                                                rsvpToEvent(activeChat.id, msg.id);
+                                              }
+                                            }}
+                                            className={`w-full py-2 px-3 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-2 shadow-md cursor-pointer ${
+                                              isAttending
+                                                ? 'bg-emerald-500 hover:bg-emerald-400 text-neutral-950 shadow-emerald-500/20'
+                                                : 'bg-blue-600 hover:bg-blue-500 text-white shadow-blue-600/20'
+                                            }`}
+                                          >
+                                            {isAttending ? (
+                                              <>
+                                                <CheckCircle className="w-4 h-4" />
+                                                <span>¡Asistiré a este evento!</span>
+                                              </>
+                                            ) : (
+                                              <>
+                                                <Users className="w-4 h-4" />
+                                                <span>Confirmar Asistencia</span>
+                                              </>
+                                            )}
+                                          </button>
+
+                                          <div className="text-[10px] text-center font-semibold text-white/60">
+                                            {attendees.length > 0
+                                              ? `👥 ${attendees.length} ${attendees.length === 1 ? 'parcero asistirá' : 'parceros asistirán'}`
+                                              : 'Sé el primero en confirmar asistencia'}
+                                          </div>
+                                        </div>
+                                      );
+                                    })()}
+                                  </div>
+                                ) : msg.audioUrl ? (
                                   <VoiceNotePlayer audioUrl={msg.audioUrl} duration={msg.audioDuration} isMe={isMe} />
                                 ) : (
                                   <p className="whitespace-pre-wrap break-words">{msg.text}</p>
@@ -1993,30 +2375,51 @@ export const ChatsView: React.FC = () => {
                 /* Standard Message Input Form */
                 <form
                   onSubmit={handleSendMessage}
-                  className="flex items-center gap-2 max-w-2xl mx-auto"
+                  className="flex items-center gap-2 max-w-2xl mx-auto relative"
                 >
-                  <button
-                    type="button"
-                    onClick={() => setShowQuickEmojis(prev => !prev)}
-                    className={`p-2 rounded-full transition-colors shrink-0 cursor-pointer ${
-                      showQuickEmojis
-                        ? 'text-amber-400 bg-amber-400/15'
-                        : 'text-white/60 hover:text-amber-400 hover:bg-white/10'
-                    }`}
-                    title="Emojis colombianos rápidos"
-                  >
-                    <Smile className="w-5 h-5" />
-                  </button>
+                  {/* WhatsApp Attachment Button (+) / Keyboard toggle */}
+                  <div className="shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowAttachMenu(prev => {
+                          const next = !prev;
+                          if (!next) {
+                            setTimeout(() => chatInputRef.current?.focus(), 50);
+                          }
+                          return next;
+                        });
+                        setShowQuickEmojis(false);
+                      }}
+                      className={`w-9 h-9 rounded-full transition-all shrink-0 cursor-pointer flex items-center justify-center font-bold ${
+                        showAttachMenu
+                          ? 'bg-amber-400 text-neutral-950 shadow-md shadow-amber-400/40 scale-105'
+                          : 'text-white/70 hover:text-white hover:bg-white/10 active:scale-95'
+                      }`}
+                      title={showAttachMenu ? "Escribir mensaje (Teclado)" : "Adjuntar (Encuesta, Evento...)"}
+                    >
+                      {showAttachMenu ? (
+                        <Keyboard className="w-5 h-5 text-neutral-950 animate-in fade-in zoom-in duration-150" />
+                      ) : (
+                        <Plus className="w-5 h-5 transition-transform duration-200" />
+                      )}
+                    </button>
+                  </div>
 
                   <div className="flex-1 relative flex items-center">
                     <input
                       ref={chatInputRef}
                       type="text"
                       value={inputMessage}
+                      onFocus={() => {
+                        if (showAttachMenu) setShowAttachMenu(false);
+                      }}
                       onChange={e => setInputMessage(e.target.value)}
                       placeholder={
                         cooldownTimeLeft > 0
                           ? `Antispam activo: espera ${cooldownTimeLeft}s...`
+                          : isClearAllowed
+                          ? `Escribe un mensaje o /clear en ${activeChat.name}...`
                           : `Escribe un mensaje en ${activeChat.name}...`
                       }
                       className="w-full bg-white/[0.08] hover:bg-white/[0.12] focus:bg-white/[0.15] text-white placeholder-white/45 px-4 py-2 text-xs sm:text-sm rounded-full border border-white/15 focus:outline-none focus:border-amber-400/80 focus:ring-1 focus:ring-amber-400/40 transition-all shadow-inner"
@@ -2052,6 +2455,47 @@ export const ChatsView: React.FC = () => {
                     </button>
                   )}
                 </form>
+              )}
+
+              {/* WhatsApp Style Attachment Drawer Panel (Expands at the bottom like keyboard) */}
+              {showAttachMenu && (
+                <div className="max-w-2xl mx-auto mt-2.5 pt-3 border-t border-white/10 animate-in slide-in-from-bottom-3 fade-in duration-200">
+                  <div className="flex items-center justify-around py-2 max-w-xs mx-auto">
+                    {/* Option 1: Encuesta */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowAttachMenu(false);
+                        setShowCreatePollModal(true);
+                      }}
+                      className="flex flex-col items-center gap-2 group cursor-pointer active:scale-95 transition-transform"
+                    >
+                      <div className="w-13 h-13 sm:w-14 sm:h-14 rounded-full bg-gradient-to-tr from-emerald-600 to-emerald-400 text-white flex items-center justify-center shadow-lg shadow-emerald-500/30 group-hover:scale-110 transition-transform border border-emerald-300/30">
+                        <BarChart2 className="w-6 h-6" />
+                      </div>
+                      <span className="text-xs font-bold text-white/90 group-hover:text-amber-300 transition-colors">
+                        Encuesta
+                      </span>
+                    </button>
+
+                    {/* Option 2: Evento */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowAttachMenu(false);
+                        setShowCreateEventModal(true);
+                      }}
+                      className="flex flex-col items-center gap-2 group cursor-pointer active:scale-95 transition-transform"
+                    >
+                      <div className="w-13 h-13 sm:w-14 sm:h-14 rounded-full bg-gradient-to-tr from-blue-600 to-sky-400 text-white flex items-center justify-center shadow-lg shadow-blue-500/30 group-hover:scale-110 transition-transform border border-blue-300/30">
+                        <Calendar className="w-6 h-6" />
+                      </div>
+                      <span className="text-xs font-bold text-white/90 group-hover:text-amber-300 transition-colors">
+                        Evento
+                      </span>
+                    </button>
+                  </div>
+                </div>
               )}
             </div>
           </div>
@@ -3030,6 +3474,317 @@ export const ChatsView: React.FC = () => {
           </div>
         </div>
       )}
-    </div>
+      </div>
+
+      {/* View Fullscreen: Crear Encuesta */}
+      {showCreatePollModal && (
+        <div className="fixed inset-0 z-[9999] bg-[#0b141a] text-white flex flex-col w-full h-full animate-in slide-in-from-bottom-5 duration-200">
+          {/* Header */}
+          <div className="flex items-center justify-between px-4 py-3 sm:px-6 bg-[#111b21] border-b border-white/10 shadow-md">
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setShowCreatePollModal(false)}
+                className="p-1.5 rounded-full hover:bg-white/10 text-white/80 hover:text-white transition-colors cursor-pointer"
+              >
+                <ArrowLeft className="w-6 h-6" />
+              </button>
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                  <BarChart2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-base sm:text-lg font-black text-white">
+                    Crear Encuesta
+                  </h2>
+                  <p className="text-[11px] text-white/60">Haz una pregunta a los parceros del grupo</p>
+                </div>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setShowCreatePollModal(false)}
+              className="text-white/60 hover:text-white p-2 rounded-full hover:bg-white/10 transition-colors cursor-pointer"
+            >
+              <X className="w-6 h-6" />
+            </button>
+          </div>
+
+          {/* Form Content */}
+          <form onSubmit={handleCreatePollSubmit} className="flex-1 flex flex-col justify-between overflow-hidden">
+            <div className="flex-1 overflow-y-auto p-4 sm:p-8 max-w-2xl mx-auto w-full space-y-6">
+              <div>
+                <label className="block text-xs sm:text-sm font-bold text-white/90 mb-2">
+                  Pregunta de la encuesta *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={pollQuestion}
+                  onChange={e => setPollQuestion(e.target.value)}
+                  placeholder="ej. ¿A dónde salimos este fin de semana?"
+                  className="w-full bg-[#1f2c34] text-white placeholder-white/40 px-4 py-3 text-sm rounded-xl border border-white/15 focus:outline-none focus:border-emerald-400 shadow-inner"
+                />
+              </div>
+
+              <div className="space-y-3">
+                <label className="block text-xs sm:text-sm font-bold text-white/90">
+                  Opciones de respuesta *
+                </label>
+                {pollOptions.map((opt, idx) => (
+                  <div key={idx} className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      required
+                      value={opt}
+                      onChange={e => {
+                        const newOpts = [...pollOptions];
+                        newOpts[idx] = e.target.value;
+                        setPollOptions(newOpts);
+                      }}
+                      placeholder={`Opción ${idx + 1}`}
+                      className="w-full bg-[#1f2c34] text-white placeholder-white/40 px-4 py-3 text-sm rounded-xl border border-white/15 focus:outline-none focus:border-emerald-400 shadow-inner"
+                    />
+                    {pollOptions.length > 2 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPollOptions(pollOptions.filter((_, i) => i !== idx));
+                        }}
+                        className="p-3 text-rose-400 hover:text-rose-300 rounded-xl hover:bg-white/10 transition-colors cursor-pointer"
+                        title="Eliminar opción"
+                      >
+                        <Trash2 className="w-5 h-5" />
+                      </button>
+                    )}
+                  </div>
+                ))}
+
+                {pollOptions.length < 6 && (
+                  <button
+                    type="button"
+                    onClick={() => setPollOptions([...pollOptions, ''])}
+                    className="w-full py-3 bg-[#1f2c34] hover:bg-[#2a3942] text-emerald-400 border border-emerald-500/30 text-xs sm:text-sm font-bold rounded-xl flex items-center justify-center gap-2 transition-colors cursor-pointer mt-2"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Añadir opción</span>
+                  </button>
+                )}
+              </div>
+
+              <div className="flex items-center gap-3 p-3.5 bg-[#1f2c34] rounded-xl border border-white/10">
+                <input
+                  id="poll-multiple-checkbox-full"
+                  type="checkbox"
+                  checked={pollMultiple}
+                  onChange={e => setPollMultiple(e.target.checked)}
+                  className="w-5 h-5 rounded text-emerald-500 focus:ring-emerald-400 border-white/30 bg-white/10 cursor-pointer"
+                />
+                <label htmlFor="poll-multiple-checkbox-full" className="text-xs sm:text-sm font-semibold text-white/90 cursor-pointer select-none">
+                  Permitir múltiples respuestas
+                </label>
+              </div>
+            </div>
+
+            {/* Bottom Action Footer */}
+            <div className="p-4 sm:px-8 sm:py-4 bg-[#111b21] border-t border-white/10 flex items-center justify-end gap-3 max-w-2xl mx-auto w-full">
+              <button
+                type="button"
+                onClick={() => setShowCreatePollModal(false)}
+                className="px-5 py-2.5 text-xs sm:text-sm font-bold text-white/70 hover:text-white transition-colors cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                className="px-6 py-3 bg-emerald-500 hover:bg-emerald-400 text-neutral-950 font-black text-xs sm:text-sm rounded-xl shadow-lg cursor-pointer flex items-center gap-2 transition-transform active:scale-95"
+              >
+                <Send className="w-4 h-4" />
+                <span>Enviar Encuesta</span>
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* View Fullscreen: Crear Evento */}
+      {showCreateEventModal && (
+        <div className="fixed inset-0 z-[9999] bg-[#0b141a] text-white flex flex-col w-full h-full animate-in slide-in-from-bottom-5 duration-200">
+          {/* Header */}
+          <div className="flex items-center justify-between px-4 py-3 sm:px-6 bg-[#111b21] border-b border-white/10 shadow-md">
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setShowCreateEventModal(false)}
+                className="p-1.5 rounded-full hover:bg-white/10 text-white/80 hover:text-white transition-colors cursor-pointer"
+              >
+                <ArrowLeft className="w-6 h-6" />
+              </button>
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-blue-500/20 text-blue-400 border border-blue-500/30">
+                  <Calendar className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-base sm:text-lg font-black text-white">
+                    Crear Evento / Quedada
+                  </h2>
+                  <p className="text-[11px] text-white/60">Organiza un encuentro para el grupo</p>
+                </div>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setShowCreateEventModal(false)}
+              className="text-white/60 hover:text-white p-2 rounded-full hover:bg-white/10 transition-colors cursor-pointer"
+            >
+              <X className="w-6 h-6" />
+            </button>
+          </div>
+
+          {/* Form Content */}
+          <form onSubmit={handleCreateEventSubmit} className="flex-1 flex flex-col justify-between overflow-hidden">
+            <div className="flex-1 overflow-y-auto p-4 sm:p-8 max-w-2xl mx-auto w-full space-y-5">
+              {/* Nombre del evento */}
+              <div>
+                <label className="block text-xs sm:text-sm font-bold text-white/90 mb-1.5">
+                  Nombre del evento *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={eventTitle}
+                  onChange={e => setEventTitle(e.target.value)}
+                  placeholder="ej. Integración de Parceros en Madrid 🇨🇴"
+                  className="w-full bg-[#1f2c34] text-white placeholder-white/40 px-4 py-3 text-sm rounded-xl border border-white/15 focus:outline-none focus:border-blue-400 shadow-inner"
+                />
+              </div>
+
+              {/* Descripcion */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-xs sm:text-sm font-bold text-white/90">
+                    Descripción (Opcional)
+                  </label>
+                  <span className="text-[11px] text-white/50 font-mono">
+                    {eventDescription.length}/2048
+                  </span>
+                </div>
+                <textarea
+                  rows={4}
+                  maxLength={2048}
+                  value={eventDescription}
+                  onChange={e => setEventDescription(e.target.value)}
+                  placeholder="ej. Traer empanadas, gaseosas y buena vibra..."
+                  className="w-full bg-[#1f2c34] text-white placeholder-white/40 px-4 py-3 text-sm rounded-xl border border-white/15 focus:outline-none focus:border-blue-400 resize-none shadow-inner"
+                />
+              </div>
+
+              {/* Empieza el (Fecha y Hora) */}
+              <div>
+                <label className="block text-xs sm:text-sm font-bold text-white/90 mb-1.5">
+                  Empieza el (Fecha y Hora) *
+                </label>
+                <input
+                  type="datetime-local"
+                  required
+                  value={eventStartDate}
+                  onChange={e => setEventStartDate(e.target.value)}
+                  className="w-full bg-[#1f2c34] text-white px-4 py-3 text-sm rounded-xl border border-white/15 focus:outline-none focus:border-blue-400 [color-scheme:dark] shadow-inner"
+                />
+              </div>
+
+              {/* Switch incluir hora de finalizacion */}
+              <div className="flex items-center justify-between p-3.5 rounded-xl bg-[#1f2c34] border border-white/10">
+                <span className="text-xs sm:text-sm font-bold text-white/90">
+                  Incluir hora de finalización
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setHasEndTime(!hasEndTime)}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors cursor-pointer ${
+                    hasEndTime ? 'bg-blue-500' : 'bg-white/20'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      hasEndTime ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
+              </div>
+
+              {/* Finaliza el */}
+              {hasEndTime && (
+                <div className="animate-in fade-in duration-150">
+                  <label className="block text-xs sm:text-sm font-bold text-white/90 mb-1.5">
+                    Finaliza el (Fecha y Hora) *
+                  </label>
+                  <input
+                    type="datetime-local"
+                    required={hasEndTime}
+                    value={eventEndDate}
+                    onChange={e => setEventEndDate(e.target.value)}
+                    className="w-full bg-[#1f2c34] text-white px-4 py-3 text-sm rounded-xl border border-white/15 focus:outline-none focus:border-blue-400 [color-scheme:dark] shadow-inner"
+                  />
+                </div>
+              )}
+
+              {/* Lugar / Ubicacion */}
+              <div>
+                <label className="block text-xs sm:text-sm font-bold text-white/90 mb-1.5">
+                  Lugar / Ubicación
+                </label>
+                <input
+                  type="text"
+                  value={eventLocation}
+                  onChange={e => setEventLocation(e.target.value)}
+                  placeholder="ej. Parque del Retiro, Madrid"
+                  className="w-full bg-[#1f2c34] text-white placeholder-white/40 px-4 py-3 text-sm rounded-xl border border-white/15 focus:outline-none focus:border-blue-400 shadow-inner"
+                />
+              </div>
+
+              {/* Recordatorio */}
+              <div>
+                <label className="block text-xs sm:text-sm font-bold text-white/90 mb-1.5 flex items-center gap-1.5">
+                  <Bell className="w-4 h-4 text-blue-400" />
+                  <span>Recordatorio (estilo WhatsApp)</span>
+                </label>
+                <select
+                  value={eventReminder}
+                  onChange={e => setEventReminder(e.target.value)}
+                  className="w-full bg-[#1f2c34] text-white px-4 py-3 text-sm rounded-xl border border-white/15 focus:outline-none focus:border-blue-400 cursor-pointer shadow-inner"
+                >
+                  <option value="none">Nunca</option>
+                  <option value="1d">1 Día antes</option>
+                  <option value="1h">1 Hora antes</option>
+                  <option value="30m">30 Minutos antes</option>
+                  <option value="15m">15 Minutos antes</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Bottom Action Footer */}
+            <div className="p-4 sm:px-8 sm:py-4 bg-[#111b21] border-t border-white/10 flex items-center justify-end gap-3 max-w-2xl mx-auto w-full">
+              <button
+                type="button"
+                onClick={() => setShowCreateEventModal(false)}
+                className="px-5 py-2.5 text-xs sm:text-sm font-bold text-white/70 hover:text-white transition-colors cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                className="px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white font-black text-xs sm:text-sm rounded-xl shadow-lg cursor-pointer flex items-center gap-2 transition-transform active:scale-95"
+              >
+                <Send className="w-4 h-4" />
+                <span>Crear Evento</span>
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+    </>
   );
 };
