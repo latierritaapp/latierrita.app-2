@@ -666,8 +666,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       try {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
-          const filtered = parsed.filter(cleanBanner);
-          if (filtered.length > 0) return filtered;
+          return parsed.filter(cleanBanner);
         }
       } catch {}
     }
@@ -675,12 +674,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       try {
         const parsed = JSON.parse(localSaved);
         if (Array.isArray(parsed)) {
-          const filtered = parsed.filter(cleanBanner);
-          if (filtered.length > 0) return filtered;
+          return parsed.filter(cleanBanner);
         }
       } catch {}
     }
-    return INITIAL_AD_BANNERS.filter(cleanBanner);
+    return [];
   });
 
   useEffect(() => {
@@ -1014,14 +1012,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
         const cleanList = list.filter(b => b && b.id !== 'banner-init-1' && !deletedIds.includes(b.id));
 
-        // Always include default initial banners if they haven't been deleted by admin
-        INITIAL_AD_BANNERS.forEach(initB => {
-          if (!cleanList.some(b => b.id === initB.id) && !deletedIds.includes(initB.id)) {
-            cleanList.push(initB);
-          }
-        });
-
-        setAdBanners(cleanList.length > 0 ? cleanList : INITIAL_AD_BANNERS);
+        setAdBanners(cleanList);
         cleanList.forEach(b => {
           if (b.id !== 'banner-oficial-latierrita' && b.id !== 'banner-init-1') {
             saveBannerToIndexedDB(b);
@@ -1057,11 +1048,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           }
         } catch (e) {}
 
-        if (list.length > 0) {
-          setAdBanners(list);
-        } else {
-          setAdBanners(prev => (prev.length > 0 ? prev : INITIAL_AD_BANNERS));
-        }
+        setAdBanners(list);
         console.warn('Banners listener note:', error?.message || error);
       });
       return () => {
@@ -3020,7 +3007,7 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
       } catch (e) {}
 
       const cleanList = list.filter(b => b && b.id !== 'banner-init-1' && !deletedIds.includes(b.id));
-      setAdBanners(cleanList.length > 0 ? cleanList : INITIAL_AD_BANNERS);
+      setAdBanners(cleanList);
       try {
         localStorage.setItem('latierrita_ad_banners', JSON.stringify(cleanList));
       } catch {}
@@ -3057,7 +3044,7 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
           }
         } catch {}
       }
-      setAdBanners(fallbackList.length > 0 ? fallbackList : INITIAL_AD_BANNERS);
+      setAdBanners(fallbackList);
       triggerPlushNotification({
         type: 'system',
         title: 'Carruseles Actualizados',
