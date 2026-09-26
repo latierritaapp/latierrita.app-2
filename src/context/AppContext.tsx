@@ -982,6 +982,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const setActiveTab = (tab: 'feed' | 'explore' | 'chats' | 'notifications' | 'profile' | 'places') => {
     setNavHistory([]);
+    setSelectedUserProfileState(null);
     setActiveTabState(tab);
   };
 

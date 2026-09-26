@@ -23,7 +23,7 @@ export const LaTierritaLogo: React.FC<LaTierritaLogoProps> = ({
   return (
     <img
       id="img-la-tierrita-logo"
-      src="/logo.png"
+      src="/logo.png?v=3"
       alt={title}
       title={title}
       className={`select-none shrink-0 object-contain ${finalClass}`}

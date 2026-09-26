@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import {
   Heart,
-  PlusSquare,
+  Plus,
   Shield,
   Settings,
   ArrowLeft,
@@ -225,7 +225,7 @@ export const Navbar: React.FC = () => {
                   className="p-2 text-white/90 hover:text-amber-400 rounded-full hover:bg-white/10 transition-all active:scale-95"
                   title="Crear contenido"
                 >
-                  <PlusSquare className="w-6 h-6 stroke-[2]" />
+                  <Plus className="w-6 h-6 stroke-[2.5]" />
                 </button>
               )}
             </div>

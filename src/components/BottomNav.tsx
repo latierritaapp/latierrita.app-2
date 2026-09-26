@@ -7,7 +7,7 @@ export const BottomNav: React.FC = () => {
     activeTab,
     setActiveTab,
     currentUser,
-    setSelectedUserProfile,
+    selectedUserProfile,
     chatRooms
   } = useApp();
 
@@ -25,28 +25,22 @@ export const BottomNav: React.FC = () => {
         {/* 1. Inicio */}
         <button
           id="tab-btn-home"
-          onClick={() => {
-            setSelectedUserProfile(null);
-            setActiveTab('feed');
-          }}
+          onClick={() => setActiveTab('feed')}
           className={`relative p-2.5 rounded-2xl flex flex-col items-center justify-center transition-all active:scale-90 ${
-            activeTab === 'feed'
+            activeTab === 'feed' && !selectedUserProfile
               ? 'text-amber-400 bg-amber-400/10'
               : 'text-white/60 hover:text-white hover:bg-white/5'
           }`}
           title="Inicio"
           aria-label="Inicio"
         >
-          <Home className={`w-5 sm:w-6 h-5 sm:h-6 ${activeTab === 'feed' ? 'stroke-[2.5]' : 'stroke-[1.8]'}`} />
+          <Home className={`w-5 sm:w-6 h-5 sm:h-6 ${activeTab === 'feed' && !selectedUserProfile ? 'stroke-[2.5]' : 'stroke-[1.8]'}`} />
         </button>
 
         {/* 2. Chats */}
         <button
           id="tab-btn-chats"
-          onClick={() => {
-            setSelectedUserProfile(null);
-            setActiveTab('chats');
-          }}
+          onClick={() => setActiveTab('chats')}
           className={`relative p-2.5 rounded-2xl flex flex-col items-center justify-center transition-all active:scale-90 ${
             activeTab === 'chats'
               ? 'text-amber-400 bg-amber-400/10'
@@ -68,19 +62,16 @@ export const BottomNav: React.FC = () => {
         {/* 3. Perfil */}
         <button
           id="tab-btn-profile"
-          onClick={() => {
-            setSelectedUserProfile(null);
-            setActiveTab('profile');
-          }}
+          onClick={() => setActiveTab('profile')}
           className={`relative p-2 rounded-2xl flex flex-col items-center justify-center transition-all active:scale-90 ${
-            activeTab === 'profile'
+            activeTab === 'profile' && !selectedUserProfile
               ? 'text-amber-400 bg-amber-400/10'
               : 'text-white/60 hover:text-white hover:bg-white/5'
           }`}
           title="Mi Perfil"
           aria-label="Perfil"
         >
-          <div className={`p-0.5 rounded-full transition-all ${activeTab === 'profile' ? 'ring-2 ring-amber-400 shadow-sm' : ''}`}>
+          <div className={`p-0.5 rounded-full transition-all ${activeTab === 'profile' && !selectedUserProfile ? 'ring-2 ring-amber-400 shadow-sm' : ''}`}>
             {currentUser.avatar ? (
               <img
                 src={currentUser.avatar}
@@ -97,10 +88,7 @@ export const BottomNav: React.FC = () => {
         {/* 4. Lugares / Anuncios (Altavoz) */}
         <button
           id="tab-btn-places"
-          onClick={() => {
-            setSelectedUserProfile(null);
-            setActiveTab('places');
-          }}
+          onClick={() => setActiveTab('places')}
           className={`relative p-2.5 rounded-2xl flex flex-col items-center justify-center transition-all active:scale-90 ${
             activeTab === 'places'
               ? 'text-amber-400 bg-amber-400/10'
@@ -115,10 +103,7 @@ export const BottomNav: React.FC = () => {
         {/* 5. Búsqueda y tendencias */}
         <button
           id="tab-btn-explore"
-          onClick={() => {
-            setSelectedUserProfile(null);
-            setActiveTab('explore');
-          }}
+          onClick={() => setActiveTab('explore')}
           className={`relative p-2.5 rounded-2xl flex flex-col items-center justify-center transition-all active:scale-90 ${
             activeTab === 'explore'
               ? 'text-amber-400 bg-amber-400/10'
