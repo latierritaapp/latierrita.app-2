@@ -227,6 +227,9 @@ export const StaffAdminModal: React.FC<{ isFullScreenRoute?: boolean }> = ({ isF
   // User search query in User Management
   const [userSearchQuery, setUserSearchQuery] = useState('');
 
+  // Banner refreshing state
+  const [isRefreshingBanners, setIsRefreshingBanners] = useState(false);
+
   const isAdminSlug = typeof window !== 'undefined' && (window.location.pathname === '/admin' || window.location.pathname === '/administracion');
   const isOpen = isStaffAdminOpen || isFullScreenRoute || isAdminSlug;
 
@@ -303,8 +306,6 @@ export const StaffAdminModal: React.FC<{ isFullScreenRoute?: boolean }> = ({ isF
   );
 
   // File upload helper from device gallery with automatic lightweight compression
-  const [isRefreshingBanners, setIsRefreshingBanners] = useState(false);
-
   const handleRefreshBanners = async () => {
     setIsRefreshingBanners(true);
     try {
