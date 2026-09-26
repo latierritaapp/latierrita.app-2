@@ -509,16 +509,7 @@ export const StaffAdminModal: React.FC<{ isFullScreenRoute?: boolean }> = ({ isF
 
   const handlePermanentlyPurgeUserAccount = async () => {
     if (!selectedUserForEdit) return;
-    const deletedRecord = deletedAccounts.find(d => d.userId === selectedUserForEdit.id);
-    if (deletedRecord) {
-      await permanentlyDeleteAccount(deletedRecord.id);
-    } else {
-      await deleteAccountByAdmin(selectedUserForEdit.id, 'Purgado por administración');
-      const delRec = deletedAccounts.find(d => d.userId === selectedUserForEdit.id);
-      if (delRec) {
-        await permanentlyDeleteAccount(delRec.id);
-      }
-    }
+    await permanentlyDeleteAccount(selectedUserForEdit.id);
     setSelectedUserForEdit(null);
   };
 

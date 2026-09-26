@@ -514,9 +514,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
         if (allReal.length > 0 && isMounted) {
           setOtherUsers(prev => {
-            // Filter out current user, staff account, and fictitious users
+            // Filter out current user, staff account, fictitious users, and deleted accounts
             const validProfiles = allReal.filter(p => {
               if (p.id === 'user-staff') return false;
+              if (p.isDeleted || (p as any).is_deleted) return false;
               if (p.username === 'latierrita_app' && p.email !== 'latierritaapp@gmail.com') return false;
               if (isFictitiousUser(p.id, p.username)) return false;
               if (current && (p.id === current.id || (p.email && current.email && p.email === current.email))) return false;
@@ -525,12 +526,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
             const merged = [...validProfiles];
             
-            // Do NOT retain fictitious parceros
+            // Do NOT retain fictitious parceros or deleted users
             prev.forEach(p => {
-              if (p.id === 'user-staff' || isFictitiousUser(p.id, p.username)) {
+              if (p.id === 'user-staff' || isFictitiousUser(p.id, p.username) || p.isDeleted || (p as any).is_deleted) {
                 return;
               }
               if (current && (p.id === current.id || (p.email && current.email && p.email === current.email))) {
+                return;
+              }
+              if (deletedAccounts.some(d => d.userId === p.id || d.username === p.username)) {
                 return;
               }
               if (!merged.some(m => m.id === p.id || m.username === p.username || (p.email && m.email === p.email))) {
@@ -2291,26 +2295,46 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
 
   // Admin Account Deletion with 7-day retention
   const deleteAccountByAdmin = async (userId: string, reason?: string) => {
-    const target = otherUsers.find(u => u.id === userId) || (currentUser.id === userId ? currentUser : null);
-    if (!target) return;
+    let target = otherUsers.find(u => u.id === userId) || (currentUser.id === userId ? currentUser : null);
+    if (!target) {
+      try {
+        const raw = localStorage.getItem('latierrita_registered_community');
+        if (raw) {
+          const list = JSON.parse(raw);
+          target = list.find((u: any) => u.id === userId);
+        }
+      } catch {}
+    }
 
+    const username = target?.username || `user_${userId.slice(0, 6)}`;
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
     const deletedRecord: DeletedAccount = {
-      id: `del-${target.id}-${Date.now()}`,
-      userId: target.id,
-      username: target.username,
-      name: target.name,
-      avatar: target.avatar,
-      email: target.email,
+      id: `del-${userId}-${Date.now()}`,
+      userId: userId,
+      username: username,
+      name: target?.name || username,
+      avatar: target?.avatar,
+      email: target?.email,
       deletedAt: new Date().toISOString(),
       retentionExpiresAt: expiresAt,
       reason: reason || 'Eliminación administrativa por STAFF',
       canRestore: true,
-      profileData: target
+      profileData: target || undefined
     };
 
-    setDeletedAccounts(prev => [deletedRecord, ...prev]);
+    setDeletedAccounts(prev => [deletedRecord, ...prev.filter(d => d.userId !== userId)]);
     setOtherUsers(prev => prev.filter(u => u.id !== userId));
+
+    // Remove from local community cache immediately
+    try {
+      const raw = localStorage.getItem('latierrita_registered_community');
+      if (raw) {
+        const list = JSON.parse(raw);
+        if (Array.isArray(list)) {
+          localStorage.setItem('latierrita_registered_community', JSON.stringify(list.filter((u: any) => u.id !== userId)));
+        }
+      }
+    } catch {}
 
     try {
       const userRef = doc(db, 'users', userId);
@@ -2326,24 +2350,40 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
       console.warn('Failed to write deleted account in Firestore:', e);
     }
 
+    // Sincronizar soft delete en Supabase profiles
+    try {
+      await supabase
+        .from('profiles')
+        .update({
+          is_deleted: true,
+          deleted_at: deletedRecord.deletedAt,
+          retention_expires_at: expiresAt,
+          deleted_reason: deletedRecord.reason
+        })
+        .eq('id', userId);
+    } catch (e) {
+      console.warn('Failed to soft delete in Supabase profiles:', e);
+    }
+
     triggerPlushNotification({
       type: 'system',
       title: 'Cuenta Eliminada (Retención 7 días)',
-      message: `La cuenta @${target.username} fue eliminada y se guardó en retención de 7 días.`
+      message: `La cuenta @${username} fue eliminada y se guardó en retención de 7 días.`
     });
   };
 
   // Deleted accounts actions with 7-day retention management
   const restoreDeletedAccount = async (id: string) => {
-    const acc = deletedAccounts.find(d => d.id === id);
-    if (!acc) return;
+    const acc = deletedAccounts.find(d => d.id === id || d.userId === id);
+    const userId = acc ? acc.userId : id;
+    const username = acc ? acc.username : '';
 
     // 1. Remove from local list
-    setDeletedAccounts(prev => prev.filter(d => d.id !== id));
+    setDeletedAccounts(prev => prev.filter(d => d.id !== id && d.userId !== userId));
 
     // 2. Restore in Firestore users collection (unmark isDeleted)
     try {
-      const userRef = doc(db, 'users', acc.userId);
+      const userRef = doc(db, 'users', userId);
       await setDoc(userRef, {
         isDeleted: false,
         deletedAt: null,
@@ -2356,37 +2396,112 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
 
     // 3. Remove from deleted_accounts collection
     try {
-      const delRef = doc(db, 'deleted_accounts', acc.userId);
+      const delRef = doc(db, 'deleted_accounts', userId);
       await deleteDoc(delRef);
     } catch (e) {
       console.warn('Failed to delete from Firestore deleted_accounts:', e);
     }
 
+    // Restaurar en Supabase profiles
+    try {
+      await supabase
+        .from('profiles')
+        .update({
+          is_deleted: false,
+          deleted_at: null,
+          retention_expires_at: null,
+          deleted_reason: null
+        })
+        .eq('id', userId);
+    } catch (e) {
+      console.warn('Failed to restore in Supabase profiles:', e);
+    }
+
     triggerPlushNotification({
       type: 'system',
       title: 'Cuenta Restaurada',
-      message: `La cuenta de @${acc.username} ha sido restaurada con éxito. El usuario puede volver a iniciar sesión.`
+      message: username ? `La cuenta de @${username} ha sido restaurada con éxito.` : 'La cuenta ha sido restaurada con éxito.'
     });
   };
 
   const permanentlyDeleteAccount = async (id: string) => {
-    const acc = deletedAccounts.find(d => d.id === id);
-    if (!acc) return;
+    const acc = deletedAccounts.find(d => d.id === id || d.userId === id);
+    const userId = acc ? acc.userId : id;
+    const username = acc ? acc.username : '';
 
     // 1. Remove from local state
-    setDeletedAccounts(prev => prev.filter(d => d.id !== id));
+    setDeletedAccounts(prev => prev.filter(d => d.id !== id && d.userId !== userId));
+    setOtherUsers(prev => prev.filter(u => u.id !== userId));
 
-    // 2. Permanently delete user document from Firestore users collection (frees the username immediately)
+    // Remove from local community cache
     try {
-      const userRef = doc(db, 'users', acc.userId);
+      const raw = localStorage.getItem('latierrita_registered_community');
+      if (raw) {
+        const list = JSON.parse(raw);
+        if (Array.isArray(list)) {
+          localStorage.setItem('latierrita_registered_community', JSON.stringify(list.filter((u: any) => u.id !== userId)));
+        }
+      }
+    } catch {}
+
+    // 2. Intentar llamada RPC administrativa en Supabase
+    try {
+      await supabase.rpc('admin_delete_user', { target_user_id: userId });
+    } catch {}
+
+    // 3. Borrar dependencias hijas en Supabase antes de borrar el perfil
+    try {
+      await supabase.from('places').delete().eq('user_id', userId);
+    } catch {}
+    try {
+      await supabase.from('posts').delete().eq('user_id', userId);
+    } catch {}
+    try {
+      await supabase.from('stories').delete().eq('user_id', userId);
+    } catch {}
+    try {
+      await supabase.from('verification_requests').delete().eq('user_id', userId);
+    } catch {}
+    try {
+      await supabase.from('follows').delete().or(`follower_id.eq.${userId},following_id.eq.${userId}`);
+    } catch {}
+    try {
+      await supabase.from('notifications').delete().eq('user_id', userId);
+    } catch {}
+
+    // 4. Borrar definitivamente de Supabase profiles
+    try {
+      const { error: delError } = await supabase
+        .from('profiles')
+        .delete()
+        .eq('id', userId);
+      if (delError) {
+        console.warn('Supabase profile delete fallback to anonymized deletion:', delError.message);
+        await supabase
+          .from('profiles')
+          .update({
+            is_deleted: true,
+            deleted_at: new Date().toISOString(),
+            retention_expires_at: new Date().toISOString(),
+            deleted_reason: 'Purgado por administración'
+          })
+          .eq('id', userId);
+      }
+    } catch (e) {
+      console.warn('Failed to permanently delete from Supabase profiles:', e);
+    }
+
+    // 4. Permanently delete user document from Firestore users collection
+    try {
+      const userRef = doc(db, 'users', userId);
       await deleteDoc(userRef);
     } catch (e) {
       console.warn('Failed to permanently delete user from Firestore users:', e);
     }
 
-    // 3. Remove from deleted_accounts in Firestore
+    // 5. Remove from deleted_accounts in Firestore
     try {
-      const delRef = doc(db, 'deleted_accounts', acc.userId);
+      const delRef = doc(db, 'deleted_accounts', userId);
       await deleteDoc(delRef);
     } catch (e) {
       console.warn('Failed to delete from Firestore deleted_accounts:', e);
@@ -2395,7 +2510,7 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
     triggerPlushNotification({
       type: 'system',
       title: 'Cuenta Eliminada Definitivamente',
-      message: `Los datos de @${acc.username} han sido purgados y su nombre de usuario ha quedado libre.`
+      message: username ? `Los datos de @${username} han sido purgados y su usuario ha quedado libre.` : 'La cuenta ha sido purgada por completo.'
     });
   };
 
