@@ -9,7 +9,7 @@ export const FeedView: React.FC = () => {
   const { posts } = useApp();
 
   const staffPosts = posts.filter(
-    post => post.isStaffAd || post.username === 'latierrita_app' || post.userId === 'user-staff'
+    post => post.isStaffAd || post.username === 'latierrita_app' || post.userId === 'user-staff' || post.username === 'staff_latierrita'
   );
 
   return (

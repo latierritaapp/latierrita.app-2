@@ -1398,11 +1398,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (!snapshot.empty) {
           snapshot.forEach((docSnap: any) => {
             const data = docSnap.data() || {};
+            const isOfficial = data.isStaffAd || data.userId === 'user-staff' || data.username === 'staff_latierrita' || data.username === 'latierrita_app' || data.username === 'latierrita_oficial';
             list.push({
               id: docSnap.id,
               ...data,
+              username: isOfficial ? 'latierrita_app' : (data.username || 'usuario'),
+              userAvatar: isOfficial ? '/logo.png?v=3' : (data.userAvatar || data.avatarUrl || ''),
               mediaUrl: data.mediaUrl || data.imageUrl || '',
-              userAvatar: data.userAvatar || data.avatarUrl || '',
               timestamp: data.timestamp || data.createdAt || 'Reciente',
               likesCount: Array.isArray(data.likes) ? data.likes.length : (typeof data.likesCount === 'number' ? data.likesCount : 0),
               hasLiked: Array.isArray(data.likes) && currentUser ? data.likes.includes(currentUser.id) : (data.hasLiked ?? false),
@@ -1419,8 +1421,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             const localPosts = JSON.parse(localPostsRaw);
             if (Array.isArray(localPosts)) {
               localPosts.forEach((lp: PostItem) => {
-                if (!list.some(p => p.id === lp.id)) {
-                  list.push(lp);
+                const isOfficial = lp.isStaffAd || lp.userId === 'user-staff' || lp.username === 'staff_latierrita' || lp.username === 'latierrita_app' || lp.username === 'latierrita_oficial';
+                const cleanedLp: PostItem = {
+                  ...lp,
+                  username: isOfficial ? 'latierrita_app' : lp.username,
+                  userAvatar: isOfficial ? '/logo.png?v=3' : lp.userAvatar
+                };
+                if (!list.some(p => p.id === cleanedLp.id)) {
+                  list.push(cleanedLp);
                 }
               });
             }
@@ -3499,9 +3507,9 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
     const newStaffPost: PostItem = {
       id: newStaffPostId,
       userId: 'user-staff',
-      username: 'staff_latierrita',
-      userAvatar: 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=400&auto=format&fit=crop&q=80',
-      userCity: currentUser.city,
+      username: 'latierrita_app',
+      userAvatar: '/logo.png?v=3',
+      userCity: currentUser.city || 'España',
       mediaUrl: data.imageUrl,
       caption: `📢 ${data.title}: ${data.description}`,
       likesCount: 1,
@@ -3536,7 +3544,7 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
         type: 'system',
         title: 'STAFF: Anuncio añadido al feed',
         message: `Se ha publicado el anuncio patrocinado "${data.title}" en el feed.`,
-        avatar: 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=200&auto=format&fit=crop&q=80'
+        avatar: '/logo.png?v=3'
       });
     } catch (error) {
       console.warn('Firestore staff post note (stored locally):', error);
@@ -3544,7 +3552,7 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
         type: 'system',
         title: 'STAFF: Anuncio publicado en el feed',
         message: `Se ha publicado el anuncio patrocinado "${data.title}".`,
-        avatar: 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=200&auto=format&fit=crop&q=80'
+        avatar: '/logo.png?v=3'
       });
     }
   };
