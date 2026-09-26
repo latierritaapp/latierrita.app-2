@@ -661,6 +661,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       };
 
       // 1. Immediately activate local session so AppGate transitions immediately to the feed
+      sessionStorage.removeItem('latierrita_startup_ad_closed');
+      sessionStorage.setItem('latierrita_show_startup_ad_now', 'true');
       safeSetLocalStorage('latierrita_user', newProfile);
       saveUserToCommunityCache(newProfile);
       if (cleanUsername !== 'latierrita_app' && user.id !== 'user-staff') {

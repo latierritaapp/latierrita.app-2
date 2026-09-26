@@ -753,11 +753,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const [startupAdConfig, setStartupAdConfig] = useState<StartupAdConfig | null>(DEFAULT_STARTUP_AD);
 
-  // Startup Ad (only shows on initial open or when closed completely & reopened)
+  // Startup Ad (shows on initial open or whenever a new login/registration enters)
   const [startupAdOpen, setStartupAdOpen] = useState<boolean>(() => {
+    const forceShow = sessionStorage.getItem('latierrita_show_startup_ad_now') === 'true';
+    if (forceShow) {
+      sessionStorage.removeItem('latierrita_show_startup_ad_now');
+      sessionStorage.removeItem('latierrita_startup_ad_closed');
+      return true;
+    }
     const hasSeenSessionAd = sessionStorage.getItem('latierrita_startup_ad_closed');
     return !hasSeenSessionAd;
   });
+
+  // Watch for freshly authenticated users or user switches to guarantee startup ad shows
+  useEffect(() => {
+    const checkFreshAuthAd = () => {
+      const forceShow = sessionStorage.getItem('latierrita_show_startup_ad_now') === 'true';
+      if (forceShow) {
+        sessionStorage.removeItem('latierrita_show_startup_ad_now');
+        sessionStorage.removeItem('latierrita_startup_ad_closed');
+        setStartupAdOpen(true);
+      }
+    };
+    checkFreshAuthAd();
+  }, [currentUser?.id]);
 
   // Chats
   const [chatRooms, setChatRooms] = useState<ChatRoom[]>(() => {

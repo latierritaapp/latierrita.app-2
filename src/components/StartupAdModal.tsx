@@ -14,12 +14,12 @@ export const StartupAdModal: React.FC = () => {
     return () => clearInterval(interval);
   }, [startupAdOpen]);
 
-  if (!startupAdOpen || !startupAdConfig || !startupAdConfig.active) return null;
+  if (!startupAdOpen || !startupAdConfig || startupAdConfig.active === false) return null;
 
   return (
     <div
       id="startup-ad-backdrop"
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn"
+      className="fixed inset-0 z-[90] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn"
       role="dialog"
       aria-modal="true"
       aria-label="Publicidad destacada"
