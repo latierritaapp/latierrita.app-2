@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
-import { useAuth, DEFAULT_SILHOUETTE_AVATAR, mapDBProfileToUserProfile } from './AuthContext';
+import { useAuth, DEFAULT_SILHOUETTE_AVATAR, mapDBProfileToUserProfile, safeSetLocalStorage } from './AuthContext';
 import { supabase } from '../lib/supabase';
 import { db, doc, updateDoc, deleteDoc, setDoc, collection, onSnapshot, addDoc, getDoc, getDocs, query, where } from '../lib/firebase';
 import {
@@ -411,6 +411,45 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return id === 'user-staff' || username === 'latierrita_app' || username === 'latierrita_oficial' || email === 'latierritaapp@gmail.com';
   };
 
+  const getStoredOfficialProfile = (): UserProfile => {
+    try {
+      const raw = localStorage.getItem('latierrita_official_profile');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && (parsed.username === 'latierrita_app' || parsed.email === 'latierritaapp@gmail.com' || parsed.id === 'user-staff')) {
+          return {
+            ...parsed,
+            username: 'latierrita_app',
+            isVerified: true,
+            staffRole: 'ADMIN'
+          };
+        }
+      }
+    } catch {}
+    return {
+      id: 'user-staff',
+      username: 'latierrita_app',
+      name: 'La Tierrita 🇨🇴',
+      email: 'latierritaapp@gmail.com',
+      avatar: 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=400&auto=format&fit=crop&q=80',
+      bio: '⭐ Cuenta oficial de Staff & Publicidad de La Tierrita España. Conectando a los colombianos.',
+      website: 'https://latierrita.es',
+      city: 'Madrid',
+      originCity: 'Toda Colombia',
+      followersCount: 0,
+      followingCount: 0,
+      postsCount: 0,
+      isVerified: true,
+      staffRole: 'ADMIN',
+      socialLinks: {
+        instagram: '',
+        facebook: '',
+        tiktok: '',
+        x: ''
+      }
+    };
+  };
+
   const getLocalCommunity = (): UserProfile[] => {
     try {
       const raw = localStorage.getItem('latierrita_registered_community');
@@ -423,13 +462,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const [otherUsers, setOtherUsers] = useState<UserProfile[]>(() => {
+    const isCurrentStaff = isStaffAccount(currentUser?.id, currentUser?.username, currentUser?.email);
     const localCommunity = getLocalCommunity().filter(u => 
-      u.id !== 'user-staff' && 
       !isFictitiousUser(u.id, u.username) &&
       (!currentUser || (u.id !== currentUser.id && u.username !== currentUser.username && (!u.email || u.email !== currentUser.email)))
     );
 
-    const initial = [...localCommunity];
+    const initial: UserProfile[] = [...localCommunity];
+
+    // If current user is not staff, ensure the canonical official account is in otherUsers
+    if (!isCurrentStaff) {
+      const official = getStoredOfficialProfile();
+      const existingIdx = initial.findIndex(u => isStaffAccount(u.id, u.username, u.email));
+      if (existingIdx >= 0) {
+        initial[existingIdx] = { ...official, ...initial[existingIdx] };
+      } else {
+        initial.unshift(official);
+      }
+    }
+
     OTHER_USERS.forEach(p => {
       if (!isFictitiousUser(p.id, p.username) && !initial.some(m => m.id === p.id || m.username === p.username || (p.email && m.email === p.email))) {
         initial.push(p);
@@ -478,7 +529,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
           const currentId = currentUser?.id;
-          list = parsed.filter(id => id && id !== currentId && id !== 'user-staff' && id !== 'latierrita_oficial');
+          list = parsed.filter(id => id && id !== currentId && id !== 'latierrita_oficial');
         }
       } catch (e) {
         console.warn('Error parsing latierrita_following:', e);
@@ -487,77 +538,163 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return list;
   });
 
-  // Fetch real users from Supabase profiles table and sync with local community cache
+  // Fetch real users from Supabase and Firestore profiles & sync with local community cache
   useEffect(() => {
     let isMounted = true;
     const fetchRealProfiles = async () => {
       try {
-        const { data: profiles, error } = await supabase
-          .from('profiles')
-          .select('*');
-
-        const localList = getLocalCommunity();
-        const current = currentUserRef.current;
         let mappedList: UserProfile[] = [];
 
-        if (!error && Array.isArray(profiles) && profiles.length > 0) {
-          mappedList = profiles.map(p => mapDBProfileToUserProfile(p));
+        // 1. Fetch from Supabase profiles
+        try {
+          const { data: profiles, error } = await supabase
+            .from('profiles')
+            .select('*');
+
+          if (!error && Array.isArray(profiles) && profiles.length > 0) {
+            mappedList = profiles.map(p => mapDBProfileToUserProfile(p));
+          }
+        } catch (supErr) {
+          console.warn('Supabase profiles query note:', supErr);
         }
 
-        // Merge DB profiles and local community, filtering out fictitious users
-        const allReal = [...mappedList].filter(p => !isFictitiousUser(p.id, p.username));
-        localList.forEach(loc => {
-          if (!isFictitiousUser(loc.id, loc.username) && !allReal.some(r => r.id === loc.id || r.username === loc.username || (loc.email && r.email === loc.email))) {
-            allReal.push(loc);
-          }
-        });
-
-        if (allReal.length > 0 && isMounted) {
-          setOtherUsers(prev => {
-            // Filter out current user, staff account, fictitious users, and deleted accounts
-            const validProfiles = allReal.filter(p => {
-              if (p.id === 'user-staff') return false;
-              if (p.isDeleted || (p as any).is_deleted) return false;
-              if (p.username === 'latierrita_app' && p.email !== 'latierritaapp@gmail.com') return false;
-              if (isFictitiousUser(p.id, p.username)) return false;
-              if (current && (p.id === current.id || (p.email && current.email && p.email === current.email))) return false;
-              return true;
+        // 2. Fetch from Firestore profiles and users collections
+        try {
+          const fsProfilesSnap = await getDocs(collection(db, 'profiles'));
+          if (!fsProfilesSnap.empty) {
+            fsProfilesSnap.forEach((docSnap: any) => {
+              const data = docSnap.data();
+              if (data) {
+                const mapped = mapDBProfileToUserProfile({ id: docSnap.id, ...data });
+                const existingIndex = mappedList.findIndex(m => m.id === mapped.id || m.username === mapped.username || (m.email && mapped.email && m.email === mapped.email));
+                if (existingIndex >= 0) {
+                  mappedList[existingIndex] = { ...mappedList[existingIndex], ...mapped };
+                } else {
+                  mappedList.push(mapped);
+                }
+              }
             });
+          }
+        } catch (fsErr) {
+          console.warn('Firestore profiles fetch note:', fsErr);
+        }
 
-            const merged = [...validProfiles];
-            
-            // Do NOT retain fictitious parceros or deleted users
-            prev.forEach(p => {
-              if (p.id === 'user-staff' || isFictitiousUser(p.id, p.username) || p.isDeleted || (p as any).is_deleted) {
-                return;
+        // 3. Fetch explicit official profile document from Firestore config
+        try {
+          const officialDoc = await getDoc(doc(db, 'config', 'official_profile'));
+          if (officialDoc.exists()) {
+            const data = officialDoc.data();
+            if (data) {
+              const mappedOfficial = mapDBProfileToUserProfile({ ...data, email: 'latierritaapp@gmail.com', username: 'latierrita_app' });
+              safeSetLocalStorage('latierrita_official_profile', mappedOfficial);
+              const existingIdx = mappedList.findIndex(m => isStaffAccount(m.id, m.username, m.email));
+              if (existingIdx >= 0) {
+                mappedList[existingIdx] = { ...mappedList[existingIdx], ...mappedOfficial };
+              } else {
+                mappedList.unshift(mappedOfficial);
               }
-              if (current && (p.id === current.id || (p.email && current.email && p.email === current.email))) {
-                return;
+            }
+          }
+        } catch (offErr) {
+          console.warn('Official profile fetch note:', offErr);
+        }
+
+        const current = currentUserRef.current;
+        const isCurrentStaff = isStaffAccount(current?.id, current?.username, current?.email);
+
+        // Filter out fictitious users and deleted profiles from database results
+        const allReal = [...mappedList].filter(p => !isFictitiousUser(p.id, p.username) && !p.isDeleted && !(p as any).is_deleted);
+
+        // Update local community cache with only real, active database profiles
+        safeSetLocalStorage('latierrita_registered_community', allReal);
+
+        // Ensure official staff account is available if current user is not staff
+        if (!isCurrentStaff) {
+          const officialStored = getStoredOfficialProfile();
+          const existingStaff = allReal.find(p => isStaffAccount(p.id, p.username, p.email));
+          if (!existingStaff) {
+            allReal.unshift(officialStored);
+          } else {
+            // Merge stored official data with fetched data to keep latest avatar, bio, website, social links
+            Object.assign(existingStaff, {
+              ...officialStored,
+              ...existingStaff,
+              username: 'latierrita_app',
+              isVerified: true,
+              staffRole: 'ADMIN',
+              avatar: existingStaff.avatar || officialStored.avatar,
+              bio: existingStaff.bio || officialStored.bio,
+              website: existingStaff.website || officialStored.website,
+              socialLinks: {
+                ...(officialStored.socialLinks || {}),
+                ...(existingStaff.socialLinks || {})
               }
-              if (deletedAccounts.some(d => d.userId === p.id || d.username === p.username)) {
-                return;
-              }
-              if (!merged.some(m => m.id === p.id || m.username === p.username || (p.email && m.email === p.email))) {
-                merged.push(p);
-              }
+            });
+            safeSetLocalStorage('latierrita_official_profile', existingStaff);
+          }
+        }
+
+        if (isMounted) {
+          setOtherUsers(() => {
+            // Filter out current user, fictitious users, and deleted accounts
+            const validProfiles = allReal.filter(p => {
+              if (p.isDeleted || (p as any).is_deleted) return false;
+              if (isFictitiousUser(p.id, p.username)) return false;
+              if (current && (p.id === current.id || (p.email && current.email && p.email === current.email) || (p.username && current.username && p.username === current.username))) return false;
+              return true;
             });
 
             // Also update selectedUserProfile if it's currently active and was updated in DB
             setSelectedUserProfile(prevSelected => {
               if (!prevSelected) return null;
-              const updated = allReal.find(r => r.id === prevSelected.id || r.username === prevSelected.username || (prevSelected.email && r.email === prevSelected.email));
+              const updated = allReal.find(r => r.id === prevSelected.id || r.username === prevSelected.username || (prevSelected.email && r.email === prevSelected.email) || (isStaffAccount(prevSelected.id, prevSelected.username, prevSelected.email) && isStaffAccount(r.id, r.username, r.email)));
               return updated ? { ...prevSelected, ...updated } : prevSelected;
             });
 
-            return merged;
+            return validProfiles;
           });
         }
       } catch (e) {
-        console.warn('Error fetching Supabase profiles for otherUsers:', e);
+        console.warn('Error fetching profiles for otherUsers:', e);
       }
     };
 
     fetchRealProfiles();
+
+    // Real-time listener for official account profile in Firestore
+    let unsubOfficial: any = null;
+    try {
+      unsubOfficial = onSnapshot(doc(db, 'config', 'official_profile'), (docSnap: any) => {
+        if (docSnap && docSnap.exists()) {
+          const data = docSnap.data();
+          if (data) {
+            const mappedOfficial = mapDBProfileToUserProfile({ ...data, email: 'latierritaapp@gmail.com', username: 'latierrita_app' });
+            safeSetLocalStorage('latierrita_official_profile', mappedOfficial);
+            setOtherUsers(prev => {
+              const idx = prev.findIndex(u => isStaffAccount(u.id, u.username, u.email));
+              if (idx >= 0) {
+                const copy = [...prev];
+                copy[idx] = { ...copy[idx], ...mappedOfficial };
+                return copy;
+              } else if (!isStaffAccount(currentUserRef.current?.id, currentUserRef.current?.username, currentUserRef.current?.email)) {
+                return [mappedOfficial, ...prev];
+              }
+              return prev;
+            });
+
+            // Update selectedUserProfile if currently viewing official profile
+            setSelectedUserProfile(prev => {
+              if (prev && isStaffAccount(prev.id, prev.username, prev.email)) {
+                return { ...prev, ...mappedOfficial };
+              }
+              return prev;
+            });
+          }
+        }
+      }, (err: any) => {
+        console.warn('official_profile snapshot listener note:', err);
+      });
+    } catch {}
 
     // Subscribe to realtime profile updates from Supabase
     const channel = supabase
@@ -569,6 +706,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     return () => {
       isMounted = false;
+      if (typeof unsubOfficial === 'function') unsubOfficial();
       supabase.removeChannel(channel);
     };
   }, [currentUser?.id, currentUser?.email]);
@@ -2332,7 +2470,7 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
       userId: userId,
       username: username,
       name: target?.name || username,
-      avatar: target?.avatar,
+      avatar: target?.avatar || DEFAULT_SILHOUETTE_AVATAR,
       email: target?.email,
       deletedAt: new Date().toISOString(),
       retentionExpiresAt: expiresAt,
@@ -2624,23 +2762,38 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
         ...updated.socialLinks
       };
     }
+    const isStaff = isStaffAccount(nextUser.id, nextUser.username, nextUser.email);
+    if (isStaff) {
+      nextUser.username = 'latierrita_app';
+      nextUser.isVerified = true;
+      nextUser.staffRole = 'ADMIN';
+      safeSetLocalStorage('latierrita_official_profile', nextUser);
+    }
+
     setCurrentUser(nextUser);
     localStorage.setItem('latierrita_user', JSON.stringify(nextUser));
 
-    setOtherUsers(prev => prev.map(u => (u.id === currentUser.id || u.username === currentUser.username) ? { ...u, ...updated } : u));
+    setOtherUsers(prev => {
+      return prev.map(u => {
+        if (u.id === currentUser.id || u.username === currentUser.username || (isStaff && isStaffAccount(u.id, u.username, u.email))) {
+          return { ...u, ...nextUser };
+        }
+        return u;
+      });
+    });
     
-    if (selectedUserProfile && (selectedUserProfile.id === currentUser.id || selectedUserProfile.username === currentUser.username)) {
+    if (selectedUserProfile && (selectedUserProfile.id === currentUser.id || selectedUserProfile.username === currentUser.username || (isStaff && isStaffAccount(selectedUserProfile.id, selectedUserProfile.username, selectedUserProfile.email)))) {
       setSelectedUserProfile(nextUser);
     }
     
     // Also update any posts/stories authored by me in local state
     if (updated.username || updated.avatar) {
       setPosts(prev => prev.map(p => {
-        if (p.userId === currentUser.id || p.username === currentUser.username || (currentUser.username === 'latierrita_app' && (p.isStaffAd || p.username === 'latierrita_app' || p.userId === 'user-staff'))) {
+        if (p.userId === currentUser.id || p.username === currentUser.username || (isStaff && (p.isStaffAd || p.username === 'latierrita_app' || p.userId === 'user-staff'))) {
           return {
             ...p,
-            username: updated.username || p.username,
-            userAvatar: updated.avatar || p.userAvatar
+            username: nextUser.username || p.username,
+            userAvatar: nextUser.avatar || p.userAvatar
           };
         }
         return p;
@@ -2648,23 +2801,54 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
       setMyProfilePosts(prev => prev.map(p => {
         return {
           ...p,
-          username: updated.username || p.username,
-          userAvatar: updated.avatar || p.userAvatar
+          username: nextUser.username || p.username,
+          userAvatar: nextUser.avatar || p.userAvatar
         };
       }));
     }
 
+    // Persist to Firestore
     try {
       if (currentUser?.id) {
         await setDoc(doc(db, 'users', currentUser.id), {
           ...updated,
           avatar: nextUser.avatar,
           avatar_url: nextUser.avatar,
+          socialLinks: nextUser.socialLinks,
+          social_links: nextUser.socialLinks,
+          updatedAt: new Date().toISOString()
+        }, { merge: true });
+        await setDoc(doc(db, 'profiles', currentUser.id), {
+          ...updated,
+          avatar: nextUser.avatar,
+          avatar_url: nextUser.avatar,
+          socialLinks: nextUser.socialLinks,
+          social_links: nextUser.socialLinks,
           updatedAt: new Date().toISOString()
         }, { merge: true });
       }
-    } catch {
-      // Non-fatal Firestore update
+
+      if (isStaff) {
+        await setDoc(doc(db, 'config', 'official_profile'), {
+          ...nextUser,
+          avatar: nextUser.avatar,
+          avatar_url: nextUser.avatar,
+          socialLinks: nextUser.socialLinks,
+          social_links: nextUser.socialLinks,
+          updatedAt: new Date().toISOString()
+        }, { merge: true });
+
+        await setDoc(doc(db, 'profiles', 'latierrita_app'), {
+          ...nextUser,
+          avatar: nextUser.avatar,
+          avatar_url: nextUser.avatar,
+          socialLinks: nextUser.socialLinks,
+          social_links: nextUser.socialLinks,
+          updatedAt: new Date().toISOString()
+        }, { merge: true });
+      }
+    } catch (fsErr) {
+      console.warn('Firestore updateProfile note:', fsErr);
     }
 
     try {

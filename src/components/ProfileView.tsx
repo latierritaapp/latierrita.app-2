@@ -68,8 +68,9 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userToDisplay }) => {
   const [commentInputs, setCommentInputs] = useState<Record<string, string>>({});
   const [heartAnimPostId, setHeartAnimPostId] = useState<string | null>(null);
 
-  const isMe = !userToDisplay || userToDisplay.id === currentUser.id || (Boolean(currentUser.username) && userToDisplay.username === currentUser.username);
-  const targetOtherUser = !isMe && userToDisplay ? (otherUsers.find(u => u.id === userToDisplay.id || u.username === userToDisplay.username || (userToDisplay.email && u.email === userToDisplay.email)) || userToDisplay) : null;
+  const isMe = !userToDisplay || userToDisplay.id === currentUser.id || (Boolean(currentUser.username) && userToDisplay.username === currentUser.username) || (Boolean(currentUser.email) && userToDisplay.email === currentUser.email);
+  const isTargetStaff = Boolean(userToDisplay && (userToDisplay.username === 'latierrita_app' || userToDisplay.email === 'latierritaapp@gmail.com' || userToDisplay.id === 'user-staff'));
+  const targetOtherUser = !isMe && userToDisplay ? (otherUsers.find(u => u.id === userToDisplay.id || u.username === userToDisplay.username || (userToDisplay.email && u.email === userToDisplay.email) || (isTargetStaff && (u.username === 'latierrita_app' || u.email === 'latierritaapp@gmail.com' || u.id === 'user-staff'))) || userToDisplay) : null;
   const user = isMe ? currentUser : (targetOtherUser || userToDisplay || currentUser);
 
   const isOfficialStaff = (user.email && user.email.trim().toLowerCase() === 'latierritaapp@gmail.com') || user.username === 'latierrita_app' || user.id === 'user-staff';

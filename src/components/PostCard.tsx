@@ -56,11 +56,16 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
   };
 
   const handleUserClick = () => {
-    if (post.userId === currentUser.id) {
+    if (post.userId === currentUser.id || post.username === currentUser.username) {
       // It's current user, handled in profile
       return;
     }
-    const found = otherUsers.find(u => u.id === post.userId);
+    const isStaffPost = post.isStaffAd || post.username === 'latierrita_app' || post.userId === 'user-staff';
+    const found = otherUsers.find(u => 
+      u.id === post.userId || 
+      u.username === post.username || 
+      (isStaffPost && (u.username === 'latierrita_app' || u.email === 'latierritaapp@gmail.com' || u.id === 'user-staff'))
+    );
     if (found) {
       setSelectedUserProfile(found);
     }

@@ -81,12 +81,16 @@ export const safeSetLocalStorage = (key: string, value: any): void => {
 };
 
 export const saveUserToCommunityCache = (user: UserProfile): void => {
-  if (!user || !user.id || user.id === 'user-staff') return;
+  if (!user || (!user.id && !user.username)) return;
   try {
+    const isStaff = user.username === 'latierrita_app' || user.email === 'latierritaapp@gmail.com' || user.id === 'user-staff';
+    if (isStaff) {
+      safeSetLocalStorage('latierrita_official_profile', user);
+    }
     const raw = localStorage.getItem('latierrita_registered_community');
     let list: UserProfile[] = raw ? JSON.parse(raw) : [];
     if (!Array.isArray(list)) list = [];
-    const idx = list.findIndex(u => u.id === user.id || u.username === user.username || (u.email && user.email && u.email === user.email));
+    const idx = list.findIndex(u => (user.id && u.id === user.id) || (user.username && u.username === user.username) || (u.email && user.email && u.email === user.email));
     if (idx >= 0) {
       list[idx] = { ...list[idx], ...user };
     } else {
@@ -98,9 +102,9 @@ export const saveUserToCommunityCache = (user: UserProfile): void => {
   }
 };
 
-// Mapeador de base de datos Postgres (snake_case) a React State (camelCase)
+// Mapeador de base de datos Postgres/Firestore a React State (camelCase)
 export const mapDBProfileToUserProfile = (db: any): UserProfile => {
-  const isOfficialEmail = (db.email || '').trim().toLowerCase() === 'latierritaapp@gmail.com';
+  const isOfficialEmail = (db.email || '').trim().toLowerCase() === 'latierritaapp@gmail.com' || db.username === 'latierrita_app' || db.id === 'user-staff';
   let cleanUsername = isOfficialEmail 
     ? 'latierrita_app' 
     : sanitizeHandle(db.username, db.email, db.id);
@@ -110,46 +114,59 @@ export const mapDBProfileToUserProfile = (db: any): UserProfile => {
     cleanUsername = sanitizeHandle('', db.email, db.id);
   }
 
-  const displayName = isOfficialEmail && (!db.name || db.name.includes('@')) 
-    ? 'La Tierrita 🇨🇴' 
-    : sanitizeDisplayName(db.name, cleanUsername, db.email);
-
   const isStaff = isOfficialEmail;
 
+  const displayName = isStaff && db.name && !db.name.includes('@') && db.name.trim().length > 0
+    ? db.name.trim()
+    : sanitizeDisplayName(db.name, cleanUsername, db.email);
+
+  // Extraer enlaces de redes sociales tanto de columnas individuales como de objetos anidados
+  const rawSocial = db.socialLinks || db.social_links || {};
+  const instagram = db.instagram || rawSocial.instagram || '';
+  const facebook = db.facebook || rawSocial.facebook || '';
+  const tiktok = db.tiktok || rawSocial.tiktok || '';
+  const x = db.x || rawSocial.x || '';
+
+  const avatarUrl = db.avatar_url || db.avatar || db.avatarUrl || (isStaff ? 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=400&auto=format&fit=crop&q=80' : DEFAULT_SILHOUETTE_AVATAR);
+  const userBio = db.bio !== undefined && db.bio !== null ? db.bio : (isStaff ? '⭐ Cuenta oficial de Staff & Publicidad de La Tierrita España. Conectando a los colombianos.' : '🇨🇴 ¡Orgullo colombiano en España! 🇪🇸');
+  const userWebsite = db.website !== undefined && db.website !== null ? db.website : (isStaff ? 'https://latierrita.es' : '');
+  const userCity = db.city || 'Madrid';
+  const userOriginCity = db.origin_city || db.originCity || (isStaff ? 'Toda Colombia' : 'Colombia');
+
   return {
-    id: db.id,
+    id: db.id || (isStaff ? 'user-staff' : `user-${cleanUsername}`),
     email: db.email,
     username: cleanUsername,
     name: displayName,
-    firstName: db.first_name || '',
-    lastName: db.last_name || '',
-    birthDate: db.birth_date || '',
+    firstName: db.first_name || db.firstName || '',
+    lastName: db.last_name || db.lastName || '',
+    birthDate: db.birth_date || db.birthDate || '',
     age: db.age || undefined,
-    avatar: db.avatar_url || db.avatar || (isStaff ? 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=400&auto=format&fit=crop&q=80' : DEFAULT_SILHOUETTE_AVATAR),
-    bio: db.bio || (isStaff ? '⭐ Cuenta oficial de Staff & Publicidad de La Tierrita España. Conectando a los colombianos.' : '🇨🇴 ¡Orgullo colombiano en España! 🇪🇸'),
-    website: db.website || (isStaff ? 'https://latierrita.es' : ''),
-    city: db.city || 'Madrid',
-    originCity: db.origin_city || (isStaff ? 'Toda Colombia' : 'Colombia'),
-    followersCount: Array.isArray(db.followers) ? db.followers.length : (typeof db.followers_count === 'number' ? db.followers_count : 0),
-    followingCount: isStaff ? 0 : (Array.isArray(db.following) ? db.following.length : 1),
-    postsCount: 0,
-    isVerified: isStaff ? true : (db.verified || false),
-    staffRole: isStaff ? 'ADMIN' : (db.staff_role || 'Usuario'),
-    isDeleted: db.is_deleted || false,
-    deletedAt: db.deleted_at || undefined,
-    retentionExpiresAt: db.retention_expires_at || undefined,
-    deletedReason: db.deleted_reason || '',
-    createdAt: db.created_at || new Date().toISOString(),
+    avatar: avatarUrl,
+    bio: userBio,
+    website: userWebsite,
+    city: userCity,
+    originCity: userOriginCity,
+    followersCount: Array.isArray(db.followers) ? db.followers.length : (typeof db.followers_count === 'number' ? db.followers_count : (typeof db.followersCount === 'number' ? db.followersCount : 0)),
+    followingCount: isStaff ? 0 : (Array.isArray(db.following) ? db.following.length : (typeof db.followingCount === 'number' ? db.followingCount : 1)),
+    postsCount: typeof db.postsCount === 'number' ? db.postsCount : 0,
+    isVerified: isStaff ? true : (db.verified || db.isVerified || false),
+    staffRole: isStaff ? 'ADMIN' : (db.staff_role || db.staffRole || 'Usuario'),
+    isDeleted: db.is_deleted || db.isDeleted || false,
+    deletedAt: db.deleted_at || db.deletedAt || undefined,
+    retentionExpiresAt: db.retention_expires_at || db.retentionExpiresAt || undefined,
+    deletedReason: db.deleted_reason || db.deletedReason || '',
+    createdAt: db.created_at || db.createdAt || new Date().toISOString(),
     socialLinks: {
-      instagram: db.instagram || '',
-      facebook: db.facebook || '',
-      tiktok: db.tiktok || '',
-      x: db.x || ''
+      instagram,
+      facebook,
+      tiktok,
+      x
     }
   };
 };
 
-// Generador de payload exclusivo para UPDATE (no sobreescribe email, id, created_at ni arrays)
+// Generador de payload para UPDATE en bases de datos (soporta Postgres y Firestore)
 const buildDBProfileUpdatePayload = (data: Partial<UserProfile>): Record<string, any> => {
   const payload: Record<string, any> = {};
 
@@ -162,17 +179,48 @@ const buildDBProfileUpdatePayload = (data: Partial<UserProfile>): Record<string,
   if (data.bio !== undefined) {
     payload.bio = data.bio.trim();
   }
+  if (data.website !== undefined) {
+    payload.website = data.website.trim();
+  }
   if (data.city !== undefined) {
     payload.city = data.city;
   }
+  if (data.originCity !== undefined) {
+    payload.origin_city = data.originCity.trim();
+    payload.originCity = data.originCity.trim();
+  }
+  if (data.age !== undefined) {
+    payload.age = data.age;
+  }
+  if (data.birthDate !== undefined) {
+    payload.birth_date = data.birthDate;
+    payload.birthDate = data.birthDate;
+  }
+  if (data.firstName !== undefined) {
+    payload.first_name = data.firstName.trim();
+    payload.firstName = data.firstName.trim();
+  }
+  if (data.lastName !== undefined) {
+    payload.last_name = data.lastName.trim();
+    payload.lastName = data.lastName.trim();
+  }
   if (data.avatar !== undefined && data.avatar.trim() !== '') {
     payload.avatar_url = data.avatar;
+    payload.avatar = data.avatar;
+  }
+  if (data.socialLinks) {
+    if (data.socialLinks.instagram !== undefined) payload.instagram = data.socialLinks.instagram.trim();
+    if (data.socialLinks.facebook !== undefined) payload.facebook = data.socialLinks.facebook.trim();
+    if (data.socialLinks.tiktok !== undefined) payload.tiktok = data.socialLinks.tiktok.trim();
+    if (data.socialLinks.x !== undefined) payload.x = data.socialLinks.x.trim();
+    payload.social_links = data.socialLinks;
+    payload.socialLinks = data.socialLinks;
   }
   
   return payload;
 };
 
-// Mapeador de React State (camelCase) a base de datos Postgres (snake_case)
+// Mapeador de React State (camelCase) a base de datos
 const mapUserProfileToDBProfile = (profile: Partial<UserProfile>): any => {
   const cleanUsername = sanitizeHandle(profile.username, profile.email, profile.id);
   const displayName = sanitizeDisplayName(profile.name, cleanUsername, profile.email);
@@ -183,8 +231,22 @@ const mapUserProfileToDBProfile = (profile: Partial<UserProfile>): any => {
     username: cleanUsername,
     name: displayName,
     avatar_url: profile.avatar || DEFAULT_SILHOUETTE_AVATAR,
+    avatar: profile.avatar || DEFAULT_SILHOUETTE_AVATAR,
     bio: profile.bio || '🇨🇴 ¡Orgullo colombiano en España! 🇪🇸',
+    website: profile.website || '',
     city: profile.city || 'Madrid',
+    origin_city: profile.originCity || 'Colombia',
+    originCity: profile.originCity || 'Colombia',
+    first_name: profile.firstName || '',
+    last_name: profile.lastName || '',
+    birth_date: profile.birthDate || '',
+    age: profile.age || null,
+    instagram: profile.socialLinks?.instagram || '',
+    facebook: profile.socialLinks?.facebook || '',
+    tiktok: profile.socialLinks?.tiktok || '',
+    x: profile.socialLinks?.x || '',
+    social_links: profile.socialLinks || {},
+    socialLinks: profile.socialLinks || {},
     created_at: profile.createdAt || new Date().toISOString()
   };
   return db;
