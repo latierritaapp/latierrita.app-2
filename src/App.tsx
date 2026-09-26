@@ -108,7 +108,7 @@ const AppContent: React.FC = () => {
 };
 
 const AppGate: React.FC = () => {
-  const { firebaseUser, loading } = useAuth();
+  const { firebaseUser, userProfile, loading } = useAuth();
 
   if (loading) {
     return (
@@ -130,9 +130,11 @@ const AppGate: React.FC = () => {
     );
   }
 
+  const isAuthenticated = Boolean(firebaseUser || userProfile);
+
   return (
     <>
-      {!firebaseUser ? (
+      {!isAuthenticated ? (
         <AuthView />
       ) : (
         <AppProvider>

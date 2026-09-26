@@ -434,6 +434,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const user = data.user;
     if (user) {
+      setFirebaseUser(user);
       let { data: profile } = await supabase
         .from('profiles')
         .select('*')
@@ -644,10 +645,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // If session is null on signup, attempt automatic login
     if (!authData.session && data.password) {
       try {
-        await supabase.auth.signInWithPassword({
+        const { data: signInData } = await supabase.auth.signInWithPassword({
           email: email,
           password: data.password
         });
+        if (signInData?.user) {
+          setFirebaseUser(signInData.user);
+        }
       } catch (signInErr) {
         console.warn('Auto sign-in attempt note:', signInErr);
       }
@@ -663,11 +667,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.warn('Profile upsert exception:', insertEx);
     }
 
+    // Immediately set active auth states so App Gate transitions into the app without refresh
+    setFirebaseUser(user);
     setUserProfile(newProfile);
+    saveUserToCommunityCache(newProfile);
     localStorage.setItem('latierrita_user', JSON.stringify(newProfile));
     if (cleanUsername !== 'latierrita_app' && user.id !== 'user-staff') {
       localStorage.setItem('latierrita_following', JSON.stringify(['user-staff']));
     }
+    setLoading(false);
   };
 
   const loginWithGoogle = async () => {
