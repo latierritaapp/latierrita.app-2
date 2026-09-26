@@ -28,6 +28,9 @@ export const ResetPasswordModal: React.FC = () => {
 
   const handleClose = () => {
     setIsPasswordRecovery(false);
+    try {
+      sessionStorage.removeItem('latierrita_is_password_recovery');
+    } catch {}
     if (window.location.hash.includes('type=recovery') || window.location.pathname.includes('reset-password')) {
       window.history.replaceState(null, '', '/');
     }

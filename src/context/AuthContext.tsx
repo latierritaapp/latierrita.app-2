@@ -204,7 +204,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   });
   const [loading, setLoading] = useState<boolean>(true);
   const [isGuest, setIsGuest] = useState<boolean>(false);
-  const [isPasswordRecovery, setIsPasswordRecovery] = useState<boolean>(false);
+  const [isPasswordRecovery, setIsPasswordRecovery] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    const isSaved = sessionStorage.getItem('latierrita_is_password_recovery') === 'true';
+    const hash = window.location.hash || '';
+    const search = window.location.search || '';
+    const path = window.location.pathname || '';
+    return isSaved || hash.includes('type=recovery') || search.includes('type=recovery') || path.includes('reset-password');
+  });
 
   // Clear any existing stale guest session and check if URL indicates password recovery
   useEffect(() => {
@@ -212,8 +219,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const hash = window.location.hash || '';
     const search = window.location.search || '';
     const path = window.location.pathname || '';
-    if (hash.includes('type=recovery') || search.includes('type=recovery') || path.includes('reset-password')) {
+    const isRecoveryUrl = hash.includes('type=recovery') || search.includes('type=recovery') || path.includes('reset-password');
+    if (isRecoveryUrl || sessionStorage.getItem('latierrita_is_password_recovery') === 'true') {
       setIsPasswordRecovery(true);
+      try {
+        sessionStorage.setItem('latierrita_is_password_recovery', 'true');
+      } catch {}
     }
   }, []);
 
@@ -222,6 +233,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'PASSWORD_RECOVERY') {
         setIsPasswordRecovery(true);
+        try {
+          sessionStorage.setItem('latierrita_is_password_recovery', 'true');
+        } catch {}
       }
       const user = session?.user || null;
       
@@ -665,6 +679,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       password: newPassword
     });
     if (error) throw error;
+    try {
+      sessionStorage.removeItem('latierrita_is_password_recovery');
+    } catch {}
     setIsPasswordRecovery(false);
     if (window.location.hash.includes('type=recovery') || window.location.pathname.includes('reset-password')) {
       window.history.replaceState(null, '', '/');
