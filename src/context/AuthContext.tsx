@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { UserProfile, SpanishCity } from '../types';
@@ -214,6 +214,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return isSaved || hash.includes('type=recovery') || search.includes('type=recovery') || path.includes('reset-password');
   });
 
+  const isRegisteringRef = useRef<boolean>(false);
+
   // Clear any existing stale guest session and check if URL indicates password recovery
   useEffect(() => {
     sessionStorage.removeItem('latierrita_guest');
@@ -377,16 +379,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
         }
       } else {
-        // When not authenticated with Supabase session, check if there is a local session (e.g. preview)
-        if (localProfile && (localProfile.id || localProfile.username)) {
-          setUserProfile(localProfile as UserProfile);
+        // If registration is currently finishing, do not wipe user states
+        if (isRegisteringRef.current) {
+          setLoading(false);
+          return;
+        }
+
+        // When not authenticated with Supabase session, check fresh local session
+        const freshSavedRaw = localStorage.getItem('latierrita_user');
+        let currentLocal: Partial<UserProfile> = localProfile;
+        if (freshSavedRaw) {
+          try {
+            currentLocal = JSON.parse(freshSavedRaw) || currentLocal;
+          } catch (e) {}
+        }
+
+        if (currentLocal && (currentLocal.id || currentLocal.username)) {
+          setUserProfile(currentLocal as UserProfile);
           setFirebaseUser({
-            id: localProfile.id || 'user-me',
-            email: localProfile.email || 'usuario@latierrita.tech',
+            id: currentLocal.id || 'user-me',
+            email: currentLocal.email || 'usuario@latierrita.tech',
             app_metadata: {},
             user_metadata: {},
             aud: 'authenticated',
-            created_at: localProfile.createdAt || new Date().toISOString()
+            created_at: currentLocal.createdAt || new Date().toISOString()
           } as User);
         } else {
           setUserProfile(null);
@@ -580,102 +596,111 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const registerWithEmail = async (data: RegisterData) => {
-    const email = data.email.trim().toLowerCase();
-
-    const cleanUsername = sanitizeHandle(data.username, email);
-    const fullName = sanitizeDisplayName(
-      data.name?.trim() || `${data.firstName || ''} ${data.lastName || ''}`.trim(),
-      cleanUsername,
-      email
-    );
-
-    const { data: authData, error } = await supabase.auth.signUp({
-      email: data.email.trim(),
-      password: data.password || '',
-      options: {
-        data: {
-          full_name: fullName,
-          name: fullName,
-          username: cleanUsername,
-          user_name: cleanUsername,
-          first_name: data.firstName?.trim() || '',
-          last_name: data.lastName?.trim() || '',
-          birth_date: data.birthDate || '',
-          age: data.age || null,
-          city: data.city || 'Madrid',
-          origin_city: data.originCity?.trim() || 'Colombia',
-          avatar_url: data.avatar || DEFAULT_SILHOUETTE_AVATAR
-        }
-      }
-    });
-
-    if (error) {
-      throw error;
-    }
-
-    if (!authData.user) {
-      throw new Error('No se pudo completar la autenticación.');
-    }
-    
-    const user = authData.user;
-
-    const newProfile: UserProfile = {
-      id: user.id,
-      email: data.email?.trim() || user.email || '',
-      username: cleanUsername,
-      name: fullName,
-      firstName: data.firstName?.trim() || '',
-      lastName: data.lastName?.trim() || '',
-      birthDate: data.birthDate || '',
-      age: data.age,
-      avatar: data.avatar || DEFAULT_SILHOUETTE_AVATAR,
-      bio: `🇨🇴 ¡Orgullo colombiano en España! 🇪🇸`,
-      website: '',
-      city: data.city || 'Madrid',
-      originCity: data.originCity?.trim() || 'Colombia',
-      followersCount: 0,
-      followingCount: (cleanUsername === 'latierrita_app' || user.id === 'user-staff') ? 0 : 1,
-      postsCount: 0,
-      isVerified: false,
-      staffRole: 'Usuario',
-      createdAt: new Date().toISOString(),
-      socialLinks: {}
-    };
-
-    // If session is null on signup, attempt automatic login
-    if (!authData.session && data.password) {
-      try {
-        const { data: signInData } = await supabase.auth.signInWithPassword({
-          email: email,
-          password: data.password
-        });
-        if (signInData?.user) {
-          setFirebaseUser(signInData.user);
-        }
-      } catch (signInErr) {
-        console.warn('Auto sign-in attempt note:', signInErr);
-      }
-    }
-
-    const dbPayload = mapUserProfileToDBProfile(newProfile);
+    isRegisteringRef.current = true;
     try {
-      const { error: insertErr } = await supabase.from('profiles').upsert([dbPayload]);
-      if (insertErr) {
-        console.warn('Profile upsert note:', insertErr);
-      }
-    } catch (insertEx) {
-      console.warn('Profile upsert exception:', insertEx);
-    }
+      const email = data.email.trim().toLowerCase();
 
-    // Immediately set active auth states so App Gate transitions into the app without refresh
-    setFirebaseUser(user);
-    setUserProfile(newProfile);
-    saveUserToCommunityCache(newProfile);
-    localStorage.setItem('latierrita_user', JSON.stringify(newProfile));
-    if (cleanUsername !== 'latierrita_app' && user.id !== 'user-staff') {
-      localStorage.setItem('latierrita_following', JSON.stringify(['user-staff']));
+      const cleanUsername = sanitizeHandle(data.username, email);
+      const fullName = sanitizeDisplayName(
+        data.name?.trim() || `${data.firstName || ''} ${data.lastName || ''}`.trim(),
+        cleanUsername,
+        email
+      );
+
+      const { data: authData, error } = await supabase.auth.signUp({
+        email: data.email.trim(),
+        password: data.password || '',
+        options: {
+          data: {
+            full_name: fullName,
+            name: fullName,
+            username: cleanUsername,
+            user_name: cleanUsername,
+            first_name: data.firstName?.trim() || '',
+            last_name: data.lastName?.trim() || '',
+            birth_date: data.birthDate || '',
+            age: data.age || null,
+            city: data.city || 'Madrid',
+            origin_city: data.originCity?.trim() || 'Colombia',
+            avatar_url: data.avatar || DEFAULT_SILHOUETTE_AVATAR
+          }
+        }
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      if (!authData.user) {
+        throw new Error('No se pudo completar la autenticación.');
+      }
+      
+      const user = authData.user;
+
+      const newProfile: UserProfile = {
+        id: user.id,
+        email: data.email?.trim() || user.email || '',
+        username: cleanUsername,
+        name: fullName,
+        firstName: data.firstName?.trim() || '',
+        lastName: data.lastName?.trim() || '',
+        birthDate: data.birthDate || '',
+        age: data.age,
+        avatar: data.avatar || DEFAULT_SILHOUETTE_AVATAR,
+        bio: `🇨🇴 ¡Orgullo colombiano en España! 🇪🇸`,
+        website: '',
+        city: data.city || 'Madrid',
+        originCity: data.originCity?.trim() || 'Colombia',
+        followersCount: 0,
+        followingCount: (cleanUsername === 'latierrita_app' || user.id === 'user-staff') ? 0 : 1,
+        postsCount: 0,
+        isVerified: false,
+        staffRole: 'Usuario',
+        createdAt: new Date().toISOString(),
+        socialLinks: {}
+      };
+
+      // 1. Immediately activate local session so AppGate transitions immediately to the feed
+      safeSetLocalStorage('latierrita_user', newProfile);
+      saveUserToCommunityCache(newProfile);
+      if (cleanUsername !== 'latierrita_app' && user.id !== 'user-staff') {
+        localStorage.setItem('latierrita_following', JSON.stringify(['user-staff']));
+      }
+      setFirebaseUser(user);
+      setUserProfile(newProfile);
+      setLoading(false);
+
+      // 2. If session is null on signup, attempt automatic login in background
+      if (!authData.session && data.password) {
+        try {
+          const { data: signInData } = await supabase.auth.signInWithPassword({
+            email: email,
+            password: data.password
+          });
+          if (signInData?.user) {
+            setFirebaseUser(signInData.user);
+          }
+        } catch (signInErr) {
+          console.warn('Auto sign-in attempt note:', signInErr);
+        }
+      }
+
+      // 3. Upsert profile in Supabase profiles table
+      const dbPayload = mapUserProfileToDBProfile(newProfile);
+      try {
+        const { error: insertErr } = await supabase.from('profiles').upsert([dbPayload]);
+        if (insertErr) {
+          console.warn('Profile upsert note:', insertErr);
+        }
+      } catch (insertEx) {
+        console.warn('Profile upsert exception:', insertEx);
+      }
+    } finally {
+      // Keep registration lock active for 3 seconds to guarantee onAuthStateChange doesn't wipe session
+      setTimeout(() => {
+        isRegisteringRef.current = false;
+      }, 3000);
     }
-    setLoading(false);
   };
 
   const loginWithGoogle = async () => {
