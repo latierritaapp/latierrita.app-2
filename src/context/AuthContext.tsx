@@ -29,6 +29,7 @@ interface AuthContextType {
   loginWithEmailOrUsername: (identifier: string, pass: string) => Promise<void>;
   registerWithEmail: (data: RegisterData) => Promise<void>;
   checkUsernameExists: (username: string) => Promise<boolean>;
+  checkEmailExists: (email: string) => Promise<boolean>;
   loginWithGoogle: () => Promise<void>;
   loginWithApple: () => Promise<void>;
   logout: () => Promise<void>;
@@ -546,6 +547,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const checkEmailExists = async (rawEmail: string): Promise<boolean> => {
+    const clean = rawEmail.trim().toLowerCase();
+    if (!clean || !clean.includes('@') || !clean.includes('.')) return false;
+    try {
+      const { data: profile, error } = await supabase
+        .from('profiles')
+        .select('id, email, is_deleted, retention_expires_at')
+        .ilike('email', clean)
+        .maybeSingle();
+
+      if (error || !profile) {
+        return false;
+      }
+
+      if (profile.is_deleted) {
+        if (profile.retention_expires_at) {
+          const expiresTime = new Date(profile.retention_expires_at).getTime();
+          if (Date.now() > expiresTime) {
+            // Cuenta eliminada con retención vencida (+7 días), el correo puede reusarse
+            return false;
+          }
+        }
+        return true;
+      }
+      return true;
+    } catch (err) {
+      console.error('Error checking email existence in Supabase:', err);
+      return false;
+    }
+  };
+
   const registerWithEmail = async (data: RegisterData) => {
     const email = data.email.trim().toLowerCase();
 
@@ -828,6 +860,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         loginWithEmailOrUsername,
         registerWithEmail,
         checkUsernameExists,
+        checkEmailExists,
         loginWithGoogle,
         loginWithApple,
         logout,

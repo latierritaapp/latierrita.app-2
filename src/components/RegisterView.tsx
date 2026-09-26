@@ -47,7 +47,8 @@ const MONTHS = [
 export const RegisterView: React.FC<RegisterViewProps> = ({ onGoToLogin }) => {
   const {
     registerWithEmail,
-    checkUsernameExists
+    checkUsernameExists,
+    checkEmailExists
   } = useAuth();
 
   // Current Step: 1 | 2 | 3 | 4
@@ -55,6 +56,8 @@ export const RegisterView: React.FC<RegisterViewProps> = ({ onGoToLogin }) => {
 
   // 1. Primera Parte (Correo, Contraseña, Social)
   const [email, setEmail] = useState('');
+  const [emailStatus, setEmailStatus] = useState<'idle' | 'checking' | 'available' | 'taken' | 'invalid'>('idle');
+  const [emailMessage, setEmailMessage] = useState<string>('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isSocialAuth, setIsSocialAuth] = useState(false);
@@ -118,6 +121,46 @@ export const RegisterView: React.FC<RegisterViewProps> = ({ onGoToLogin }) => {
       setIsAgeValid(null);
     }
   }, [birthDay, birthMonth, birthYear]);
+
+  // Email validation debouncing
+  useEffect(() => {
+    const clean = email.trim().toLowerCase();
+    if (!clean) {
+      setEmailStatus('idle');
+      setEmailMessage('');
+      return;
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(clean)) {
+      if (clean.includes('@')) {
+        setEmailStatus('invalid');
+        setEmailMessage('Formato de correo incompleto');
+      } else {
+        setEmailStatus('idle');
+        setEmailMessage('');
+      }
+      return;
+    }
+
+    setEmailStatus('checking');
+    const timer = setTimeout(async () => {
+      try {
+        const taken = await checkEmailExists(clean);
+        if (taken) {
+          setEmailStatus('taken');
+          setEmailMessage('Este correo ya está registrado. Inicia sesión con él.');
+        } else {
+          setEmailStatus('available');
+          setEmailMessage('Correo disponible');
+        }
+      } catch {
+        setEmailStatus('idle');
+      }
+    }, 400);
+
+    return () => clearTimeout(timer);
+  }, [email, checkEmailExists]);
 
   // Username validation debouncing
   useEffect(() => {
@@ -184,11 +227,11 @@ export const RegisterView: React.FC<RegisterViewProps> = ({ onGoToLogin }) => {
   };
 
   // Step 1: Submit email & password
-  const handleStep1Submit = (e: React.FormEvent) => {
+  const handleStep1Submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
 
-    const emailTrimmed = email.trim();
+    const emailTrimmed = email.trim().toLowerCase();
     if (!emailTrimmed || !emailTrimmed.includes('@') || !emailTrimmed.includes('.')) {
       setErrorMessage('Ingresa un correo electrónico válido.');
       return;
@@ -199,7 +242,27 @@ export const RegisterView: React.FC<RegisterViewProps> = ({ onGoToLogin }) => {
       return;
     }
 
-    setStep(2);
+    if (emailStatus === 'taken') {
+      setErrorMessage('Este correo ya está registrado en La Tierrita. Inicia sesión con él o usa otro.');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const taken = await checkEmailExists(emailTrimmed);
+      if (taken) {
+        setEmailStatus('taken');
+        setEmailMessage('Este correo ya está registrado. Inicia sesión con él.');
+        setErrorMessage('Este correo ya está registrado en La Tierrita. Inicia sesión con él o usa otro correo.');
+        return;
+      }
+      setEmailStatus('available');
+      setStep(2);
+    } catch {
+      setStep(2);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // Google Signup in Step 1
@@ -434,11 +497,51 @@ export const RegisterView: React.FC<RegisterViewProps> = ({ onGoToLogin }) => {
                       required
                       autoComplete="email"
                       value={email}
-                      onChange={(e) => setEmail(e.target.value)}
+                      onChange={(e) => {
+                        setEmail(e.target.value);
+                        if (errorMessage) setErrorMessage(null);
+                      }}
                       placeholder="ejemplo@correo.com"
-                      className="w-full pl-8 pr-3 py-1.5 sm:py-2 bg-white/5 hover:bg-white/10 focus:bg-white/10 border border-white/15 focus:border-amber-400 rounded-xl text-xs sm:text-sm text-white placeholder-white/40 outline-none transition-all"
+                      className={`w-full pl-8 pr-9 py-1.5 sm:py-2 bg-white/5 hover:bg-white/10 focus:bg-white/10 border ${
+                        emailStatus === 'taken' 
+                          ? 'border-rose-500 focus:border-rose-500' 
+                          : emailStatus === 'available'
+                          ? 'border-emerald-500/70 focus:border-emerald-500'
+                          : 'border-white/15 focus:border-amber-400'
+                      } rounded-xl text-xs sm:text-sm text-white placeholder-white/40 outline-none transition-all`}
                     />
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                      {emailStatus === 'checking' && (
+                        <div className="w-3.5 h-3.5 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
+                      )}
+                      {emailStatus === 'available' && (
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                      )}
+                      {emailStatus === 'taken' && (
+                        <AlertCircle className="w-3.5 h-3.5 text-rose-400" />
+                      )}
+                    </div>
                   </div>
+
+                  {/* Feedback Helper Message */}
+                  {emailMessage && (
+                    <div
+                      className={`text-[10px] font-semibold flex items-center gap-1 pt-0.5 ${
+                        emailStatus === 'available'
+                          ? 'text-emerald-400'
+                          : emailStatus === 'taken'
+                          ? 'text-rose-400'
+                          : 'text-white/60'
+                      }`}
+                    >
+                      {emailStatus === 'available' ? (
+                        <Check className="w-3 h-3" />
+                      ) : (
+                        <AlertCircle className="w-3 h-3 shrink-0" />
+                      )}
+                      <span>{emailMessage}</span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Contraseña */}
@@ -527,11 +630,17 @@ export const RegisterView: React.FC<RegisterViewProps> = ({ onGoToLogin }) => {
                 <button
                   id="btn-register-step1-submit"
                   type="submit"
-                  disabled={isSubmitting}
-                  className="w-full py-2 sm:py-2.5 px-3 bg-amber-400 hover:bg-amber-300 active:scale-[0.99] text-neutral-950 font-black text-xs sm:text-sm rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-60"
+                  disabled={isSubmitting || emailStatus === 'taken' || emailStatus === 'checking'}
+                  className="w-full py-2 sm:py-2.5 px-3 bg-amber-400 hover:bg-amber-300 active:scale-[0.99] text-neutral-950 font-black text-xs sm:text-sm rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
                 >
-                  <span>Continuar</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
+                  {isSubmitting ? (
+                    <div className="w-4 h-4 border-2 border-neutral-950 border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <>
+                      <span>Continuar</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </>
+                  )}
                 </button>
               </form>
 
