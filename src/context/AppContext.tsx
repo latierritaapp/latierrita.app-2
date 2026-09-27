@@ -3368,30 +3368,42 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
       hideLikes: data.hideLikes,
       taggedUsernames: data.taggedUsernames
     };
+    
+    // 1. Optimistic state update
     setPosts(prev => [newPost, ...prev]);
 
-    // Guardado local resistente para fallback inmediato
+    const updatedUser = { ...currentUser, postsCount: (currentUser.postsCount || 0) + 1 };
+    setCurrentUser(updatedUser);
+    localStorage.setItem('latierrita_user', JSON.stringify(updatedUser));
+
+    // 2. Guardado local resistente para fallback inmediato
     try {
       const localPostsRaw = localStorage.getItem('latierrita_local_posts') || '[]';
       const localPosts = JSON.parse(localPostsRaw);
-      localPosts.push(newPost);
-      localStorage.setItem('latierrita_local_posts', JSON.stringify(localPosts));
+      const filtered = localPosts.filter((p: any) => p.id !== newPostId);
+      filtered.push(newPost);
+      localStorage.setItem('latierrita_local_posts', JSON.stringify(filtered));
     } catch (e) {
       console.warn('Local post storage note:', e);
     }
 
+    // 3. Close modal & notify immediately
+    setIsCreatePostOpen(false);
+    triggerPlushNotification({
+      type: 'system',
+      title: 'Publicación subida',
+      message: 'Tu nueva foto ya está disponible en tu perfil y en el feed.',
+      avatar: currentUser.avatar
+    });
+
+    // 4. Background sync to Firestore
     try {
       await setDoc(doc(db, 'posts', newPostId), newPost);
-      setCurrentUser(prev => ({ ...prev, postsCount: prev.postsCount + 1 }));
-      setIsCreatePostOpen(false);
-      triggerPlushNotification({
-        type: 'system',
-        title: 'Publicación subida',
-        message: 'Tu nueva foto ya está disponible en tu perfil y en el feed.',
-        avatar: currentUser.avatar
-      });
+      try {
+        await setDoc(doc(db, 'users', currentUser.id), { postsCount: updatedUser.postsCount }, { merge: true });
+      } catch (e) {}
     } catch (error) {
-      handleFirestoreError(error, OperationType.CREATE, 'posts');
+      console.warn('Firestore post sync background warning:', error);
     }
   };
 
