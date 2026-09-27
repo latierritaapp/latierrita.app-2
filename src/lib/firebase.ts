@@ -14,13 +14,19 @@ import {
   where as fsWhere,
   limit as fsLimit,
   getDocFromServer,
-  QueryConstraint
+  QueryConstraint,
+  initializeFirestore
 } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 import { supabase } from './supabase';
 
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+
+// Use initializeFirestore with experimentalForceLongPolling to ensure robust connections in preview/iframe environments
+export const db = initializeFirestore(app, {
+  experimentalForceLongPolling: true
+}, firebaseConfig.firestoreDatabaseId);
+
 export const auth = null;
 
 // Test connection as required by Firebase skill

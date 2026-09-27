@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
-import { X, Image, MapPin, ChevronRight, ArrowLeft, EyeOff, MessageSquareOff, Camera, Search, ChevronDown, ChevronUp, Navigation, Check, RotateCw } from 'lucide-react';
+import { X, Image, MapPin, ChevronRight, ArrowLeft, EyeOff, MessageSquareOff, Camera, Search, ChevronDown, ChevronUp, Navigation, Check, RotateCw, Crop, Sliders } from 'lucide-react';
 
 const COMMON_WORLD_CITIES = [
   'Madrid, España',
@@ -27,6 +27,8 @@ const COMMON_WORLD_CITIES = [
   'Toronto, Canadá'
 ];
 
+type AspectRatioType = '1:1' | '4:5' | 'original';
+
 export const CreatePostModal: React.FC = () => {
   const {
     isCreatePostOpen,
@@ -40,25 +42,19 @@ export const CreatePostModal: React.FC = () => {
 
   const [step, setStep] = useState<'selector' | 'camera' | 'form'>('selector');
   const [mediaUrl, setMediaUrl] = useState('');
+  const [aspectRatio, setAspectRatio] = useState<AspectRatioType>('1:1');
   const [caption, setCaption] = useState('');
   const [location, setLocation] = useState('Madrid, España');
   const [showLocation, setShowLocation] = useState(false);
   const [showLocationSuggestions, setShowLocationSuggestions] = useState(false);
 
-  // Dragging / Pan framing state for 1:1 photo
+  // Framing / Pan offset
   const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
-  const dragStartRef = useRef({ x: 0, y: 0 });
 
-  // Camera state for 1:1 post capture
+  // Camera state
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user');
   const [cameraError, setCameraError] = useState(false);
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const mediaStreamRef = useRef<MediaStream | null>(null);
-
-  const galleryInputRef = useRef<HTMLInputElement>(null);
-  const nativeCameraInputRef = useRef<HTMLInputElement>(null);
 
   // Gallery Permission & Device Photos
   const [galleryPermission, setGalleryPermission] = useState<'prompt' | 'granted' | 'denied'>(() => {
@@ -67,11 +63,45 @@ export const CreatePostModal: React.FC = () => {
   const [devicePhotos, setDevicePhotos] = useState<string[]>(() => {
     try {
       const saved = localStorage.getItem('latierrita_device_photos');
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
-    }
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return [
+      'https://images.unsplash.com/photo-1589556264807-a72628e06346?auto=format&fit=crop&q=80&w=1000',
+      'https://images.unsplash.com/photo-1599813956719-7120e36742d1?auto=format&fit=crop&q=80&w=1000',
+      'https://images.unsplash.com/photo-1569336415962-a4bd9f69cd83?auto=format&fit=crop&q=80&w=1000',
+      'https://images.unsplash.com/photo-1544735716-392fe2489ffa?auto=format&fit=crop&q=80&w=1000',
+      'https://images.unsplash.com/photo-1509316975850-ff9c5deb0cd9?auto=format&fit=crop&q=80&w=1000',
+      'https://images.unsplash.com/photo-1551024709-8f23befc6f87?auto=format&fit=crop&q=80&w=1000'
+    ];
   });
+
+  // Tagging state
+  const [taggedUsernames, setTaggedUsernames] = useState<string[]>([]);
+  const [isTagModalOpen, setIsTagModalOpen] = useState(false);
+  const [userSearchQuery, setUserSearchQuery] = useState('');
+
+  const [disableComments, setDisableComments] = useState(false);
+  const [hideLikes, setHideLikes] = useState(false);
+  const [isMoreOptionsOpen, setIsMoreOptionsOpen] = useState(false);
+
+  // Staff ad extra fields
+  const [isStaffAd, setIsStaffAd] = useState(false);
+  const [sponsorName, setSponsorName] = useState('');
+  const [adTitle, setAdTitle] = useState('');
+  const [adDescription, setAdDescription] = useState('');
+  const [adCtaText, setAdCtaText] = useState('Más información');
+  const [adCtaUrl, setAdCtaUrl] = useState('https://latierrita.es/anuncios');
+
+  // Refs
+  const dragStartRef = useRef({ x: 0, y: 0 });
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
+  const nativeCameraInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     localStorage.setItem('latierrita_gallery_permission', galleryPermission);
@@ -87,7 +117,7 @@ export const CreatePostModal: React.FC = () => {
     }
   }, [devicePhotos, mediaUrl]);
 
-  // Live Camera effect when in 'camera' step
+  // Live Camera effect
   useEffect(() => {
     if (isCreatePostOpen && step === 'camera') {
       startLiveCamera();
@@ -104,7 +134,7 @@ export const CreatePostModal: React.FC = () => {
     try {
       stopLiveCamera();
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        throw new Error('API mediaDevices no soportada o contexto no seguro (se requiere HTTPS)');
+        throw new Error('API mediaDevices no soportada');
       }
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: { ideal: facingMode } },
@@ -116,7 +146,6 @@ export const CreatePostModal: React.FC = () => {
         videoRef.current.play().catch(() => {});
       }
     } catch (err) {
-      // Cámara en vivo no disponible, activando alternativas de galería y cámara nativa de forma limpia
       setCameraError(true);
     }
   };
@@ -128,23 +157,22 @@ export const CreatePostModal: React.FC = () => {
     }
   };
 
-  const handleCaptureSquareSnapshot = () => {
+  const handleCaptureSnapshot = () => {
     if (videoRef.current && canvasRef.current && !cameraError) {
       const video = videoRef.current;
       const canvas = canvasRef.current;
-      const size = Math.min(video.videoWidth || 1080, video.videoHeight || 1080);
-      canvas.width = size;
-      canvas.height = size;
+      const w = video.videoWidth || 1080;
+      const h = video.videoHeight || 1080;
+      canvas.width = w;
+      canvas.height = h;
       const ctx = canvas.getContext('2d');
       if (ctx) {
         ctx.save();
-        const startX = (video.videoWidth - size) / 2;
-        const startY = (video.videoHeight - size) / 2;
         if (facingMode === 'user') {
           ctx.scale(-1, 1);
-          ctx.drawImage(video, startX, startY, size, size, -size, 0, size, size);
+          ctx.drawImage(video, 0, 0, -w, h);
         } else {
-          ctx.drawImage(video, startX, startY, size, size, 0, 0, size, size);
+          ctx.drawImage(video, 0, 0, w, h);
         }
         ctx.restore();
 
@@ -180,6 +208,7 @@ export const CreatePostModal: React.FC = () => {
             if (loadedCount === files.length) {
               setDevicePhotos(prev => [...newUrls, ...prev]);
               setMediaUrl(newUrls[0]);
+              setPanOffset({ x: 0, y: 0 });
             }
           }
         };
@@ -241,57 +270,36 @@ export const CreatePostModal: React.FC = () => {
     handleClose();
   };
 
-  // Tagging state
-  const [taggedUsernames, setTaggedUsernames] = useState<string[]>([]);
-  const [isTagModalOpen, setIsTagModalOpen] = useState(false);
-  const [userSearchQuery, setUserSearchQuery] = useState('');
-
-  const [disableComments, setDisableComments] = useState(false);
-  const [hideLikes, setHideLikes] = useState(false);
-  const [isMoreOptionsOpen, setIsMoreOptionsOpen] = useState(false);
-
-  // Staff ad extra fields
-  const [isStaffAd, setIsStaffAd] = useState(false);
-  const [sponsorName, setSponsorName] = useState('');
-  const [adTitle, setAdTitle] = useState('');
-  const [adDescription, setAdDescription] = useState('');
-  const [adCtaText, setAdCtaText] = useState('Más información');
-  const [adCtaUrl, setAdCtaUrl] = useState('https://latierrita.es/anuncios');
-
   const toggleTagUser = (username: string) => {
     setTaggedUsernames(prev =>
       prev.includes(username) ? prev.filter(u => u !== username) : [...prev, username]
     );
   };
 
-  // Real-time Geolocation like Instagram
   const handleGetGeolocation = () => {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (position) => {
-          // Simulate reverse geocoding to current city/neighborhood
-          const city = currentUser.city || 'Madrid';
-          setLocation(`${city}, España (GPS en vivo)`);
+          const city = currentUser?.city || 'Madrid';
+          setLocation(`${city}, España (GPS)`);
           setShowLocationSuggestions(false);
         },
         () => {
-          alert('No se pudo obtener la ubicación GPS en tiempo real.');
+          alert('No se pudo obtener la ubicación GPS.');
         },
         { enableHighAccuracy: true, timeout: 10000 }
       );
     }
   };
 
-  // Filter users who follow current user or general community
-  const followedUsersForTagging = otherUsers.filter(u =>
-    followingIds.includes(u.id) || u.username.toLowerCase().includes(userSearchQuery.toLowerCase())
+  const followedUsersForTagging = (otherUsers || []).filter(u =>
+    (followingIds || []).includes(u.id) || u.username.toLowerCase().includes(userSearchQuery.toLowerCase())
   );
 
   const filteredLocations = COMMON_WORLD_CITIES.filter(c =>
     c.toLowerCase().includes(location.toLowerCase())
   );
 
-  // Dragging / pan handlers for photo framing
   const handleMouseDown = (e: React.MouseEvent) => {
     setIsDragging(true);
     dragStartRef.current = { x: e.clientX - panOffset.x, y: e.clientY - panOffset.y };
@@ -328,7 +336,7 @@ export const CreatePostModal: React.FC = () => {
                 "La Tierrita" quiere acceder a tus fotos
               </h4>
               <p className="text-xs text-white/70 leading-relaxed">
-                Permite el acceso a tu galería para seleccionar tus imágenes personales del dispositivo y publicarlas en 1:1.
+                Permite el acceso a tu galería para seleccionar tus imágenes en tamaño real o 1:1 sin recortes forzados.
               </p>
             </div>
             <div className="space-y-2 pt-2">
@@ -351,7 +359,7 @@ export const CreatePostModal: React.FC = () => {
         </div>
       )}
 
-      {/* Hidden gallery file input */}
+      {/* Hidden inputs */}
       <input
         ref={galleryInputRef}
         type="file"
@@ -375,11 +383,10 @@ export const CreatePostModal: React.FC = () => {
         className="w-full max-w-2xl mx-auto bg-[#001845] border-x border-white/10 flex flex-col h-full shadow-2xl relative"
       >
         {step === 'camera' ? (
-          /* 1:1 INSTAGRAM-STYLE LIVE CAMERA CAPTURE */
           <div className="relative flex-1 flex flex-col justify-between bg-black overflow-hidden">
             {!cameraError ? (
               <div className="absolute inset-0 flex items-center justify-center overflow-hidden">
-                <div className="w-full aspect-square relative overflow-hidden bg-black">
+                <div className={`w-full relative overflow-hidden bg-black ${aspectRatio === '1:1' ? 'aspect-square' : aspectRatio === '4:5' ? 'aspect-[4/5]' : 'h-full'}`}>
                   <video
                     ref={videoRef}
                     playsInline
@@ -389,7 +396,6 @@ export const CreatePostModal: React.FC = () => {
                       facingMode === 'user' ? '-scale-x-100' : ''
                     }`}
                   />
-                  {/* 1:1 Square Frame Guides */}
                   <div className="absolute inset-0 border-2 border-amber-400/40 pointer-events-none" />
                 </div>
               </div>
@@ -398,9 +404,9 @@ export const CreatePostModal: React.FC = () => {
                 <div className="w-16 h-16 bg-rose-500/20 border-2 border-rose-500 rounded-full flex items-center justify-center text-rose-400 mb-2 shadow-xl animate-bounce">
                   <Camera className="w-8 h-8" />
                 </div>
-                <h3 className="text-sm font-bold text-white">Permiso de cámara denegado</h3>
+                <h3 className="text-sm font-bold text-white">Cámara no disponible</h3>
                 <p className="text-xs text-white/70 max-w-xs leading-relaxed">
-                  No se pudo acceder a la cámara en vivo. Pero no te preocupes, puedes usar la cámara nativa de tu celular o elegir de tu galería.
+                  Puedes usar la cámara nativa de tu dispositivo o seleccionar una imagen de tu galería.
                 </p>
                 <div className="flex flex-col gap-2.5 w-full max-w-xs pt-2">
                   <button
@@ -408,20 +414,18 @@ export const CreatePostModal: React.FC = () => {
                     onClick={() => nativeCameraInputRef.current?.click()}
                     className="w-full py-3 bg-amber-400 hover:bg-amber-300 text-neutral-950 font-black text-xs rounded-xl shadow-lg transition-all cursor-pointer active:scale-95"
                   >
-                    Usar cámara nativa de mi celular
+                    Cámara nativa
                   </button>
                   <button
                     type="button"
                     onClick={() => {
                       stopLiveCamera();
                       setStep('selector');
-                      setTimeout(() => {
-                        galleryInputRef.current?.click();
-                      }, 100);
+                      setTimeout(() => galleryInputRef.current?.click(), 100);
                     }}
                     className="w-full py-2.5 bg-white/10 hover:bg-white/15 text-white/90 font-bold text-xs rounded-xl transition-all cursor-pointer border border-white/20"
                   >
-                    Seleccionar de la galería
+                    Galería
                   </button>
                   <button
                     type="button"
@@ -431,13 +435,12 @@ export const CreatePostModal: React.FC = () => {
                     }}
                     className="w-full py-2 bg-transparent hover:text-white text-white/60 font-bold text-xs transition-all cursor-pointer"
                   >
-                    Volver atrás
+                    Volver
                   </button>
                 </div>
               </div>
             )}
 
-            {/* Top Bar */}
             <div className="absolute top-0 inset-x-0 z-20 p-4 flex items-center justify-between bg-gradient-to-b from-black/80 to-transparent">
               <button
                 onClick={() => setStep('selector')}
@@ -455,14 +458,12 @@ export const CreatePostModal: React.FC = () => {
               )}
             </div>
 
-            {/* Bottom Shutter Bar */}
             {!cameraError && (
               <div className="p-8 pb-12 flex items-center justify-center bg-gradient-to-t from-black via-black/80 to-transparent z-20">
                 <button
                   type="button"
-                  onClick={handleCaptureSquareSnapshot}
+                  onClick={handleCaptureSnapshot}
                   className="w-20 h-20 rounded-full bg-white p-1 flex items-center justify-center cursor-pointer shadow-2xl active:scale-95 transition-all"
-                  title="Capturar foto 1:1"
                 >
                   <div className="w-16 h-16 rounded-full bg-amber-400 border-4 border-white flex items-center justify-center">
                     <Camera className="w-7 h-7 text-neutral-950" />
@@ -472,9 +473,9 @@ export const CreatePostModal: React.FC = () => {
             )}
           </div>
         ) : step === 'selector' ? (
-          /* STEP 1: SELECTOR & 1:1 DRAGGABLE FRAMING PREVIEW */
-          <div className="flex flex-col h-full overflow-hidden bg-neutral-950">
-            <div className="sticky top-0 z-20 px-4 py-3.5 bg-[#002466]/95 backdrop-blur-md border-b border-white/15 flex items-center justify-between text-white shadow-md">
+          <div className="flex flex-col h-full overflow-hidden bg-[#001845] text-white">
+            {/* Header with La Tierrita Colors */}
+            <div className="sticky top-0 z-20 px-4 py-3.5 bg-[#002466]/95 backdrop-blur-md border-b border-white/15 flex items-center justify-between shadow-md">
               <button
                 type="button"
                 onClick={handleClose}
@@ -482,23 +483,28 @@ export const CreatePostModal: React.FC = () => {
               >
                 Cancelar
               </button>
-              <h2 className="text-sm font-black text-white">
-                Nueva publicación (1:1)
+              <h2 className="text-sm font-black text-white tracking-tight">
+                Crear nueva publicación
               </h2>
               <button
                 type="button"
                 onClick={() => setStep('form')}
                 disabled={!mediaUrl.trim()}
-                className="flex items-center gap-1 px-3.5 py-1.5 bg-amber-400 hover:bg-amber-300 text-neutral-950 font-black text-xs rounded-xl shadow transition-all disabled:opacity-40 cursor-pointer"
+                className="text-xs font-bold text-amber-400 hover:text-amber-300 disabled:opacity-40 cursor-pointer"
               >
-                <span>Siguiente</span>
-                <ChevronRight className="w-4 h-4" />
+                Siguiente
               </button>
             </div>
 
-            {/* Upper Section: Draggable 1:1 Framing Preview */}
+            {/* Preview Area (Instagram Cropper style with La Tierrita theme) */}
             <div
-              className="w-full aspect-square max-h-[45vh] bg-neutral-900 relative flex items-center justify-center overflow-hidden border-b border-white/10 cursor-grab active:cursor-grabbing select-none"
+              className={`w-full relative bg-[#001845] flex items-center justify-center overflow-hidden border-b border-white/15 select-none ${
+                aspectRatio === '1:1'
+                  ? 'aspect-square max-h-[44vh]'
+                  : aspectRatio === '4:5'
+                  ? 'aspect-[4/5] max-h-[48vh]'
+                  : 'h-[42vh]'
+              }`}
               onMouseDown={handleMouseDown}
               onMouseMove={handleMouseMove}
               onMouseUp={handleMouseUp}
@@ -506,96 +512,159 @@ export const CreatePostModal: React.FC = () => {
             >
               {mediaUrl ? (
                 <div
-                  className="w-full h-full relative transition-transform duration-75"
+                  className="w-full h-full relative transition-transform duration-75 flex items-center justify-center"
                   style={{
-                    transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(1.15)`
+                    transform: `translate(${panOffset.x}px, ${panOffset.y}px)`
                   }}
                 >
                   <img
                     src={mediaUrl}
-                    alt="Draggable preview"
-                    className="w-full h-full object-cover pointer-events-none"
+                    alt="Preview"
+                    className={`w-full h-full ${aspectRatio === 'original' ? 'object-contain' : 'object-cover'} pointer-events-none`}
                     referrerPolicy="no-referrer"
                   />
                 </div>
               ) : (
                 <div className="text-center p-6 text-white/60 text-xs space-y-2">
-                  <p>Selecciona una foto para encuadrar en tamaño 1:1</p>
+                  <p>Selecciona una foto de tu galería</p>
                   <button
                     type="button"
                     onClick={() => galleryInputRef.current?.click()}
-                    className="px-4 py-2 bg-amber-400 text-neutral-950 font-bold rounded-xl text-xs cursor-pointer"
+                    className="px-4 py-2 bg-amber-400 hover:bg-amber-300 text-neutral-950 font-bold rounded-xl text-xs cursor-pointer shadow"
                   >
-                    Abrir Galería
+                    Abrir archivo
                   </button>
                 </div>
               )}
-              <div className="absolute bottom-2 left-2 bg-black/70 backdrop-blur-md px-2.5 py-1 rounded-lg text-[10px] text-amber-300 font-bold flex items-center gap-1">
-                <span>Arrastra para encuadrar (1:1)</span>
+
+              {/* Floating Aspect Ratio / Zoom Controls */}
+              <div className="absolute bottom-3 left-3 flex items-center gap-2 z-10">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (aspectRatio === '1:1') setAspectRatio('4:5');
+                    else if (aspectRatio === '4:5') setAspectRatio('original');
+                    else setAspectRatio('1:1');
+                  }}
+                  className="w-8 h-8 rounded-full bg-[#002466]/90 hover:bg-[#002466] text-amber-300 flex items-center justify-center shadow-lg border border-white/20 backdrop-blur cursor-pointer text-[10px] font-bold"
+                  title="Cambiar formato"
+                >
+                  {aspectRatio === '1:1' ? '1:1' : aspectRatio === '4:5' ? '4:5' : '↔'}
+                </button>
+              </div>
+
+              <div className="absolute bottom-3 right-3 flex items-center gap-1.5 bg-[#002466]/90 backdrop-blur px-2.5 py-1 rounded-full border border-white/20 text-[10px] text-amber-300 font-bold z-10">
+                <span>{aspectRatio === 'original' ? 'Tamaño real' : 'Arrastra para encuadrar'}</span>
               </div>
             </div>
 
-            {/* Lower Section: Grid with Camera shortcut & device photos */}
-            <div className="flex-1 p-2 overflow-y-auto bg-[#001845]">
-              <div className="flex items-center justify-between px-2 py-1 mb-1">
-                <p className="text-[10px] uppercase font-bold text-white/60">
-                  Galería del dispositivo ({devicePhotos.length})
-                </p>
-                <button
-                  type="button"
-                  onClick={() => galleryInputRef.current?.click()}
-                  className="text-[10px] font-bold text-amber-300 hover:underline cursor-pointer"
-                >
-                  + Agregar fotos
-                </button>
-              </div>
-
-              <div className="grid grid-cols-4 gap-1.5">
-                {/* 1st casilla: Camera 1:1 shortcut */}
-                <button
-                  type="button"
-                  onClick={() => setStep('camera')}
-                  className="aspect-square bg-white/10 hover:bg-amber-400/20 border-2 border-dashed border-amber-400/50 rounded-xl flex flex-col items-center justify-center cursor-pointer transition-all active:scale-95 group shadow"
-                >
-                  <Camera className="w-6 h-6 text-amber-400 group-hover:scale-110 transition-transform" />
-                  <span className="text-[9px] font-bold text-amber-300 mt-1">Cámara 1:1</span>
-                </button>
-
-                {/* Device Photos */}
-                {(devicePhotos || []).map((imgUrl, idx) => (
-                  <button
-                    key={idx}
-                    type="button"
-                    onClick={() => {
-                      setMediaUrl(imgUrl);
-                      setPanOffset({ x: 0, y: 0 });
-                    }}
-                    className={`aspect-square rounded-xl overflow-hidden relative border-2 transition-all cursor-pointer ${
-                      mediaUrl === imgUrl ? 'border-amber-400 ring-2 ring-amber-400/40 scale-95' : 'border-transparent opacity-80 hover:opacity-100'
-                    }`}
+            {/* Gallery Picker Drawer with La Tierrita Colors */}
+            <div className="flex-1 p-2.5 overflow-y-auto bg-[#001845]">
+              {/* Header bar with album dropdown */}
+              <div className="flex items-center justify-between px-3 py-2 mb-2 bg-[#002466]/80 rounded-xl border border-white/10 shadow">
+                <div className="flex items-center gap-1 text-xs font-semibold text-white cursor-pointer">
+                  <select 
+                    className="bg-transparent text-amber-300 font-bold text-xs outline-none cursor-pointer"
+                    defaultValue="recientes"
                   >
-                    <img src={imgUrl} alt="Device photo" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                  </button>
-                ))}
-              </div>
-
-              {devicePhotos.length === 0 && (
-                <div className="text-center py-8 px-4 text-white/50 text-xs space-y-2">
-                  <p>No hay fotos en tu galería todavía.</p>
+                    <option value="recientes" className="bg-[#001845] text-white">Recientes (Dispositivo)</option>
+                    <option value="camara" className="bg-[#001845] text-white">Fotos de Cámara</option>
+                    <option value="favoritos" className="bg-[#001845] text-white">La Tierrita Galerías</option>
+                  </select>
+                </div>
+                <div className="flex items-center gap-2">
+                  {devicePhotos.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDevicePhotos([]);
+                        setMediaUrl('');
+                        localStorage.removeItem('latierrita_device_photos');
+                      }}
+                      className="text-[11px] font-bold text-rose-400 hover:underline cursor-pointer"
+                    >
+                      Limpiar
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => galleryInputRef.current?.click()}
-                    className="px-4 py-2 bg-amber-400 text-neutral-950 font-black rounded-xl text-xs shadow cursor-pointer"
+                    className="px-3 py-1 bg-amber-400 hover:bg-amber-300 text-neutral-950 font-black text-xs rounded-lg cursor-pointer shadow"
                   >
-                    Seleccionar fotos del dispositivo
+                    + Seleccionar
+                  </button>
+                </div>
+              </div>
+
+              {/* Grid of photos */}
+              <div className="grid grid-cols-4 gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setStep('camera')}
+                  className="aspect-square bg-[#002466]/60 hover:bg-[#002466] border border-white/10 rounded-xl flex flex-col items-center justify-center cursor-pointer transition-all group"
+                >
+                  <Camera className="w-5 h-5 text-amber-400 group-hover:scale-110 transition-transform" />
+                  <span className="text-[10px] text-amber-300 font-bold mt-1">Cámara</span>
+                </button>
+
+                {(devicePhotos || []).map((imgUrl, idx) => {
+                  const isSelected = mediaUrl === imgUrl;
+                  return (
+                    <div
+                      key={idx}
+                      className="aspect-square relative overflow-hidden rounded-xl bg-[#002466]/40 border border-white/10 cursor-pointer group"
+                      onClick={() => {
+                        setMediaUrl(imgUrl);
+                        setPanOffset({ x: 0, y: 0 });
+                      }}
+                    >
+                      <img 
+                        src={imgUrl} 
+                        alt="Gallery item" 
+                        className={`w-full h-full object-cover transition-opacity ${isSelected ? 'opacity-60' : 'opacity-90 hover:opacity-100'}`} 
+                        referrerPolicy="no-referrer" 
+                      />
+                      {isSelected && (
+                        <div className="absolute inset-0 border-2 border-amber-400 bg-amber-400/20 flex items-start justify-end p-1">
+                          <div className="w-5 h-5 bg-amber-400 rounded-full flex items-center justify-center text-neutral-950 text-[10px] font-black shadow">
+                            ✓
+                          </div>
+                        </div>
+                      )}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDevicePhotos(prev => prev.filter((_, i) => i !== idx));
+                          if (mediaUrl === imgUrl) setMediaUrl('');
+                        }}
+                        className="absolute top-1 right-1 p-1 bg-black/70 hover:bg-rose-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                        title="Eliminar foto"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {devicePhotos.length === 0 && (
+                <div className="text-center py-12 px-4 text-white/50 text-xs space-y-3">
+                  <p>No hay fotos disponibles.</p>
+                  <button
+                    type="button"
+                    onClick={() => galleryInputRef.current?.click()}
+                    className="px-4 py-2 bg-amber-400 hover:bg-amber-300 text-neutral-950 font-bold rounded-xl text-xs"
+                  >
+                    Seleccionar fotos de tu dispositivo
                   </button>
                 </div>
               )}
             </div>
           </div>
         ) : (
-          /* STEP 2: FORM WITH FULL 1:1 IMAGE DISPLAY & LOCATION & TAGGING */
-          <div className="flex flex-col h-full overflow-hidden">
+          <div className="flex flex-col h-full overflow-hidden bg-[#001845]">
+            {/* Form Header */}
             <div className="sticky top-0 z-20 px-4 py-3.5 bg-[#002466]/95 backdrop-blur-md border-b border-white/15 flex items-center justify-between text-white shadow-md">
               <button
                 type="button"
@@ -606,24 +675,31 @@ export const CreatePostModal: React.FC = () => {
                 <span>Atrás</span>
               </button>
               <h2 className="text-sm font-black text-white">
-                Nueva publicación
+                Nuevos detalles
               </h2>
               <button
                 type="button"
                 onClick={handleSubmit}
                 disabled={!mediaUrl.trim()}
-                className="px-3.5 py-1.5 bg-amber-400 hover:bg-amber-300 text-neutral-950 font-black text-xs rounded-xl shadow transition-all disabled:opacity-40 cursor-pointer"
+                className="px-4 py-1.5 bg-amber-400 hover:bg-amber-300 text-neutral-950 font-black text-xs rounded-xl shadow transition-all disabled:opacity-40 cursor-pointer"
               >
                 Compartir
               </button>
             </div>
 
             <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1 text-xs pb-24">
-              {/* Full 1:1 Image Preview (Not minimized) */}
-              <div className="w-full aspect-square max-w-sm mx-auto rounded-2xl overflow-hidden bg-neutral-900 border border-white/20 shadow-2xl relative">
-                <img src={mediaUrl} alt="Selected 1:1" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                <span className="absolute bottom-2 left-2 bg-black/70 backdrop-blur-md px-3 py-1 rounded-full text-[10px] text-amber-300 font-bold">
-                  Tamaño 1:1 Original
+              {/* Preview Box */}
+              <div className={`w-full max-w-xs mx-auto rounded-2xl overflow-hidden bg-neutral-900 border border-white/20 shadow-2xl relative ${
+                aspectRatio === '1:1' ? 'aspect-square' : aspectRatio === '4:5' ? 'aspect-[4/5]' : 'aspect-auto max-h-[350px]'
+              }`}>
+                <img
+                  src={mediaUrl}
+                  alt="Post preview"
+                  className={`w-full h-full ${aspectRatio === 'original' ? 'object-contain' : 'object-cover'}`}
+                  referrerPolicy="no-referrer"
+                />
+                <span className="absolute bottom-2 left-2 bg-black/75 backdrop-blur-md px-3 py-1 rounded-full text-[10px] text-amber-300 font-bold">
+                  {aspectRatio === 'original' ? 'Tamaño real' : aspectRatio === '4:5' ? 'Vertical 4:5' : 'Cuadrado 1:1'}
                 </span>
               </div>
 
@@ -636,19 +712,19 @@ export const CreatePostModal: React.FC = () => {
                   value={caption}
                   onChange={e => setCaption(e.target.value)}
                   rows={3}
-                  placeholder="¿Qué estás pensando parcero? Usa hashtags y emojis..."
+                  placeholder="¿Qué estás pensando parcero? Usa hashtags (#) y emojis (🇨🇴)..."
                   className="w-full bg-white/10 text-white placeholder-white/40 p-3 rounded-2xl border border-white/20 focus:outline-none focus:ring-1 focus:ring-amber-400 resize-none text-xs"
                 />
               </div>
 
-              {/* Location Toggle & Input */}
+              {/* Location Card */}
               <div className="space-y-2 bg-white/5 border border-white/15 p-4 rounded-2xl">
                 <div className="flex items-center justify-between pb-2 border-b border-white/10">
                   <div className="flex items-center gap-2">
                     <MapPin className="w-4 h-4 text-amber-400" />
                     <div>
-                      <p className="font-bold text-xs text-white">Compartir mi ubicación</p>
-                      <p className="text-[10px] text-white/60">Permite a otros ver dónde se tomó la foto.</p>
+                      <p className="font-bold text-xs text-white">Añadir ubicación</p>
+                      <p className="text-[10px] text-white/60">Comparte dónde se tomó esta foto.</p>
                     </div>
                   </div>
                   <label className="relative inline-flex items-center cursor-pointer">
@@ -683,10 +759,10 @@ export const CreatePostModal: React.FC = () => {
                         type="button"
                         onClick={handleGetGeolocation}
                         className="px-3 py-2.5 bg-amber-400/25 hover:bg-amber-400/40 border border-amber-400/50 text-amber-300 font-bold rounded-xl flex items-center gap-1 shrink-0 transition-all cursor-pointer shadow"
-                        title="Obtener ubicación GPS en tiempo real"
+                        title="Obtener GPS"
                       >
                         <Navigation className="w-3.5 h-3.5 animate-pulse" />
-                        <span>GPS Real-Time</span>
+                        <span>GPS</span>
                       </button>
                     </div>
 
@@ -712,16 +788,16 @@ export const CreatePostModal: React.FC = () => {
                 ) : (
                   <div className="py-2 text-center text-[11px] text-white/50 flex items-center justify-center gap-2 bg-black/20 rounded-xl border border-white/5">
                     <EyeOff className="w-3.5 h-3.5 text-rose-400" />
-                    <span>Ubicación oculta. No se mostrará ninguna ubicación en tu publicación.</span>
+                    <span>Ubicación oculta en esta publicación.</span>
                   </div>
                 )}
               </div>
 
-              {/* Tagging Followers */}
+              {/* Tagging */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <label className="block text-xs font-bold text-white/90">
-                    Etiquetar parceros seguidores ({(taggedUsernames || []).length})
+                    Etiquetar parceros ({(taggedUsernames || []).length})
                   </label>
                   <button
                     type="button"
@@ -753,7 +829,7 @@ export const CreatePostModal: React.FC = () => {
                         type="text"
                         value={userSearchQuery}
                         onChange={e => setUserSearchQuery(e.target.value)}
-                        placeholder="Buscar entre tus seguidores..."
+                        placeholder="Buscar seguidores..."
                         className="w-full bg-white/10 text-white placeholder-white/40 pl-8 pr-3 py-1.5 rounded-xl border border-white/20 text-xs focus:outline-none focus:ring-1 focus:ring-amber-400"
                       />
                     </div>
@@ -772,7 +848,7 @@ export const CreatePostModal: React.FC = () => {
                               <img src={u.avatar} alt={u.name} className="w-7 h-7 rounded-full object-cover" referrerPolicy="no-referrer" />
                               <div>
                                 <p className="font-bold text-white text-[11px]">{u.name}</p>
-                                <p className="text-[9px] text-white/60">@{u.username} · Seguidor</p>
+                                <p className="text-[9px] text-white/60">@{u.username}</p>
                               </div>
                             </div>
                             {isSelected && <Check className="w-4 h-4 text-amber-400" />}
@@ -784,7 +860,7 @@ export const CreatePostModal: React.FC = () => {
                 )}
               </div>
 
-              {/* More advanced options toggle */}
+              {/* Advanced options */}
               <div className="pt-2 border-t border-white/10 space-y-3">
                 <button
                   type="button"
@@ -800,7 +876,7 @@ export const CreatePostModal: React.FC = () => {
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <MessageSquareOff className="w-4 h-4 text-white/60" />
-                        <span>Desactivar comentarios en esta publicación</span>
+                        <span>Desactivar comentarios</span>
                       </div>
                       <label className="relative inline-flex items-center cursor-pointer">
                         <input
