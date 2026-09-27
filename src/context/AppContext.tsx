@@ -1430,7 +1430,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           });
         }
 
-        // Incorporar publicaciones guardadas localmente (fallback por RLS)
+        // Incorporar publicaciones guardadas localmente y sincronizarlas a la nube para otros usuarios
         try {
           const localPostsRaw = localStorage.getItem('latierrita_local_posts');
           if (localPostsRaw) {
@@ -1446,6 +1446,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 if (!list.some(p => p.id === cleanedLp.id)) {
                   list.push(cleanedLp);
                 }
+                // Sincronizar a la nube de forma silenciosa para que otros usuarios la vean
+                setDoc(doc(db, 'posts', cleanedLp.id), cleanedLp).catch(() => {});
               });
             }
           }
@@ -3450,14 +3452,17 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
       avatar: currentUser.avatar
     });
 
-    // 4. Background sync to Firestore
+    // 4. Background sync to Cloud Database (Firestore & Supabase)
     try {
       await setDoc(doc(db, 'posts', newPostId), newPost);
       try {
         await setDoc(doc(db, 'users', currentUser.id), { postsCount: updatedUser.postsCount }, { merge: true });
       } catch (e) {}
+      try {
+        await setDoc(doc(db, 'profiles', currentUser.id), { postsCount: updatedUser.postsCount }, { merge: true });
+      } catch (e) {}
     } catch (error) {
-      console.warn('Firestore post sync background warning:', error);
+      console.warn('Cloud post sync warning:', error);
     }
   };
 
