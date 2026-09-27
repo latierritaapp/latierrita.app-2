@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useMemo } from 'react';
 import { useAuth, DEFAULT_SILHOUETTE_AVATAR, mapDBProfileToUserProfile, safeSetLocalStorage } from './AuthContext';
 import { supabase } from '../lib/supabase';
 import { db, doc, updateDoc, deleteDoc, setDoc, collection, onSnapshot, addDoc, getDoc, getDocs, query, where } from '../lib/firebase';
@@ -803,6 +803,38 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [storyViewerRestriction, setStoryViewerRestriction] = useState<string | null>(null);
   const [isCreateStoryOpen, setIsCreateStoryOpen] = useState(false);
 
+  // Safe persistence helper for instant grid loading on refresh
+  const safeSaveLocalPosts = (postsToSave: PostItem[]) => {
+    try {
+      const sanitized = postsToSave.slice(0, 60);
+      localStorage.setItem('latierrita_local_posts', JSON.stringify(sanitized));
+    } catch (e) {
+      try {
+        const trimmed = postsToSave.slice(0, 20);
+        localStorage.setItem('latierrita_local_posts', JSON.stringify(trimmed));
+      } catch {}
+    }
+  };
+
+  // Helper to remove any undefined properties so Firestore writes never fail
+  const sanitizeCommentForFirestore = (c: PostComment): Record<string, any> => {
+    const clean: Record<string, any> = {
+      id: c.id || `c-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      userId: c.userId || 'anon',
+      name: c.name || c.username || 'Usuario',
+      username: c.username || 'usuario',
+      userAvatar: c.userAvatar || '',
+      isVerified: Boolean(c.isVerified),
+      staffRole: c.staffRole || 'Usuario',
+      text: c.text || '',
+      timestamp: c.timestamp || 'Reciente'
+    };
+    if (c.parentId) clean.parentId = c.parentId;
+    if (Array.isArray(c.likes)) clean.likes = c.likes;
+    if (typeof (c as any).createdAt === 'number') clean.createdAt = (c as any).createdAt;
+    return clean;
+  };
+
   // Posts & profile posts
   const [posts, setPosts] = useState<PostItem[]>(() => {
     try {
@@ -816,7 +848,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } catch {}
     return [];
   });
-  const [myProfilePosts, setMyProfilePosts] = useState<PostItem[]>([]);
+
+  // Dynamically and synchronously compute profile posts from unified posts pool (Zero delay, always 100% in sync)
+  const myProfilePosts = useMemo(() => {
+    if (!currentUser) return [];
+    const currentId = currentUser.id;
+    const currentUsername = currentUser.username?.toLowerCase().trim();
+    const currentEmail = currentUser.email?.toLowerCase().trim();
+    const isCurrentStaff = isStaffAccount(currentId, currentUsername, currentEmail);
+
+    return posts.filter(p => {
+      if (isCurrentStaff && (p.isStaffAd || p.userId === 'user-staff' || p.username?.toLowerCase() === 'latierrita_app' || p.username?.toLowerCase() === 'staff_latierrita')) {
+        return true;
+      }
+      const pUserId = p.userId;
+      const pUsername = p.username?.toLowerCase().trim();
+      const pEmail = (p as any).email?.toLowerCase().trim();
+
+      return (
+        (pUserId && currentId && pUserId === currentId) ||
+        (pUsername && currentUsername && pUsername === currentUsername) ||
+        (pEmail && currentEmail && pEmail === currentEmail)
+      );
+    });
+  }, [posts, currentUser]);
+
   const [isCreatePostOpen, setIsCreatePostOpen] = useState(false);
   const [isCreateMenuOpen, setIsCreateMenuOpen] = useState(false);
 
@@ -1114,12 +1170,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, []);
 
-  // Derive profile posts dynamically from synced posts
-  useEffect(() => {
-    if (currentUser) {
-      setMyProfilePosts(posts.filter(p => p.userId === currentUser.id || p.username === currentUser.username));
-    }
-  }, [posts, currentUser]);
+
 
   // Load Banners from IndexedDB and Sync with Firestore
   // Sync Deleted Banners Globally from Firestore
@@ -1406,15 +1457,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, []);
 
-  // Sync Posts
+  // Sync Posts in real-time from Firestore and keep local cache updated for instant 0ms loads
   useEffect(() => {
     try {
       const unsub = onSnapshot(collection(db, 'posts'), (snapshot) => {
         const list: PostItem[] = [];
+        const currentUserId = currentUserRef.current?.id;
+
         if (!snapshot.empty) {
           snapshot.forEach((docSnap: any) => {
             const data = docSnap.data() || {};
             const isOfficial = data.isStaffAd || data.userId === 'user-staff' || data.username === 'staff_latierrita' || data.username === 'latierrita_app' || data.username === 'latierrita_oficial';
+            const likesArr = Array.isArray(data.likes) ? data.likes : [];
+            const commentsArr = Array.isArray(data.comments) ? data.comments : [];
             list.push({
               id: docSnap.id,
               ...data,
@@ -1422,32 +1477,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               userAvatar: isOfficial ? '/logo.png?v=3' : (data.userAvatar || data.avatarUrl || ''),
               mediaUrl: data.mediaUrl || data.imageUrl || '',
               timestamp: data.timestamp || data.createdAt || 'Reciente',
-              likesCount: Array.isArray(data.likes) ? data.likes.length : (typeof data.likesCount === 'number' ? data.likesCount : 0),
-              hasLiked: Array.isArray(data.likes) && currentUser ? data.likes.includes(currentUser.id) : (data.hasLiked ?? false),
+              likes: likesArr,
+              likesCount: typeof data.likesCount === 'number' ? data.likesCount : likesArr.length,
+              hasLiked: currentUserId ? likesArr.includes(currentUserId) : Boolean(data.hasLiked),
               hideLocation: data.hideLocation ?? !data.location,
-              comments: Array.isArray(data.comments) ? data.comments : []
+              comments: commentsArr
             } as PostItem);
           });
         }
 
-        // Incorporar publicaciones guardadas localmente y sincronizarlas a la nube para otros usuarios
+        // Incorporar publicaciones guardadas localmente SOLO si no existen aún en la nube
         try {
           const localPostsRaw = localStorage.getItem('latierrita_local_posts');
           if (localPostsRaw) {
             const localPosts = JSON.parse(localPostsRaw);
             if (Array.isArray(localPosts)) {
               localPosts.forEach((lp: PostItem) => {
-                const isOfficial = lp.isStaffAd || lp.userId === 'user-staff' || lp.username === 'staff_latierrita' || lp.username === 'latierrita_app' || lp.username === 'latierrita_oficial';
-                const cleanedLp: PostItem = {
-                  ...lp,
-                  username: isOfficial ? 'latierrita_app' : lp.username,
-                  userAvatar: isOfficial ? '/logo.png?v=3' : lp.userAvatar
-                };
-                if (!list.some(p => p.id === cleanedLp.id)) {
+                if (lp && lp.id && !list.some(p => p.id === lp.id)) {
+                  const isOfficial = lp.isStaffAd || lp.userId === 'user-staff' || lp.username === 'staff_latierrita' || lp.username === 'latierrita_app' || lp.username === 'latierrita_oficial';
+                  const cleanedLp: PostItem = {
+                    ...lp,
+                    username: isOfficial ? 'latierrita_app' : lp.username,
+                    userAvatar: isOfficial ? '/logo.png?v=3' : lp.userAvatar
+                  };
                   list.push(cleanedLp);
+                  // Solo subir si no existía en el servidor
+                  setDoc(doc(db, 'posts', cleanedLp.id), cleanedLp, { merge: true }).catch(() => {});
                 }
-                // Sincronizar a la nube de forma silenciosa para que otros usuarios la vean
-                setDoc(doc(db, 'posts', cleanedLp.id), cleanedLp).catch(() => {});
               });
             }
           }
@@ -1455,8 +1511,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
         list.sort((a, b) => b.id.localeCompare(a.id));
         setPosts(list);
+        safeSaveLocalPosts(list);
       }, (error) => {
-        // En caso de error, mostrar al menos las publicaciones locales
+        // En caso de error o sin conexión, mantener o cargar publicaciones locales
         const list: PostItem[] = [];
         try {
           const localPostsRaw = localStorage.getItem('latierrita_local_posts');
@@ -1467,15 +1524,38 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             }
           }
         } catch (e) {}
-        setPosts(list);
-        console.warn('Posts listener error:', error?.message || error);
+        if (list.length > 0) {
+          setPosts(list);
+        }
+        console.warn('Posts listener note:', error?.message || error);
       });
       return () => unsub();
     } catch (e) {
-      setPosts([]);
       console.warn('Failed to listen to posts in DB:', e);
     }
   }, []);
+
+  // Sync user hasLiked status across all posts when currentUser changes
+  useEffect(() => {
+    if (!currentUser?.id) return;
+    setPosts(prev => {
+      let changed = false;
+      const updated = prev.map(p => {
+        const likesArr = Array.isArray((p as any).likes) ? (p as any).likes : [];
+        const userHasLiked = likesArr.includes(currentUser.id);
+        if (p.hasLiked !== userHasLiked) {
+          changed = true;
+          return { ...p, hasLiked: userHasLiked };
+        }
+        return p;
+      });
+      if (changed) {
+        safeSaveLocalPosts(updated);
+        return updated;
+      }
+      return prev;
+    });
+  }, [currentUser?.id]);
 
   // Sync Chat Rooms with dual-engine Supabase and Firestore real-time fallbacks
   useEffect(() => {
@@ -2699,6 +2779,11 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
   };
 
   const deletePostByAdmin = async (postId: string) => {
+    setPosts(prev => {
+      const next = prev.filter(p => p.id !== postId);
+      safeSaveLocalPosts(next);
+      return next;
+    });
     try {
       await deleteDoc(doc(db, 'posts', postId));
       triggerPlushNotification({
@@ -2712,6 +2797,11 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
   };
 
   const deleteStaffPost = async (id: string) => {
+    setPosts(prev => {
+      const next = prev.filter(p => p.id !== id);
+      safeSaveLocalPosts(next);
+      return next;
+    });
     try {
       await deleteDoc(doc(db, 'posts', id));
       triggerPlushNotification({
@@ -2815,23 +2905,20 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
     
     // Also update any posts/stories authored by me in local state
     if (updated.username || updated.avatar) {
-      setPosts(prev => prev.map(p => {
-        if (p.userId === currentUser.id || p.username === currentUser.username || (isStaff && (p.isStaffAd || p.username === 'latierrita_app' || p.userId === 'user-staff'))) {
-          return {
-            ...p,
-            username: nextUser.username || p.username,
-            userAvatar: nextUser.avatar || p.userAvatar
-          };
-        }
-        return p;
-      }));
-      setMyProfilePosts(prev => prev.map(p => {
-        return {
-          ...p,
-          username: nextUser.username || p.username,
-          userAvatar: nextUser.avatar || p.userAvatar
-        };
-      }));
+      setPosts(prev => {
+        const next = prev.map(p => {
+          if (p.userId === currentUser.id || p.username === currentUser.username || (isStaff && (p.isStaffAd || p.username === 'latierrita_app' || p.userId === 'user-staff'))) {
+            return {
+              ...p,
+              username: nextUser.username || p.username,
+              userAvatar: nextUser.avatar || p.userAvatar
+            };
+          }
+          return p;
+        });
+        safeSaveLocalPosts(next);
+        return next;
+      });
     }
 
     // Persist to Firestore
@@ -3156,7 +3243,7 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
     }
   };
 
-  // Posts
+  // Posts interactions
   const likePost = async (postId: string) => {
     const targetPost = posts.find(p => p.id === postId);
     if (!targetPost) return;
@@ -3164,25 +3251,33 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
     const currentLikes: string[] = Array.isArray((targetPost as any).likes)
       ? [...(targetPost as any).likes]
       : [];
-    const alreadyLiked = targetPost.hasLiked || currentLikes.includes(currentUser.id);
+    const currentUserId = currentUser?.id || 'anon';
+    const alreadyLiked = targetPost.hasLiked || currentLikes.includes(currentUserId);
     const updatedLikes = alreadyLiked
-      ? currentLikes.filter(uid => uid !== currentUser.id)
-      : [...currentLikes, currentUser.id];
+      ? currentLikes.filter(uid => uid !== currentUserId)
+      : [...currentLikes, currentUserId];
 
     const newHasLiked = !alreadyLiked;
     const newLikesCount = updatedLikes.length;
 
-    setPosts(prev => prev.map(p => p.id === postId ? {
-      ...p,
+    const updatedPost: PostItem = {
+      ...targetPost,
       hasLiked: newHasLiked,
       likesCount: newLikesCount,
       likes: updatedLikes
-    } as any : p));
+    } as any;
+
+    setPosts(prev => {
+      const next = prev.map(p => p.id === postId ? updatedPost : p);
+      safeSaveLocalPosts(next);
+      return next;
+    });
 
     try {
-      await updateDoc(doc(db, 'posts', postId), {
-        likes: updatedLikes
-      });
+      await setDoc(doc(db, 'posts', postId), {
+        likes: updatedLikes,
+        likesCount: newLikesCount
+      }, { merge: true });
     } catch (error) {
       console.warn('Could not sync like to DB, state updated locally:', error);
     }
@@ -3202,19 +3297,23 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
     localStorage.setItem('latierrita_user', JSON.stringify(nextUser));
 
     // Update posts state locally
-    setPosts(prev => prev.map(p => {
-      if (p.id === postId) {
-        const savedBy = Array.isArray(p.savedBy) ? [...p.savedBy] : [];
-        const uidx = savedBy.indexOf(currentUser.id);
-        if (uidx >= 0) {
-          savedBy.splice(uidx, 1);
-        } else {
-          savedBy.push(currentUser.id);
+    setPosts(prev => {
+      const next = prev.map(p => {
+        if (p.id === postId) {
+          const savedBy = Array.isArray(p.savedBy) ? [...p.savedBy] : [];
+          const uidx = savedBy.indexOf(currentUser.id);
+          if (uidx >= 0) {
+            savedBy.splice(uidx, 1);
+          } else {
+            savedBy.push(currentUser.id);
+          }
+          return { ...p, savedBy };
         }
-        return { ...p, savedBy };
-      }
-      return p;
-    }));
+        return p;
+      });
+      safeSaveLocalPosts(next);
+      return next;
+    });
 
     try {
       await setDoc(doc(db, 'users', currentUser.id), { savedPostIds }, { merge: true });
@@ -3239,7 +3338,7 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
         } else {
           savedBy.push(currentUser.id);
         }
-        await updateDoc(doc(db, 'posts', postId), { savedBy });
+        await setDoc(doc(db, 'posts', postId), { savedBy }, { merge: true });
       }
     } catch (err) {
       console.warn('Failed to sync savedBy to post document:', err);
@@ -3256,29 +3355,40 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
     const targetPost = posts.find(p => p.id === postId);
     if (!targetPost) return;
 
+    // Clean comment payload - ensure NO undefined properties
     const newComment: PostComment = {
-      id: `c-${Date.now()}`,
-      userId: currentUser.id,
-      name: currentUser.name || currentUser.username,
-      username: currentUser.username,
-      userAvatar: currentUser.avatar,
-      isVerified: currentUser.isVerified,
-      staffRole: currentUser.staffRole,
-      text,
-      timestamp: 'Justo ahora',
-      parentId
+      id: `c-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      userId: currentUser?.id || 'anon',
+      name: currentUser?.name || currentUser?.username || 'Usuario',
+      username: currentUser?.username || 'usuario',
+      userAvatar: currentUser?.avatar || '',
+      isVerified: Boolean(currentUser?.isVerified),
+      staffRole: currentUser?.staffRole || 'Usuario',
+      text: text.trim(),
+      timestamp: 'Justo ahora'
     };
-    const updatedComments = [...(targetPost.comments || []), newComment];
+    if (parentId) {
+      newComment.parentId = parentId;
+    }
 
-    setPosts(prev => prev.map(p => p.id === postId ? {
-      ...p,
+    const updatedComments = [...(targetPost.comments || []), newComment];
+    const cleanedComments = updatedComments.map(sanitizeCommentForFirestore);
+
+    const updatedPost: PostItem = {
+      ...targetPost,
       comments: updatedComments
-    } : p));
+    };
+
+    setPosts(prev => {
+      const next = prev.map(p => p.id === postId ? updatedPost : p);
+      safeSaveLocalPosts(next);
+      return next;
+    });
 
     try {
-      await updateDoc(doc(db, 'posts', postId), {
-        comments: updatedComments
-      });
+      await setDoc(doc(db, 'posts', postId), {
+        comments: cleanedComments
+      }, { merge: true });
     } catch (error) {
       console.warn('Could not sync comment to DB, state updated locally:', error);
     }
@@ -3288,26 +3398,33 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
     const targetPost = posts.find(p => p.id === postId);
     if (!targetPost) return;
 
+    const currentUserId = currentUser?.id || 'anon';
     const updatedComments = (targetPost.comments || []).map(c => {
       if (c.id === commentId) {
         const likes = Array.isArray(c.likes) ? [...c.likes] : [];
-        const idx = likes.indexOf(currentUser.id);
+        const idx = likes.indexOf(currentUserId);
         if (idx >= 0) {
           likes.splice(idx, 1);
         } else {
-          likes.push(currentUser.id);
+          likes.push(currentUserId);
         }
         return { ...c, likes };
       }
       return c;
     });
 
-    setPosts(prev => prev.map(p => p.id === postId ? { ...p, comments: updatedComments } : p));
+    const cleanedComments = updatedComments.map(sanitizeCommentForFirestore);
+
+    setPosts(prev => {
+      const next = prev.map(p => p.id === postId ? { ...p, comments: updatedComments } : p);
+      safeSaveLocalPosts(next);
+      return next;
+    });
 
     try {
-      await updateDoc(doc(db, 'posts', postId), {
-        comments: updatedComments
-      });
+      await setDoc(doc(db, 'posts', postId), {
+        comments: cleanedComments
+      }, { merge: true });
     } catch (e) {
       console.warn('Could not sync comment like to DB:', e);
     }
@@ -3317,14 +3434,19 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
     const targetPost = posts.find(p => p.id === postId);
     if (!targetPost) return;
 
-    const updatedComments = (targetPost.comments || []).filter(c => c.id !== commentId);
+    const updatedComments = (targetPost.comments || []).filter(c => c.id !== commentId && c.parentId !== commentId);
+    const cleanedComments = updatedComments.map(sanitizeCommentForFirestore);
 
-    setPosts(prev => prev.map(p => p.id === postId ? { ...p, comments: updatedComments } : p));
+    setPosts(prev => {
+      const next = prev.map(p => p.id === postId ? { ...p, comments: updatedComments } : p);
+      safeSaveLocalPosts(next);
+      return next;
+    });
 
     try {
-      await updateDoc(doc(db, 'posts', postId), {
-        comments: updatedComments
-      });
+      await setDoc(doc(db, 'posts', postId), {
+        comments: cleanedComments
+      }, { merge: true });
     } catch (e) {
       console.warn('Could not delete comment in DB:', e);
     }
@@ -3425,23 +3547,16 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
       taggedUsernames: data.taggedUsernames
     };
     
-    // 1. Optimistic state update
-    setPosts(prev => [newPost, ...prev]);
+    // 1. Optimistic state update & safe local caching
+    setPosts(prev => {
+      const next = [newPost, ...prev];
+      safeSaveLocalPosts(next);
+      return next;
+    });
 
     const updatedUser = { ...currentUser, postsCount: (currentUser.postsCount || 0) + 1 };
     setCurrentUser(updatedUser);
     localStorage.setItem('latierrita_user', JSON.stringify(updatedUser));
-
-    // 2. Guardado local resistente para fallback inmediato
-    try {
-      const localPostsRaw = localStorage.getItem('latierrita_local_posts') || '[]';
-      const localPosts = JSON.parse(localPostsRaw);
-      const filtered = localPosts.filter((p: any) => p.id !== newPostId);
-      filtered.push(newPost);
-      localStorage.setItem('latierrita_local_posts', JSON.stringify(filtered));
-    } catch (e) {
-      console.warn('Local post storage note:', e);
-    }
 
     // 3. Close modal & notify immediately
     setIsCreatePostOpen(false);

@@ -58,20 +58,20 @@ export const ExploreView: React.FC = () => {
     } catch {}
   }, []);
 
-  // Combine feed posts + profile posts into a unified unique pool of user publications (excluding demo/unsplash images)
+  // Unified pool of user publications from posts pool (excluding demo images and sponsored ads)
   const allUserPosts = useMemo(() => {
     const map = new Map<string, PostItem>();
 
-    [...posts, ...myProfilePosts].forEach(p => {
+    posts.forEach(p => {
       if (!p.isStaffAd && !p.mediaUrl?.includes('unsplash.com')) {
         map.set(p.id, p);
       }
     });
 
     return Array.from(map.values());
-  }, [posts, myProfilePosts]);
+  }, [posts]);
 
-  // Top 3 sorted by popularity (likes + comments), remainder randomized
+  // Sorted by popularity (likes + comments) and recency without erratic reshuffling
   const trendingPosts = useMemo(() => {
     let result = [...allUserPosts];
 
@@ -87,27 +87,15 @@ export const ExploreView: React.FC = () => {
       });
     }
 
-    // Sort descending by popularity (likes + comments)
-    const sorted = [...result].sort((a, b) => {
+    // Sort descending by popularity (likes + comments * 2), then by ID/recency
+    return result.sort((a, b) => {
       const scoreA = (a.likesCount || 0) + (a.comments?.length || 0) * 2;
       const scoreB = (b.likesCount || 0) + (b.comments?.length || 0) * 2;
-      return scoreB - scoreA;
+      if (scoreB !== scoreA) {
+        return scoreB - scoreA;
+      }
+      return b.id.localeCompare(a.id);
     });
-
-    if (sorted.length <= 3) {
-      return sorted;
-    }
-
-    const top3 = sorted.slice(0, 3);
-    const rest = sorted.slice(3);
-
-    // Shuffle the remaining posts randomly
-    for (let i = rest.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [rest[i], rest[j]] = [rest[j], rest[i]];
-    }
-
-    return [...top3, ...rest];
   }, [allUserPosts, exploreSearchQuery]);
 
   // Set of top 3 post IDs for fast checking
@@ -229,7 +217,7 @@ export const ExploreView: React.FC = () => {
                   alt={post.caption || 'Publicación'}
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                   referrerPolicy="no-referrer"
-                  loading="lazy"
+                  decoding="async"
                 />
 
                 {/* Top Badge for Top Trending Posts ONLY (Top 3) */}
@@ -333,7 +321,7 @@ export const ExploreView: React.FC = () => {
           {/* Scrollable Feed List - Full Screen Edge-to-Edge using PostCard */}
           <div className="flex-1 overflow-y-auto overscroll-contain pb-20 space-y-4 pt-4">
             {(trendingPosts || []).map(post => (
-              <div key={post.id} className="w-full max-w-xl mx-auto">
+              <div key={post.id} id={`explore-feed-post-${post.id}`} className="w-full max-w-xl mx-auto">
                 <PostCard post={post} />
               </div>
             ))}

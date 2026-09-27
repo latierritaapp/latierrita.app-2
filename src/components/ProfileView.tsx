@@ -102,16 +102,16 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userToDisplay }) => {
     ? myProfilePosts
     : posts.filter(p => {
         const postUserId = p.userId;
-        const postUsername = p.username?.toLowerCase();
+        const postUsername = p.username?.toLowerCase().trim();
         
         const targetId = user.id || userToDisplay?.id;
-        const targetUsername = (user.username || userToDisplay?.username)?.toLowerCase();
-        const targetEmail = (user.email || userToDisplay?.email)?.toLowerCase();
+        const targetUsername = (user.username || userToDisplay?.username)?.toLowerCase().trim();
+        const targetEmail = (user.email || userToDisplay?.email)?.toLowerCase().trim();
         
         return (
           (postUserId && targetId && postUserId === targetId) ||
           (postUsername && targetUsername && postUsername === targetUsername) ||
-          ((p as any).email && targetEmail && (p as any).email.toLowerCase() === targetEmail)
+          ((p as any).email && targetEmail && (p as any).email.toLowerCase().trim() === targetEmail)
         );
       })
   ).filter(p => !p.isStaffAd);
@@ -580,17 +580,17 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userToDisplay }) => {
               alt={post.caption}
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
               referrerPolicy="no-referrer"
-              loading="lazy"
+              decoding="async"
             />
             {/* Hover overlay with likes and comments */}
             <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-4 text-white font-bold text-xs">
               <div className="flex items-center gap-1">
                 <Heart className="w-4 h-4 fill-rose-500 text-rose-500" />
-                <span>{post.likesCount}</span>
+                <span>{post.likesCount || 0}</span>
               </div>
               <div className="flex items-center gap-1">
                 <MessageCircle className="w-4 h-4 text-white" />
-                <span>{post.comments.length}</span>
+                <span>{post.comments?.length || 0}</span>
               </div>
             </div>
           </div>
@@ -666,7 +666,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userToDisplay }) => {
           {/* Scrollable Feed Container - Full screen edge-to-edge on mobile using PostCard */}
           <div className="flex-1 overflow-y-auto overscroll-contain pb-16 space-y-4 pt-4">
             {(activeDisplayList || []).map(post => (
-              <div key={post.id} className="w-full max-w-xl mx-auto">
+              <div key={post.id} id={`profile-feed-post-${post.id}`} className="w-full max-w-xl mx-auto">
                 <PostCard post={post} />
               </div>
             ))}
