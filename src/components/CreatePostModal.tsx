@@ -195,25 +195,18 @@ export const CreatePostModal: React.FC = () => {
   };
 
   const handleFilesSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (files && files.length > 0) {
-      const newUrls: string[] = [];
-      let loadedCount = 0;
-      Array.from(files).forEach((file: any) => {
-        const reader = new FileReader();
-        reader.onload = () => {
-          if (reader.result) {
-            newUrls.push(reader.result as string);
-            loadedCount++;
-            if (loadedCount === files.length) {
-              setDevicePhotos(prev => [...newUrls, ...prev]);
-              setMediaUrl(newUrls[0]);
-              setPanOffset({ x: 0, y: 0 });
-            }
-          }
-        };
-        reader.readAsDataURL(file);
-      });
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        if (reader.result) {
+          const imgUrl = reader.result as string;
+          setMediaUrl(imgUrl);
+          setPanOffset({ x: 0, y: 0 });
+          setStep('selector');
+        }
+      };
+      reader.readAsDataURL(file);
     }
   };
 
@@ -239,6 +232,7 @@ export const CreatePostModal: React.FC = () => {
     stopLiveCamera();
     setIsCreatePostOpen(false);
     setStep('selector');
+    setMediaUrl('');
     setCaption('');
     setTaggedUsernames([]);
     setUserSearchQuery('');
