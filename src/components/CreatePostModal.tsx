@@ -65,17 +65,14 @@ export const CreatePostModal: React.FC = () => {
       const saved = localStorage.getItem('latierrita_device_photos');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (parsed.length > 0) return parsed;
+        const userCleanPhotos = (parsed || []).filter((url: string) => !url.includes('unsplash.com'));
+        if (userCleanPhotos.length > 0) {
+          return userCleanPhotos;
+        }
       }
     } catch {}
-    return [
-      'https://images.unsplash.com/photo-1589556264807-a72628e06346?auto=format&fit=crop&q=80&w=1000',
-      'https://images.unsplash.com/photo-1599813956719-7120e36742d1?auto=format&fit=crop&q=80&w=1000',
-      'https://images.unsplash.com/photo-1569336415962-a4bd9f69cd83?auto=format&fit=crop&q=80&w=1000',
-      'https://images.unsplash.com/photo-1544735716-392fe2489ffa?auto=format&fit=crop&q=80&w=1000',
-      'https://images.unsplash.com/photo-1509316975850-ff9c5deb0cd9?auto=format&fit=crop&q=80&w=1000',
-      'https://images.unsplash.com/photo-1551024709-8f23befc6f87?auto=format&fit=crop&q=80&w=1000'
-    ];
+    localStorage.removeItem('latierrita_device_photos');
+    return [];
   });
 
   // Tagging state
