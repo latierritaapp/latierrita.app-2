@@ -804,7 +804,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isCreateStoryOpen, setIsCreateStoryOpen] = useState(false);
 
   // Posts & profile posts
-  const [posts, setPosts] = useState<PostItem[]>([]);
+  const [posts, setPosts] = useState<PostItem[]>(() => {
+    try {
+      const localPostsRaw = localStorage.getItem('latierrita_local_posts');
+      if (localPostsRaw) {
+        const parsed = JSON.parse(localPostsRaw);
+        if (Array.isArray(parsed)) {
+          return parsed.filter((p: PostItem) => !p.mediaUrl?.includes('unsplash.com'));
+        }
+      }
+    } catch {}
+    return [];
+  });
   const [myProfilePosts, setMyProfilePosts] = useState<PostItem[]>([]);
   const [isCreatePostOpen, setIsCreatePostOpen] = useState(false);
   const [isCreateMenuOpen, setIsCreateMenuOpen] = useState(false);
