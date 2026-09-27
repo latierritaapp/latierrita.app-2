@@ -3343,6 +3343,49 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
       }
       localStorage.setItem(lastAdKey, String(now));
     }
+
+    // Comprimir imagen base64 para evitar superar el límite de 1MB de Firestore o cuota de localStorage
+    const compressBase64Image = (url: string): Promise<string> => {
+      return new Promise((resolve) => {
+        if (!url || !url.startsWith('data:image')) {
+          resolve(url);
+          return;
+        }
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+          const MAX = 1000;
+          if (width > height && width > MAX) {
+            height = Math.round((height * MAX) / width);
+            width = MAX;
+          } else if (height > MAX) {
+            width = Math.round((width * MAX) / height);
+            height = MAX;
+          }
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            resolve(url);
+            return;
+          }
+          ctx.drawImage(img, 0, 0, width, height);
+          try {
+            const compressed = canvas.toDataURL('image/jpeg', 0.8);
+            resolve(compressed);
+          } catch (e) {
+            resolve(url);
+          }
+        };
+        img.onerror = () => resolve(url);
+        img.src = url;
+      });
+    };
+
+    const optimizedMediaUrl = await compressBase64Image(data.mediaUrl);
+
     const newPostId = `post-${Date.now()}`;
     const newPost: PostItem = {
       id: newPostId,
@@ -3350,7 +3393,7 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
       username: currentUser.username,
       userAvatar: currentUser.avatar,
       userCity: currentUser.city,
-      mediaUrl: data.mediaUrl,
+      mediaUrl: optimizedMediaUrl,
       caption: data.caption,
       likesCount: 0,
       hasLiked: false,
