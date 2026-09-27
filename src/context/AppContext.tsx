@@ -3804,6 +3804,13 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
 
     const msgText = text.trim() || (sharedPost ? `Compartió un post de @${sharedPost.username}` : poll ? `📊 Encuesta: ${poll.question}` : event ? `📅 Evento: ${event.title}` : audioData ? '🎤 Nota de voz' : '');
 
+    const sanitizedPost = sharedPost ? {
+      id: String(sharedPost.id || ''),
+      username: String(sharedPost.username || 'usuario'),
+      mediaUrl: String(sharedPost.mediaUrl || ''),
+      caption: String(sharedPost.caption || '')
+    } : undefined;
+
     const newMsg: ChatMessage = {
       id: `msg-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`,
       senderId: currentUser.id,
@@ -3824,7 +3831,7 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
       audioDuration: audioData?.duration,
       poll,
       event,
-      sharedPost
+      sharedPost: sanitizedPost
     };
 
     const targetRoom = chatRooms.find(r => r.id === chatId);
