@@ -43,12 +43,26 @@ export const ExploreView: React.FC = () => {
   const [expandedComments, setExpandedComments] = useState<Record<string, boolean>>({});
   const [heartAnimPostId, setHeartAnimPostId] = useState<string | null>(null);
 
-  // Combine feed posts + profile posts into a unified unique pool of user publications
+  // Clean local storage of unsplash example posts on mount
+  useEffect(() => {
+    try {
+      const localPostsRaw = localStorage.getItem('latierrita_local_posts');
+      if (localPostsRaw) {
+        const parsed = JSON.parse(localPostsRaw);
+        if (Array.isArray(parsed)) {
+          const cleaned = parsed.filter((p: PostItem) => !p.mediaUrl?.includes('unsplash.com'));
+          localStorage.setItem('latierrita_local_posts', JSON.stringify(cleaned));
+        }
+      }
+    } catch {}
+  }, []);
+
+  // Combine feed posts + profile posts into a unified unique pool of user publications (excluding demo/unsplash images)
   const allUserPosts = useMemo(() => {
     const map = new Map<string, PostItem>();
 
     [...posts, ...myProfilePosts].forEach(p => {
-      if (!p.isStaffAd) {
+      if (!p.isStaffAd && !p.mediaUrl?.includes('unsplash.com')) {
         map.set(p.id, p);
       }
     });
