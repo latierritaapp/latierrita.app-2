@@ -59,6 +59,7 @@ export interface UserProfile {
     title: string;
     cover: string;
   }[];
+  savedPostIds?: string[];
 }
 
 export interface StoryViewer {
@@ -90,10 +91,16 @@ export interface StoryItem {
 
 export interface PostComment {
   id: string;
+  userId?: string;
+  name?: string;
   username: string;
   userAvatar: string;
   text: string;
   timestamp: string;
+  isVerified?: boolean;
+  staffRole?: StaffRole;
+  likes?: string[];
+  parentId?: string;
 }
 
 export interface PostItem {
@@ -119,6 +126,7 @@ export interface PostItem {
   disableComments?: boolean;
   hideLikes?: boolean;
   taggedUsernames?: string[];
+  savedBy?: string[];
 }
 
 export type AdCategory =
@@ -310,6 +318,7 @@ export interface ChatMessage {
   senderStaffRole?: StaffRole;
   poll?: ChatPoll;
   event?: ChatEvent;
+  sharedPost?: any;
 }
 
 export type ChatType = 'general' | 'city' | 'private' | 'group';

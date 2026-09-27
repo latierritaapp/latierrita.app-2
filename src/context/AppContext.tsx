@@ -6,6 +6,7 @@ import {
   UserProfile,
   StoryItem,
   PostItem,
+  PostComment,
   AdBanner,
   ChatRoom,
   ChatMessage,
@@ -72,7 +73,10 @@ interface AppContextType {
   // Posts & Feed
   posts: PostItem[];
   likePost: (postId: string) => void;
-  addComment: (postId: string, text: string) => void;
+  toggleSavePost: (postId: string) => Promise<void>;
+  addComment: (postId: string, text: string, parentId?: string) => void;
+  likeComment: (postId: string, commentId: string) => Promise<void>;
+  deleteComment: (postId: string, commentId: string) => Promise<void>;
   createPost: (data: {
     mediaUrl: string;
     caption: string;
@@ -161,7 +165,8 @@ interface AppContextType {
     replyTo?: { id: string; senderName: string; text: string },
     audioData?: { url: string; duration: number },
     poll?: ChatPoll,
-    event?: ChatEvent
+    event?: ChatEvent,
+    sharedPost?: any
   ) => Promise<void>;
   voteInPoll: (chatId: string, messageId: string, optionIndex: number) => void;
   rsvpToEvent: (chatId: string, messageId: string) => void;
@@ -3170,16 +3175,85 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
     }
   };
 
-  const addComment = async (postId: string, text: string) => {
+  const toggleSavePost = async (postId: string) => {
+    const savedPostIds = Array.isArray(currentUser.savedPostIds) ? [...currentUser.savedPostIds] : [];
+    const idx = savedPostIds.indexOf(postId);
+    if (idx >= 0) {
+      savedPostIds.splice(idx, 1);
+    } else {
+      savedPostIds.push(postId);
+    }
+
+    const nextUser = { ...currentUser, savedPostIds };
+    setCurrentUser(nextUser);
+    localStorage.setItem('latierrita_user', JSON.stringify(nextUser));
+
+    // Update posts state locally
+    setPosts(prev => prev.map(p => {
+      if (p.id === postId) {
+        const savedBy = Array.isArray(p.savedBy) ? [...p.savedBy] : [];
+        const uidx = savedBy.indexOf(currentUser.id);
+        if (uidx >= 0) {
+          savedBy.splice(uidx, 1);
+        } else {
+          savedBy.push(currentUser.id);
+        }
+        return { ...p, savedBy };
+      }
+      return p;
+    }));
+
+    try {
+      await setDoc(doc(db, 'users', currentUser.id), { savedPostIds }, { merge: true });
+    } catch (e) {
+      console.warn('Failed to sync savedPostIds in Firestore:', e);
+    }
+
+    try {
+      await updateUserProfile({ savedPostIds });
+    } catch (e) {
+      // Ignore
+    }
+
+    // Sync savedBy to Firestore post document
+    try {
+      const p = posts.find(item => item.id === postId);
+      if (p) {
+        const savedBy = Array.isArray(p.savedBy) ? [...p.savedBy] : [];
+        const uidx = savedBy.indexOf(currentUser.id);
+        if (uidx >= 0) {
+          savedBy.splice(uidx, 1);
+        } else {
+          savedBy.push(currentUser.id);
+        }
+        await updateDoc(doc(db, 'posts', postId), { savedBy });
+      }
+    } catch (err) {
+      console.warn('Failed to sync savedBy to post document:', err);
+    }
+
+    triggerPlushNotification({
+      type: 'system',
+      title: idx >= 0 ? 'Publicación eliminada' : 'Publicación guardada',
+      message: idx >= 0 ? 'Se eliminó el post de tus guardados.' : 'El post se ha guardado en tu colección guardada.'
+    });
+  };
+
+  const addComment = async (postId: string, text: string, parentId?: string) => {
     const targetPost = posts.find(p => p.id === postId);
     if (!targetPost) return;
 
-    const newComment = {
+    const newComment: PostComment = {
       id: `c-${Date.now()}`,
+      userId: currentUser.id,
+      name: currentUser.name || currentUser.username,
       username: currentUser.username,
       userAvatar: currentUser.avatar,
+      isVerified: currentUser.isVerified,
+      staffRole: currentUser.staffRole,
       text,
-      timestamp: 'Justo ahora'
+      timestamp: 'Justo ahora',
+      parentId
     };
     const updatedComments = [...(targetPost.comments || []), newComment];
 
@@ -3194,6 +3268,52 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
       });
     } catch (error) {
       console.warn('Could not sync comment to DB, state updated locally:', error);
+    }
+  };
+
+  const likeComment = async (postId: string, commentId: string) => {
+    const targetPost = posts.find(p => p.id === postId);
+    if (!targetPost) return;
+
+    const updatedComments = (targetPost.comments || []).map(c => {
+      if (c.id === commentId) {
+        const likes = Array.isArray(c.likes) ? [...c.likes] : [];
+        const idx = likes.indexOf(currentUser.id);
+        if (idx >= 0) {
+          likes.splice(idx, 1);
+        } else {
+          likes.push(currentUser.id);
+        }
+        return { ...c, likes };
+      }
+      return c;
+    });
+
+    setPosts(prev => prev.map(p => p.id === postId ? { ...p, comments: updatedComments } : p));
+
+    try {
+      await updateDoc(doc(db, 'posts', postId), {
+        comments: updatedComments
+      });
+    } catch (e) {
+      console.warn('Could not sync comment like to DB:', e);
+    }
+  };
+
+  const deleteComment = async (postId: string, commentId: string) => {
+    const targetPost = posts.find(p => p.id === postId);
+    if (!targetPost) return;
+
+    const updatedComments = (targetPost.comments || []).filter(c => c.id !== commentId);
+
+    setPosts(prev => prev.map(p => p.id === postId ? { ...p, comments: updatedComments } : p));
+
+    try {
+      await updateDoc(doc(db, 'posts', postId), {
+        comments: updatedComments
+      });
+    } catch (e) {
+      console.warn('Could not delete comment in DB:', e);
     }
   };
 
@@ -3644,15 +3764,34 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
     });
   };
 
+  const cleanForFirestore = (obj: any): any => {
+    if (obj === undefined) return null;
+    if (obj === null) return null;
+    if (Array.isArray(obj)) {
+      return obj.map(item => cleanForFirestore(item));
+    }
+    if (typeof obj === 'object') {
+      const cleaned: any = {};
+      for (const key in obj) {
+        if (obj[key] !== undefined) {
+          cleaned[key] = cleanForFirestore(obj[key]);
+        }
+      }
+      return cleaned;
+    }
+    return obj;
+  };
+
   const sendMessage = async (
     chatId: string,
     text: string,
     replyTo?: { id: string; senderName: string; text: string },
     audioData?: { url: string; duration: number },
     poll?: ChatPoll,
-    event?: ChatEvent
+    event?: ChatEvent,
+    sharedPost?: any
   ) => {
-    if (!text.trim() && !audioData && !poll && !event) return;
+    if (!text.trim() && !audioData && !poll && !event && !sharedPost) return;
 
     if (text.trim().toLowerCase() === '/clear') {
       await clearChatMessages(chatId);
@@ -3663,7 +3802,7 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
     const simulatedHash = 'SHA256:' + Array.from(crypto.getRandomValues(new Uint8Array(8)))
       .map(b => b.toString(16).padStart(2, '0')).join('');
 
-    const msgText = text.trim() || (poll ? `📊 Encuesta: ${poll.question}` : event ? `📅 Evento: ${event.title}` : audioData ? '🎤 Nota de voz' : '');
+    const msgText = text.trim() || (sharedPost ? `Compartió un post de @${sharedPost.username}` : poll ? `📊 Encuesta: ${poll.question}` : event ? `📅 Evento: ${event.title}` : audioData ? '🎤 Nota de voz' : '');
 
     const newMsg: ChatMessage = {
       id: `msg-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`,
@@ -3684,7 +3823,8 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
       audioUrl: audioData?.url,
       audioDuration: audioData?.duration,
       poll,
-      event
+      event,
+      sharedPost
     };
 
     const targetRoom = chatRooms.find(r => r.id === chatId);
@@ -3794,7 +3934,7 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
 
       const mergedMessages = pruneRoomMessages({ ...targetRoom, messages: Array.from(msgMap.values()) }).messages;
 
-      await setDoc(roomRef, { 
+      await setDoc(roomRef, cleanForFirestore({ 
         id: targetRoom.id,
         type: targetRoom.type,
         name: targetRoom.name,
@@ -3802,7 +3942,7 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
         messages: mergedMessages,
         members: targetRoom.members || [],
         createdAt: targetRoom.createdAt || new Date().toISOString().split('T')[0]
-      }, { merge: true });
+      }), { merge: true });
     } catch (error) {
       console.warn('Firestore sendMessage write error:', error);
     }
@@ -4585,7 +4725,10 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
 
         posts,
         likePost,
+        toggleSavePost,
         addComment,
+        likeComment,
+        deleteComment,
         createPost,
         myProfilePosts,
         isCreatePostOpen,

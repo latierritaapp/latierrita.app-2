@@ -25,10 +25,12 @@ import {
   Share2,
   MoreHorizontal,
   Send,
-  Trash2
+  Trash2,
+  Bookmark
 } from 'lucide-react';
 import { FollowersModal } from './FollowersModal';
 import { FlagColombia, FlagSpain, renderTextWithFlags } from './CountryFlag';
+import { VerifiedBadge } from './VerifiedBadge';
 
 interface ProfileViewProps {
   userToDisplay?: UserProfile | null;
@@ -59,7 +61,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userToDisplay }) => {
   } = useApp();
   const { isGuest, logout } = useAuth();
 
-  const [activeTab, setActiveTab] = useState<'posts' | 'tagged'>('posts');
+  const [activeTab, setActiveTab] = useState<'posts' | 'tagged' | 'saved'>('posts');
   const [modalFollowType, setModalFollowType] = useState<'followers' | 'following' | null>(null);
   
   // Feed viewer state: opened post ID when clicking a grid photo to scroll up/down
@@ -173,7 +175,12 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userToDisplay }) => {
     }
   }, [openedFeedPostId]);
 
-  const activeDisplayList = activeTab === 'posts' ? userPosts : taggedPosts;
+  const savedPosts = posts.filter(p => Array.isArray(currentUser.savedPostIds) && currentUser.savedPostIds.includes(p.id));
+  const activeDisplayList = activeTab === 'posts' 
+    ? userPosts 
+    : activeTab === 'tagged' 
+    ? taggedPosts 
+    : savedPosts;
 
   return (
     <div id="profile-container" className="w-full text-white">
@@ -226,7 +233,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userToDisplay }) => {
                 : (user.username ? user.username.replace(/^@+/, '').split('@')[0] : 'Usuario')}
             </h1>
             {user.isVerified && (
-              <BadgeCheck className="w-4.5 h-4.5 text-sky-400 fill-sky-400/20 shrink-0 inline-block" />
+              <VerifiedBadge className="w-5 h-5" />
             )}
             {user.staffRole && user.staffRole !== 'Usuario' && (
               <span
@@ -507,7 +514,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userToDisplay }) => {
       )}
 
       {/* 4. Instagram Navigation Tabs */}
-      <div className="grid grid-cols-2 text-center border-b border-white/10">
+      <div className={`grid ${isMe ? 'grid-cols-3' : 'grid-cols-2'} text-center border-b border-white/10`}>
         <button
           id="tab-profile-posts"
           onClick={() => setActiveTab('posts')}
@@ -539,6 +546,24 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userToDisplay }) => {
             <span className="absolute bottom-0 inset-x-0 h-0.5 bg-amber-400" />
           )}
         </button>
+
+        {isMe && (
+          <button
+            id="tab-profile-saved"
+            onClick={() => setActiveTab('saved')}
+            className={`py-3 flex items-center justify-center gap-2 transition-all relative ${
+              activeTab === 'saved'
+                ? 'text-amber-400 font-bold'
+                : 'text-white/60 hover:text-white'
+            }`}
+          >
+            <Bookmark className="w-4 h-4" />
+            <span className="text-xs uppercase tracking-wider">Guardados</span>
+            {activeTab === 'saved' && (
+              <span className="absolute bottom-0 inset-x-0 h-0.5 bg-amber-400" />
+            )}
+          </button>
+        )}
       </div>
 
       {/* 5. Clean 3-Column Photo Grid */}
@@ -572,12 +597,18 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userToDisplay }) => {
 
         {activeDisplayList.length === 0 && (
           <div className="col-span-3 py-16 px-4 text-center text-white/50">
-            <Grid className="w-10 h-10 mx-auto text-white/20 mb-2" />
+            {activeTab === 'saved' ? (
+              <Bookmark className="w-10 h-10 mx-auto text-white/20 mb-2" />
+            ) : (
+              <Grid className="w-10 h-10 mx-auto text-white/20 mb-2" />
+            )}
             <p className="text-sm font-bold text-white/80">
-              Aún no hay publicaciones
+              {activeTab === 'saved' ? 'No tienes publicaciones guardadas' : 'Aún no hay publicaciones'}
             </p>
             <p className="text-xs text-white/50 mt-1 max-w-xs mx-auto">
-              {isMe
+              {activeTab === 'saved'
+                ? 'Guarda fotos y anuncios interesantes para verlos más tarde aquí.'
+                : isMe
                 ? 'Comparte tus fotos y recuerdos viviendo en España con la comunidad.'
                 : `@${user.username} todavía no ha compartido fotos.`}
             </p>

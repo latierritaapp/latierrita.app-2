@@ -19,6 +19,7 @@ import {
   UserX
 } from 'lucide-react';
 import { LaTierritaLogo } from './LaTierritaLogo';
+import { VerifiedBadge } from './VerifiedBadge';
 
 export const Navbar: React.FC = () => {
   const {
@@ -238,9 +239,7 @@ export const Navbar: React.FC = () => {
                     @{displayedUser.username ? displayedUser.username.replace(/^@+/, '').split('@')[0] : 'usuario'}
                   </span>
                   {displayedUser.isVerified && (
-                    <span title="Usuario Verificado" className="inline-flex shrink-0">
-                      <BadgeCheck className="w-4 h-4 text-sky-400 fill-sky-400/20 shrink-0 inline-block" />
-                    </span>
+                    <VerifiedBadge className="w-4.5 h-4.5" />
                   )}
                 </div>
               ) : (

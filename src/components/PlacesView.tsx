@@ -33,6 +33,7 @@ import {
 import { PlaceCategory, PlaceItem, SpanishCity } from '../types';
 import { SPANISH_CITIES } from '../data/mockData';
 import { ClassifiedAdsSection } from './ClassifiedAdsSection';
+import { VerifiedBadge } from './VerifiedBadge';
 
 const CATEGORIES: { label: PlaceCategory | 'Todos'; icon: React.FC<{ className?: string }> }[] = [
   { label: 'Todos', icon: Compass },
@@ -309,9 +310,7 @@ export const PlacesView: React.FC = () => {
                         {place.name}
                       </span>
                       {place.isVerified && (
-                        <span title="Verificado por la comunidad" className="inline-flex items-center">
-                          <CheckCircle2 className="w-3.5 h-3.5 text-blue-400 shrink-0" />
-                        </span>
+                        <VerifiedBadge className="w-3.5 h-3.5" title="Negocio verificado" />
                       )}
                     </h3>
 
@@ -404,9 +403,7 @@ export const PlacesView: React.FC = () => {
                   <h2 className="text-base sm:text-lg font-black text-white flex items-center gap-1.5 truncate">
                     <span className="truncate">{selectedPlace.name}</span>
                     {selectedPlace.isVerified && (
-                      <span title="Verificado" className="inline-flex items-center shrink-0">
-                        <CheckCircle2 className="w-4 h-4 text-blue-400" />
-                      </span>
+                      <VerifiedBadge className="w-4.5 h-4.5" title="Negocio verificado" />
                     )}
                   </h2>
                 </div>

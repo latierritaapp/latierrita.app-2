@@ -52,6 +52,7 @@ import {
 } from 'lucide-react';
 import { SPANISH_CITIES } from '../data/mockData';
 import { FlagColombia, FlagSpain, CountryFlag } from './CountryFlag';
+import { VerifiedBadge } from './VerifiedBadge';
 
 // Component for rendering verified checkmark badge and staff role labels (MOD, Soporte, ADMIN)
 const UserBadges: React.FC<{
@@ -64,9 +65,7 @@ const UserBadges: React.FC<{
   return (
     <span className={`inline-flex items-center gap-1 shrink-0 ${className}`}>
       {isVerified && (
-        <span title="Usuario Verificado" className="inline-flex shrink-0">
-          <BadgeCheck className="w-3.5 h-3.5 text-blue-500 fill-blue-500/20 shrink-0 inline-block" />
-        </span>
+        <VerifiedBadge className="w-3.5 h-3.5" />
       )}
       {staffRole && staffRole !== 'Usuario' && (
         <span
@@ -2199,7 +2198,52 @@ export const ChatsView: React.FC = () => {
                                 ) : msg.audioUrl ? (
                                   <VoiceNotePlayer audioUrl={msg.audioUrl} duration={msg.audioDuration} isMe={isMe} />
                                 ) : (
-                                  <p className="whitespace-pre-wrap break-words">{msg.text}</p>
+                                  <div className="space-y-1">
+                                    {msg.sharedPost && (
+                                      <div
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          // 1. Navigate to feed tab
+                                          setActiveTab('feed');
+                                          // 2. Clear active conversation list layout
+                                          setSelectedPrivateOrGroupId(null);
+                                          setActiveChatId(null);
+                                          // 3. Scroll to target post card with a small timing offset
+                                          setTimeout(() => {
+                                            const el = document.getElementById(`post-card-${msg.sharedPost.id}`);
+                                            if (el) {
+                                              el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                              el.classList.add('ring-2', 'ring-amber-400', 'ring-offset-2', 'ring-offset-[#001428]', 'animate-pulse');
+                                              setTimeout(() => {
+                                                el.classList.remove('ring-2', 'ring-amber-400', 'ring-offset-2', 'ring-offset-[#001428]', 'animate-pulse');
+                                              }, 2500);
+                                            }
+                                          }, 200);
+                                        }}
+                                        className="my-1 p-2 rounded-xl bg-black/25 dark:bg-neutral-900/60 border border-white/10 hover:border-amber-400/40 transition-all flex items-center gap-2.5 text-left cursor-pointer group/post hover:scale-[1.01] active:scale-[0.99] w-full max-w-[240px] shrink-0 select-none"
+                                        title="Ver publicación original en el feed"
+                                      >
+                                        <img
+                                          src={msg.sharedPost.mediaUrl}
+                                          alt={msg.sharedPost.caption || 'Publicación'}
+                                          className="w-11 h-11 rounded-lg object-cover border border-white/10 shrink-0 group-hover/post:scale-105 transition-transform"
+                                          referrerPolicy="no-referrer"
+                                        />
+                                        <div className="min-w-0 flex-1">
+                                          <span className="text-[10px] font-black text-amber-400 block tracking-wide uppercase">
+                                            @{msg.sharedPost.username}
+                                          </span>
+                                          <p className="text-[10px] text-white/95 line-clamp-2 mt-0.5 leading-snug break-words">
+                                            {msg.sharedPost.caption || 'Ver publicación...'}
+                                          </p>
+                                          <span className="text-[9px] text-amber-300 group-hover/post:text-amber-200 block font-bold mt-1">
+                                            Ver publicación →
+                                          </span>
+                                        </div>
+                                      </div>
+                                    )}
+                                    <p className="whitespace-pre-wrap break-words">{msg.text}</p>
+                                  </div>
                                 )}
                               </>
                             )}

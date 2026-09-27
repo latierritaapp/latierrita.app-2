@@ -3,6 +3,7 @@ import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { LaTierritaLogo } from './LaTierritaLogo';
 import { TICKET_CATEGORIES } from '../data/ticketData';
+import { VerifiedBadge } from './VerifiedBadge';
 import {
   X,
   Lock,
@@ -671,8 +672,8 @@ export const SettingsModal: React.FC = () => {
             <div>
               {currentUser.isVerified ? (
                 <div className="p-5 text-center bg-blue-500/20 rounded-xl border border-blue-500/40 space-y-2">
-                  <div className="w-10 h-10 rounded-full bg-blue-400 text-neutral-950 flex items-center justify-center mx-auto text-lg font-black">
-                    ✓
+                  <div className="flex justify-center mx-auto py-1">
+                    <VerifiedBadge className="w-12 h-12" />
                   </div>
                   <h4 className="text-xs font-black text-blue-200">
                     ¡Tu perfil ya está verificado!

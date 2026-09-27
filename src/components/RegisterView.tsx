@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { COLOMBIAN_CITIES, SPANISH_CITIES } from '../data/citiesData';
+import { optimizeAvatarImage } from '../lib/imageOptimizer';
 
 interface RegisterViewProps {
   onGoToLogin: () => void;
@@ -354,7 +355,7 @@ export const RegisterView: React.FC<RegisterViewProps> = ({ onGoToLogin }) => {
   };
 
   // Step 4: Handle gallery photo upload
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -363,17 +364,23 @@ export const RegisterView: React.FC<RegisterViewProps> = ({ onGoToLogin }) => {
       return;
     }
 
-    if (file.size > 5 * 1024 * 1024) {
-      setErrorMessage('La imagen no debe superar los 5MB.');
+    if (file.size > 20 * 1024 * 1024) {
+      setErrorMessage('La imagen no debe superar los 20MB.');
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      setAvatarPreview(reader.result as string);
+    try {
+      setIsSubmitting(true);
       setErrorMessage(null);
-    };
-    reader.readAsDataURL(file);
+      const optimizedUrl = await optimizeAvatarImage(file, 400, 0.85);
+      setAvatarPreview(optimizedUrl);
+    } catch (err: any) {
+      console.error('Error optimizing image:', err);
+      setErrorMessage('No se pudo procesar la imagen seleccionada. Inténtalo con otra foto.');
+    } finally {
+      setIsSubmitting(false);
+      if (e.target) e.target.value = '';
+    }
   };
 
   // Step 4: Finalize registration

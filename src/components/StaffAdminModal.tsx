@@ -46,6 +46,7 @@ import {
 import { AdCategory, AD_CAROUSEL_CATEGORIES, StaffRole, TicketType, UserProfile, SpanishCity, SupportTicket } from '../types';
 import { SPANISH_CITIES } from '../data/citiesData';
 import { optimizeBannerImage } from '../lib/imageOptimizer';
+import { VerifiedBadge } from './VerifiedBadge';
 
 export const StaffAdminModal: React.FC<{ isFullScreenRoute?: boolean }> = ({ isFullScreenRoute }) => {
   const {
@@ -2335,7 +2336,7 @@ export const StaffAdminModal: React.FC<{ isFullScreenRoute?: boolean }> = ({ isF
                                           {u.name}
                                         </span>
                                         {u.isVerified && (
-                                          <BadgeCheck className="w-4 h-4 text-amber-400 fill-amber-400" />
+                                          <VerifiedBadge className="w-4 h-4" />
                                         )}
                                         {u.isSuspended && (
                                           <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/40">
@@ -2908,7 +2909,7 @@ CREATE POLICY "Permitir eliminación stories" ON public.stories FOR DELETE USING
                   <div className="flex items-center gap-1.5">
                     <h3 className="font-bold text-base text-white">{selectedUserForEdit.name}</h3>
                     {selectedUserForEdit.isVerified && (
-                      <BadgeCheck className="w-4 h-4 text-amber-400 fill-amber-400" />
+                      <VerifiedBadge className="w-4 h-4" />
                     )}
                   </div>
                   <div className="flex items-center gap-2 flex-wrap text-xs text-white/70">
@@ -3109,7 +3110,7 @@ CREATE POLICY "Permitir eliminación stories" ON public.stories FOR DELETE USING
                   {/* Verification checkbox */}
                   <div className="p-3 bg-white/5 border border-white/10 rounded-2xl flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <BadgeCheck className="w-5 h-5 text-amber-400 fill-amber-400" />
+                      <VerifiedBadge className="w-5 h-5" />
                       <div>
                         <span className="font-bold text-white block">Insignia Oficial de Verificación</span>
                         <span className="text-[10px] text-white/60">Marca la cuenta como verificada por el STAFF</span>

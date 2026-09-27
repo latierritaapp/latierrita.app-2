@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useApp, isFictitiousUser } from '../context/AppContext';
 import { UserProfile } from '../types';
-import { ArrowLeft, X, Search, UserCheck, UserPlus, Users, BadgeCheck, Compass, MapPin } from 'lucide-react';
+import { ArrowLeft, X, Search, UserCheck, UserPlus, Users, Compass, MapPin } from 'lucide-react';
+import { VerifiedBadge } from './VerifiedBadge';
 
 interface FollowersModalProps {
   type: 'followers' | 'following';
@@ -127,7 +128,7 @@ export const FollowersModal: React.FC<FollowersModalProps> = ({ type, user, onCl
             <h2 className="text-base font-black text-white truncate flex items-center justify-center gap-1.5">
               <span>@{user.username}</span>
               {user.isVerified && (
-                <BadgeCheck className="w-4 h-4 text-sky-400 fill-sky-400/20 inline-block" />
+                <VerifiedBadge className="w-4 h-4" />
               )}
             </h2>
             <p className="text-[11px] text-neutral-400 font-medium truncate">
@@ -286,7 +287,9 @@ export const FollowersModal: React.FC<FollowersModalProps> = ({ type, user, onCl
                         referrerPolicy="no-referrer"
                       />
                       {displayItem.isVerified && (
-                        <BadgeCheck className="w-4 h-4 text-sky-400 fill-sky-400/20 absolute -bottom-0.5 -right-0.5 bg-neutral-900 rounded-full" />
+                        <div className="absolute -bottom-0.5 -right-0.5 bg-neutral-900 rounded-full p-0.5 shadow-sm">
+                          <VerifiedBadge className="w-3.5 h-3.5" />
+                        </div>
                       )}
                     </div>
 
