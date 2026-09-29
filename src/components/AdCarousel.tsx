@@ -322,9 +322,9 @@ export const AdCarousel: React.FC<AdCarouselProps> = ({ type = 'inicio' }) => {
       <>
         <section
           aria-label="Carrusel de anuncios destacados"
-          className={type === 'explorar' ? 'w-full max-w-2xl mx-auto p-0 m-0' : 'w-full max-w-2xl mx-auto px-4 py-3'}
+          className="w-full max-w-2xl mx-auto p-0 m-0"
         >
-          <div className={`relative overflow-hidden shadow-lg border border-white/10 bg-gradient-to-br from-amber-500/20 via-neutral-900 to-neutral-950 p-4 sm:p-5 flex flex-col sm:flex-row items-center justify-between gap-4 ${type === 'explorar' ? 'rounded-none border-x-0 border-t-0 border-b border-white/10' : 'rounded-2xl'}`}>
+          <div className="relative overflow-hidden shadow-lg border-x-0 border-t-0 border-b border-white/10 bg-gradient-to-br from-amber-500/20 via-neutral-900 to-neutral-950 p-4 sm:p-5 flex flex-col sm:flex-row items-center justify-between gap-4 rounded-none">
             <div className="space-y-1 text-center sm:text-left">
               <span className="text-[10px] font-bold uppercase tracking-wider text-amber-300 bg-amber-400/10 px-2.5 py-0.5 rounded-full border border-amber-400/20">
                 {type === 'explorar' ? 'Carrusel 02 · Explorar' : 'Carrusel 01 · Inicio'}
@@ -390,11 +390,11 @@ export const AdCarousel: React.FC<AdCarouselProps> = ({ type = 'inicio' }) => {
     <>
       <section
         aria-label="Carrusel de anuncios destacados"
-        className={type === 'explorar' ? 'w-full max-w-2xl mx-auto p-0 m-0' : 'w-full max-w-2xl mx-auto px-0 sm:px-4 py-3'}
+        className="w-full max-w-2xl mx-auto p-0 m-0"
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
       >
-        <div className={`relative overflow-hidden shadow-xl bg-neutral-950 group ${type === 'explorar' ? 'rounded-none border-x-0 border-t-0 border-b border-white/10' : 'rounded-none sm:rounded-2xl border-y sm:border border-white/15'}`}>
+        <div className="relative overflow-hidden shadow-xl bg-neutral-950 group rounded-none border-x-0 border-t-0 border-b border-white/10">
           {/* Main Banner Image Container */}
           <div className="relative w-full h-56 sm:h-72 md:h-80 overflow-hidden bg-neutral-900">
             <div
