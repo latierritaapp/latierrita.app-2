@@ -240,6 +240,10 @@ interface AppContextType {
   setExploreSearchQuery: (query: string) => void;
   chatSearchQuery: string;
   setChatSearchQuery: (query: string) => void;
+  placesSearchQuery: string;
+  setPlacesSearchQuery: (query: string) => void;
+  adsSearchQuery: string;
+  setAdsSearchQuery: (query: string) => void;
   placesSubTab: 'places' | 'ads';
   setPlacesSubTab: (tab: 'places' | 'ads') => void;
   chatTypeTab: 'general' | 'city' | 'messages';
@@ -1086,6 +1090,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const [exploreSearchQuery, setExploreSearchQuery] = useState('');
   const [chatSearchQuery, setChatSearchQuery] = useState('');
+  const [placesSearchQuery, setPlacesSearchQuery] = useState('');
+  const [adsSearchQuery, setAdsSearchQuery] = useState('');
   const [placesSubTab, setPlacesSubTab] = useState<'places' | 'ads'>('places');
   const [chatTypeTab, setChatTypeTab] = useState<'general' | 'city' | 'messages'>('messages');
   const [selectedUserProfile, setSelectedUserProfileState] = useState<UserProfile | null>(null);
@@ -5032,6 +5038,10 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
         setExploreSearchQuery,
         chatSearchQuery,
         setChatSearchQuery,
+        placesSearchQuery,
+        setPlacesSearchQuery,
+        adsSearchQuery,
+        setAdsSearchQuery,
         placesSubTab,
         setPlacesSubTab,
         chatTypeTab,

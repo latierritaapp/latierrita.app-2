@@ -109,6 +109,27 @@
         "discountBadge": { "type": "string", "description": "Optional badge" },
         "active": { "type": "boolean", "description": "Active status" }
       }
+    },
+    "ClassifiedAd": {
+      "collection": "classified_ads",
+      "description": "User submitted classified advertisements",
+      "fields": {
+        "id": { "type": "string", "description": "Classified Ad unique ID" },
+        "userId": { "type": "string", "description": "Creator User ID" },
+        "title": { "type": "string", "description": "Ad title" },
+        "category": { "type": "string", "description": "Category" },
+        "city": { "type": "string", "description": "City in Spain or Toda España" },
+        "description": { "type": "string", "description": "Ad description (max 100 chars)" },
+        "contactName": { "type": "string", "description": "Contact person name" },
+        "contactUsername": { "type": "string", "description": "Contact username" },
+        "contactPhone": { "type": "string", "description": "Phone number" },
+        "whatsapp": { "type": "string", "description": "WhatsApp contact number" },
+        "price": { "type": "string", "description": "Price if applicable" },
+        "imageUrl": { "type": "string", "description": "Ad image/logo url" },
+        "date": { "type": "string", "description": "Human readable date label" },
+        "createdAt": { "type": "number", "description": "Creation timestamp epoch" },
+        "isPromoted": { "type": "boolean", "description": "Promoted flag" }
+      }
     }
   }
 }

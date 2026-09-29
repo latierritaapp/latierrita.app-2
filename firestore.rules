@@ -77,6 +77,11 @@ service cloud.firestore {
       allow read, write: if true;
     }
 
+    // Classified Ads
+    match /classified_ads/{adId} {
+      allow read, write: if true;
+    }
+
     // Config (e.g. startup ad config)
     match /config/{configId} {
       allow read, write: if true;

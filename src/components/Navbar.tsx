@@ -32,6 +32,10 @@ export const Navbar: React.FC = () => {
     setExploreSearchQuery,
     chatSearchQuery,
     setChatSearchQuery,
+    placesSearchQuery,
+    setPlacesSearchQuery,
+    adsSearchQuery,
+    setAdsSearchQuery,
     placesSubTab,
     setPlacesSubTab,
     chatTypeTab,
@@ -74,6 +78,12 @@ export const Navbar: React.FC = () => {
   const isVisitingOtherProfile = isProfileView && Boolean(selectedUserProfile) && selectedUserProfile?.id !== currentUser.id && selectedUserProfile?.username !== currentUser.username;
 
   const pendingInvitesCount = (groupInvites || []).filter(i => i.status === 'pending').length;
+
+  const unreadMessagesCount = useMemo(() => {
+    return (chatRooms || [])
+      .filter(r => r.type === 'private')
+      .reduce((acc, r) => acc + (r.unreadCount || 0), 0);
+  }, [chatRooms]);
 
   // Compile a comprehensive list of unique real users available for search
   const allSearchableUsers = useMemo(() => {
@@ -390,33 +400,65 @@ export const Navbar: React.FC = () => {
             </div>
           </div>
         ) : isPlacesView ? (
-          /* CASE 2: LUGARES & ANUNCIOS HEADER */
-          <div className="w-full flex items-center justify-center gap-2">
-            <button
-              id="btn-header-tab-places"
-              onClick={() => setPlacesSubTab('places')}
-              className={`flex-1 max-w-[200px] py-2 px-4 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-sm active:scale-95 ${
-                placesSubTab === 'places'
-                  ? 'bg-amber-400 text-neutral-950 font-black ring-1 ring-amber-300'
-                  : 'bg-white/10 text-white/70 hover:text-white hover:bg-white/20'
-              }`}
-            >
-              <MapPin className={`w-3.5 h-3.5 ${placesSubTab === 'places' ? 'stroke-[2.5]' : ''}`} />
-              <span>Lugares</span>
-            </button>
+          /* CASE 2: LUGARES Y ANUNCIOS HEADER (Título a la izquierda, barra de búsqueda al lado) */
+          <div className="w-full flex items-center justify-between gap-3">
+            {/* Título a la izquierda */}
+            <div className="flex items-center gap-1.5 shrink-0">
+              {placesSubTab === 'ads' ? (
+                <>
+                  <Megaphone className="w-5 h-5 text-amber-400 stroke-[2.2]" />
+                  <span className="text-base sm:text-lg font-black tracking-tight text-white select-none">
+                    Anuncios
+                  </span>
+                </>
+              ) : (
+                <>
+                  <MapPin className="w-5 h-5 text-amber-400 stroke-[2.2]" />
+                  <span className="text-base sm:text-lg font-black tracking-tight text-white select-none">
+                    Lugares
+                  </span>
+                </>
+              )}
+            </div>
 
-            <button
-              id="btn-header-tab-ads"
-              onClick={() => setPlacesSubTab('ads')}
-              className={`flex-1 max-w-[200px] py-2 px-4 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-sm active:scale-95 ${
-                placesSubTab === 'ads'
-                  ? 'bg-amber-400 text-neutral-950 font-black ring-1 ring-amber-300'
-                  : 'bg-white/10 text-white/70 hover:text-white hover:bg-white/20'
-              }`}
-            >
-              <Megaphone className={`w-3.5 h-3.5 ${placesSubTab === 'ads' ? 'stroke-[2.5]' : ''}`} />
-              <span>Anuncios</span>
-            </button>
+            {/* Barra de búsqueda al lado derecho */}
+            <div className="flex-1 max-w-xs sm:max-w-sm relative">
+              <Search className="w-4 h-4 text-white/50 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                id="input-navbar-places-ads-search"
+                type="text"
+                value={placesSubTab === 'ads' ? adsSearchQuery : placesSearchQuery}
+                onChange={e => {
+                  if (placesSubTab === 'ads') {
+                    setAdsSearchQuery(e.target.value);
+                  } else {
+                    setPlacesSearchQuery(e.target.value);
+                  }
+                }}
+                placeholder={
+                  placesSubTab === 'ads'
+                    ? 'Buscar anuncios, empleo, vivienda...'
+                    : 'Buscar lugares, restaurantes, servicios...'
+                }
+                autoComplete="off"
+                className="w-full pl-9 pr-8 py-2 text-xs bg-white/10 hover:bg-white/15 focus:bg-white/20 rounded-full text-white placeholder-white/50 focus:outline-none focus:ring-1 focus:ring-amber-400 border border-white/15 transition-all shadow-inner"
+              />
+              {(placesSubTab === 'ads' ? adsSearchQuery : placesSearchQuery) && (
+                <button
+                  onClick={() => {
+                    if (placesSubTab === 'ads') {
+                      setAdsSearchQuery('');
+                    } else {
+                      setPlacesSearchQuery('');
+                    }
+                  }}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 rounded-full text-white/60 hover:text-white hover:bg-white/20 transition-colors"
+                  title="Limpiar búsqueda"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
           </div>
         ) : isChatsView ? (
           /* CASE 2: CHATS HEADER (Logo de la app a la izquierda, barra de búsqueda sustituyendo los sub-tabs) */
@@ -472,11 +514,21 @@ export const Navbar: React.FC = () => {
               ) : (
                 <button
                   id="btn-nav-create-menu"
-                  onClick={() => setIsCreateMenuOpen(true)}
-                  className="p-2 text-white/90 hover:text-amber-400 rounded-full hover:bg-white/10 transition-all active:scale-95"
-                  title="Crear contenido"
+                  onClick={() => {
+                    setActiveTab('chats');
+                    setChatTypeTab('messages');
+                    setActiveChatId(null);
+                  }}
+                  className="relative p-2 text-white/90 hover:text-amber-400 rounded-full hover:bg-white/10 transition-all active:scale-95"
+                  title="Bandeja de chats"
+                  aria-label="Bandeja de chats"
                 >
-                  <Plus className="w-6 h-6 stroke-[2.5]" />
+                  <MessageCircle className="w-6 h-6 stroke-[2.2]" />
+                  {unreadMessagesCount > 0 && (
+                    <span className="absolute top-1 right-1 px-1 min-w-4 h-4 bg-rose-500 text-white text-[9px] font-extrabold rounded-full flex items-center justify-center ring-2 ring-[#001428]">
+                      {unreadMessagesCount > 9 ? '9+' : unreadMessagesCount}
+                    </span>
+                  )}
                 </button>
               )}
             </div>

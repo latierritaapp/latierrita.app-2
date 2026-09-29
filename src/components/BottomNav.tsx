@@ -1,6 +1,6 @@
 import React from 'react';
 import { useApp } from '../context/AppContext';
-import { Home, MessageCircle, User, Megaphone, Search } from 'lucide-react';
+import { Home, Search, User, Megaphone, MapPin } from 'lucide-react';
 
 export const BottomNav: React.FC = () => {
   const {
@@ -8,14 +8,15 @@ export const BottomNav: React.FC = () => {
     setActiveTab,
     currentUser,
     selectedUserProfile,
-    chatRooms,
-    setChatTypeTab,
-    setActiveChatId
+    placesSubTab,
+    setPlacesSubTab
   } = useApp();
 
-  const unreadMessagesCount = (chatRooms || [])
-    .filter(r => r.type === 'private')
-    .reduce((acc, r) => acc + (r.unreadCount || 0), 0);
+  const isHomeActive = activeTab === 'feed' && !selectedUserProfile;
+  const isExploreActive = activeTab === 'explore';
+  const isProfileActive = activeTab === 'profile' && !selectedUserProfile;
+  const isAdsActive = activeTab === 'places' && placesSubTab === 'ads';
+  const isPlacesActive = activeTab === 'places' && placesSubTab === 'places';
 
   return (
     <nav
@@ -29,40 +30,29 @@ export const BottomNav: React.FC = () => {
           id="tab-btn-home"
           onClick={() => setActiveTab('feed')}
           className={`relative p-2.5 rounded-2xl flex flex-col items-center justify-center transition-all active:scale-90 ${
-            activeTab === 'feed' && !selectedUserProfile
+            isHomeActive
               ? 'text-amber-400 bg-amber-400/10'
               : 'text-white/60 hover:text-white hover:bg-white/5'
           }`}
           title="Inicio"
           aria-label="Inicio"
         >
-          <Home className={`w-5 sm:w-6 h-5 sm:h-6 ${activeTab === 'feed' && !selectedUserProfile ? 'stroke-[2.5]' : 'stroke-[1.8]'}`} />
+          <Home className={`w-5 sm:w-6 h-5 sm:h-6 ${isHomeActive ? 'stroke-[2.5]' : 'stroke-[1.8]'}`} />
         </button>
 
-        {/* 2. Chats */}
+        {/* 2. Explorar */}
         <button
-          id="tab-btn-chats"
-          onClick={() => {
-            setActiveTab('chats');
-            setChatTypeTab('messages');
-            setActiveChatId(null);
-          }}
+          id="tab-btn-explore"
+          onClick={() => setActiveTab('explore')}
           className={`relative p-2.5 rounded-2xl flex flex-col items-center justify-center transition-all active:scale-90 ${
-            activeTab === 'chats'
+            isExploreActive
               ? 'text-amber-400 bg-amber-400/10'
               : 'text-white/60 hover:text-white hover:bg-white/5'
           }`}
-          title="Bandeja de chats"
-          aria-label="Chats"
+          title="Explorar"
+          aria-label="Explorar"
         >
-          <div className="relative">
-            <MessageCircle className={`w-5 sm:w-6 h-5 sm:h-6 ${activeTab === 'chats' ? 'stroke-[2.5]' : 'stroke-[1.8]'}`} />
-            {unreadMessagesCount > 0 && (
-              <span className="absolute -top-1 -right-1.5 px-1 min-w-4 h-4 bg-rose-500 text-white text-[9px] font-extrabold rounded-full flex items-center justify-center ring-2 ring-[#1A2436]">
-                {unreadMessagesCount > 9 ? '9+' : unreadMessagesCount}
-              </span>
-            )}
-          </div>
+          <Search className={`w-5 sm:w-6 h-5 sm:h-6 ${isExploreActive ? 'stroke-[2.5]' : 'stroke-[1.8]'}`} />
         </button>
 
         {/* 3. Perfil */}
@@ -70,14 +60,14 @@ export const BottomNav: React.FC = () => {
           id="tab-btn-profile"
           onClick={() => setActiveTab('profile')}
           className={`relative p-2 rounded-2xl flex flex-col items-center justify-center transition-all active:scale-90 ${
-            activeTab === 'profile' && !selectedUserProfile
+            isProfileActive
               ? 'text-amber-400 bg-amber-400/10'
               : 'text-white/60 hover:text-white hover:bg-white/5'
           }`}
           title="Mi Perfil"
           aria-label="Perfil"
         >
-          <div className={`p-0.5 rounded-full transition-all ${activeTab === 'profile' && !selectedUserProfile ? 'ring-2 ring-amber-400 shadow-sm' : ''}`}>
+          <div className={`p-0.5 rounded-full transition-all ${isProfileActive ? 'ring-2 ring-amber-400 shadow-sm' : ''}`}>
             {currentUser.avatar ? (
               <img
                 src={currentUser.avatar}
@@ -91,34 +81,40 @@ export const BottomNav: React.FC = () => {
           </div>
         </button>
 
-        {/* 4. Lugares / Anuncios (Altavoz) */}
+        {/* 4. Anuncios */}
         <button
-          id="tab-btn-places"
-          onClick={() => setActiveTab('places')}
+          id="tab-btn-ads"
+          onClick={() => {
+            setActiveTab('places');
+            setPlacesSubTab('ads');
+          }}
           className={`relative p-2.5 rounded-2xl flex flex-col items-center justify-center transition-all active:scale-90 ${
-            activeTab === 'places'
+            isAdsActive
               ? 'text-amber-400 bg-amber-400/10'
               : 'text-white/60 hover:text-white hover:bg-white/5'
           }`}
-          title="Lugares y Anuncios"
-          aria-label="Lugares y Anuncios"
+          title="Anuncios Clasificados"
+          aria-label="Anuncios"
         >
-          <Megaphone className={`w-5 sm:w-6 h-5 sm:h-6 ${activeTab === 'places' ? 'stroke-[2.5] text-amber-400' : 'stroke-[1.8]'}`} />
+          <Megaphone className={`w-5 sm:w-6 h-5 sm:h-6 ${isAdsActive ? 'stroke-[2.5] text-amber-400' : 'stroke-[1.8]'}`} />
         </button>
 
-        {/* 5. Búsqueda y tendencias */}
+        {/* 5. Lugares */}
         <button
-          id="tab-btn-explore"
-          onClick={() => setActiveTab('explore')}
+          id="tab-btn-places"
+          onClick={() => {
+            setActiveTab('places');
+            setPlacesSubTab('places');
+          }}
           className={`relative p-2.5 rounded-2xl flex flex-col items-center justify-center transition-all active:scale-90 ${
-            activeTab === 'explore'
+            isPlacesActive
               ? 'text-amber-400 bg-amber-400/10'
               : 'text-white/60 hover:text-white hover:bg-white/5'
           }`}
-          title="Búsqueda y tendencias"
-          aria-label="Búsqueda y tendencias"
+          title="Lugares"
+          aria-label="Lugares"
         >
-          <Search className={`w-5 sm:w-6 h-5 sm:h-6 ${activeTab === 'explore' ? 'stroke-[2.5]' : 'stroke-[1.8]'}`} />
+          <MapPin className={`w-5 sm:w-6 h-5 sm:h-6 ${isPlacesActive ? 'stroke-[2.5] text-amber-400' : 'stroke-[1.8]'}`} />
         </button>
       </div>
     </nav>

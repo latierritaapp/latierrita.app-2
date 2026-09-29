@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import {
   Megaphone,
@@ -9,6 +9,7 @@ import {
   MapPin,
   Calendar,
   X,
+  ArrowLeft,
   Briefcase,
   Home,
   Package,
@@ -22,11 +23,14 @@ import {
   User,
   ExternalLink,
   Flag,
-  ShieldAlert
+  ShieldAlert,
+  Trash2,
+  AlertTriangle
 } from 'lucide-react';
 import { ClassifiedAdItem, ClassifiedCategory, SpanishCity, UserProfile } from '../types';
 import { DEFAULT_SILHOUETTE_AVATAR } from '../context/AuthContext';
 import { SPANISH_CITIES } from '../data/mockData';
+import { db, doc, setDoc, deleteDoc, collection, onSnapshot } from '../lib/firebase';
 
 const AD_CATEGORIES: { label: ClassifiedCategory | 'Todos'; icon: React.FC<{ className?: string }> }[] = [
   { label: 'Todos', icon: Megaphone },
@@ -47,7 +51,9 @@ export const ClassifiedAdsSection: React.FC = () => {
     setChatTypeTab,
     startPrivateChat,
     triggerPlushNotification,
-    openReportModal
+    openReportModal,
+    adsSearchQuery,
+    setAdsSearchQuery
   } = useApp();
 
   const [ads, setAds] = useState<ClassifiedAdItem[]>(() => {
@@ -55,11 +61,71 @@ export const ClassifiedAdsSection: React.FC = () => {
     return saved ? JSON.parse(saved) : INITIAL_ADS;
   });
 
-  const [searchQuery, setSearchQuery] = useState('');
+  // Sync ads with Firestore in real-time if available
+  useEffect(() => {
+    let unsub: any = null;
+    try {
+      unsub = onSnapshot(collection(db, 'classified_ads'), (snapshot) => {
+        if (!snapshot.empty) {
+          const fsAds: ClassifiedAdItem[] = [];
+          snapshot.forEach((docSnap: any) => {
+            const d = docSnap.data() as any;
+            if (d && d.title) {
+              fsAds.push({
+                id: docSnap.id,
+                userId: d.userId,
+                title: d.title,
+                category: d.category || 'Empleo & Trabajo',
+                city: d.city || 'Toda España',
+                description: d.description || '',
+                contactName: d.contactName || 'Usuario La Tierrita',
+                contactUsername: d.contactUsername,
+                contactPhone: d.contactPhone,
+                whatsapp: d.whatsapp,
+                contactEmail: d.contactEmail,
+                price: d.price,
+                imageUrl: d.imageUrl,
+                date: d.date || 'Reciente',
+                createdAt: d.createdAt,
+                isPromoted: Boolean(d.isPromoted),
+                tags: Array.isArray(d.tags) ? d.tags : []
+              });
+            }
+          });
+          if (fsAds.length > 0) {
+            setAds(prev => {
+              const merged = [...fsAds];
+              prev.forEach(p => {
+                if (!merged.some(m => m.id === p.id)) {
+                  merged.push(p);
+                }
+              });
+              try {
+                localStorage.setItem('latierrita_user_ads', JSON.stringify(merged));
+              } catch {}
+              return merged;
+            });
+          }
+        }
+      }, (err) => {
+        console.warn('Classified ads snapshot note:', err);
+      });
+    } catch (e) {
+      console.warn('Error setting up classified ads listener:', e);
+    }
+
+    return () => {
+      if (typeof unsub === 'function') unsub();
+    };
+  }, []);
+
+  const searchQuery = adsSearchQuery;
+  const setSearchQuery = setAdsSearchQuery;
   const [selectedCity, setSelectedCity] = useState<SpanishCity | 'Todas'>(currentUser.city || 'Todas');
   const [selectedCategory, setSelectedCategory] = useState<ClassifiedCategory | 'Todos'>('Todos');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [selectedAdDetail, setSelectedAdDetail] = useState<ClassifiedAdItem | null>(null);
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
 
   // New Ad Form State
   const [title, setTitle] = useState('');
@@ -98,6 +164,72 @@ export const ClassifiedAdsSection: React.FC = () => {
     return ad.contactName
       ? ad.contactName.toLowerCase().replace(/[^a-z0-9]/g, '_')
       : 'usuario';
+  };
+
+  const canDeleteAd = (ad: ClassifiedAdItem | null): boolean => {
+    if (!ad || !currentUser) return false;
+
+    // Staff roles: ADMIN, Soporte, MOD
+    const staffRole = currentUser.staffRole;
+    if (staffRole === 'ADMIN' || staffRole === 'Soporte' || staffRole === 'MOD') {
+      return true;
+    }
+
+    // Official admin account checks
+    if (
+      currentUser.email === 'latierritaapp@gmail.com' ||
+      currentUser.username === 'latierrita_app' ||
+      currentUser.id === 'user-staff'
+    ) {
+      return true;
+    }
+
+    // Direct User ID matching
+    if (ad.userId && (ad.userId === currentUser.id || ad.userId === `user-${currentUser.username}`)) {
+      return true;
+    }
+
+    // Username matching
+    const authorUsername = getAuthorUsername(ad).toLowerCase().replace(/^@/, '').trim();
+    const currentUsername = (currentUser.username || '').toLowerCase().replace(/^@/, '').trim();
+    if (authorUsername && currentUsername && authorUsername === currentUsername) {
+      return true;
+    }
+
+    // Contact name matching fallback
+    if (
+      ad.contactName &&
+      currentUser.name &&
+      ad.contactName.trim().toLowerCase() === currentUser.name.trim().toLowerCase()
+    ) {
+      return true;
+    }
+
+    return false;
+  };
+
+  const handleDeleteAd = async (ad: ClassifiedAdItem) => {
+    const updated = ads.filter(item => item.id !== ad.id);
+    setAds(updated);
+    try {
+      localStorage.setItem('latierrita_user_ads', JSON.stringify(updated));
+    } catch {}
+
+    try {
+      await deleteDoc(doc(db, 'classified_ads', ad.id));
+    } catch (err) {
+      console.warn('Note: Classified ad deletion synced locally:', err);
+    }
+
+    setIsDeleteConfirmOpen(false);
+    setSelectedAdDetail(null);
+
+    triggerPlushNotification({
+      type: 'system',
+      title: 'Anuncio eliminado',
+      message: 'El anuncio ha sido eliminado exitosamente.',
+      avatar: currentUser.avatar
+    });
   };
 
   const handleNavigateToAuthor = (ad: ClassifiedAdItem) => {
@@ -182,12 +314,14 @@ export const ClassifiedAdsSection: React.FC = () => {
   const isPriceAllowed =
     category === 'Vivienda & Habitaciones' || category === 'Compra & Venta';
 
-  const handleCreateAdSubmit = (e: React.FormEvent) => {
+  const handleCreateAdSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim() || !description.trim() || !isDisclaimerAccepted) return;
 
+    const newAdId = `ad-${Date.now()}`;
     const newAd: ClassifiedAdItem = {
-      id: `ad-${Date.now()}`,
+      id: newAdId,
+      userId: currentUser.id,
       title: title.trim(),
       category,
       city,
@@ -199,13 +333,25 @@ export const ClassifiedAdsSection: React.FC = () => {
       price: isPriceAllowed && price.trim() ? price.trim() : undefined,
       imageUrl: imageUrl.trim() || undefined,
       date: 'Reciente',
+      createdAt: Date.now(),
       isPromoted: false,
       tags: [category.split(' ')[0], city === 'Toda España' ? 'España' : city]
     };
 
     const updated = [newAd, ...ads];
     setAds(updated);
-    localStorage.setItem('latierrita_user_ads', JSON.stringify(updated));
+    try {
+      localStorage.setItem('latierrita_user_ads', JSON.stringify(updated));
+    } catch {}
+
+    try {
+      await setDoc(doc(db, 'classified_ads', newAdId), {
+        ...newAd,
+        createdAt: Date.now()
+      });
+    } catch (err) {
+      console.warn('Note: Classified ad saved locally:', err);
+    }
 
     triggerPlushNotification({
       type: 'system',
@@ -227,17 +373,24 @@ export const ClassifiedAdsSection: React.FC = () => {
 
   return (
     <div id="classified-ads-section" className="w-full bg-transparent">
-      {/* Subheader with filters */}
-      <div className="sticky top-14 z-30 bg-[#003087]/80 backdrop-blur-md border-b border-white/10 px-4 py-3 space-y-3">
+      {/* Subheader with filters and actions */}
+      <div className="sticky top-14 z-30 bg-[#003087]/80 backdrop-blur-md border-b border-white/10 px-4 py-2.5 space-y-2.5">
         <div className="flex items-center justify-between gap-2">
-          <div>
-            <h1 className="text-lg font-black tracking-tight text-white flex items-center gap-1.5">
-              <Megaphone className="w-5 h-5 text-amber-400" />
-              <span>Anuncios</span>
-            </h1>
-            <p className="text-[11px] text-white/70">
-              Empleo, alquileres, encomiendas y servicios entre parceros
-            </p>
+          {/* City Filter */}
+          <div className="flex-1 max-w-[220px]">
+            <select
+              id="select-ads-city"
+              value={selectedCity}
+              onChange={e => setSelectedCity(e.target.value as any)}
+              className="w-full px-3 py-1.5 bg-[#0c2454] text-xs rounded-xl border border-white/15 text-white focus:outline-none focus:ring-1 focus:ring-amber-400 font-medium"
+            >
+              <option value="Todas" className="bg-[#0c2454] text-white">Toda España</option>
+              {SPANISH_CITIES.map(c => (
+                <option key={c} value={c} className="bg-[#0c2454] text-white">
+                  {c} {currentUser.city === c ? '(Tu ciudad)' : ''}
+                </option>
+              ))}
+            </select>
           </div>
 
           <button
@@ -250,45 +403,17 @@ export const ClassifiedAdsSection: React.FC = () => {
           </button>
         </div>
 
-        {/* Search Input and City Selector */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-          <div className="relative sm:col-span-2">
-            <Search className="w-4 h-4 text-white/50 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              id="input-ads-search"
-              type="text"
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              placeholder="Buscar por título, descripción, autor o ciudad..."
-              className="w-full pl-9 pr-3.5 py-2 bg-white/10 text-xs rounded-xl border border-white/15 text-white placeholder-white/50 focus:outline-none focus:ring-1 focus:ring-amber-400"
-            />
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-white/60 hover:text-white"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            )}
-          </div>
-
-          {/* City Filter */}
-          <div>
-            <select
-              id="select-ads-city"
-              value={selectedCity}
-              onChange={e => setSelectedCity(e.target.value as any)}
-              className="w-full px-3 py-2 bg-[#0c2454] text-xs rounded-xl border border-white/15 text-white focus:outline-none focus:ring-1 focus:ring-amber-400 font-medium"
+        {searchQuery && (
+          <div className="flex items-center justify-between text-[11px] text-white/70 bg-black/30 px-3 py-1 rounded-lg border border-white/10">
+            <span>Filtrando anuncios por: <strong className="text-amber-400">"{searchQuery}"</strong></span>
+            <button
+              onClick={() => setSearchQuery('')}
+              className="text-white/60 hover:text-white flex items-center gap-0.5 text-[10px]"
             >
-              <option value="Todas" className="bg-[#0c2454] text-white">Toda España</option>
-              {SPANISH_CITIES.map(c => (
-                <option key={c} value={c} className="bg-[#0c2454] text-white">
-                  {c} {currentUser.city === c ? '(Tu ciudad)' : ''}
-                </option>
-              ))}
-            </select>
+              <X className="w-3 h-3" /> Limpiar
+            </button>
           </div>
-        </div>
+        )}
 
         {/* Category Pills */}
         <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pt-1 pb-0.5">
@@ -582,38 +707,103 @@ export const ClassifiedAdsSection: React.FC = () => {
                   <Flag className="w-4 h-4" />
                 </button>
               </div>
+
+              {/* Botón único de Eliminar Anuncio para Creador / ADMIN / Soporte / MOD */}
+              {canDeleteAd(selectedAdDetail) && (
+                <div className="pt-2.5 border-t border-rose-500/20">
+                  <button
+                    type="button"
+                    id="btn-delete-ad-authorized"
+                    onClick={() => setIsDeleteConfirmOpen(true)}
+                    className="w-full py-2.5 px-4 bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-rose-300 hover:text-rose-200 font-bold text-xs rounded-xl flex items-center justify-center gap-2 transition-all active:scale-95 shadow cursor-pointer"
+                  >
+                    <Trash2 className="w-4 h-4 text-rose-400" />
+                    <span>Eliminar anuncio</span>
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>
       )}
 
-      {/* Create Ad Modal (Formulario de Publicar Anuncio) */}
+      {/* Modal de Confirmación para Eliminar Anuncio */}
+      {isDeleteConfirmOpen && selectedAdDetail && (
+        <div
+          id="modal-confirm-delete-ad"
+          className="fixed inset-0 z-[70] bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-150"
+          onClick={() => setIsDeleteConfirmOpen(false)}
+        >
+          <div
+            className="w-full max-w-sm bg-[#0d224d] border border-rose-500/30 rounded-3xl p-5 shadow-2xl text-white space-y-4 animate-in zoom-in-95 duration-150"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="w-12 h-12 rounded-2xl bg-rose-500/20 border border-rose-500/30 flex items-center justify-center mx-auto text-rose-400">
+              <Trash2 className="w-6 h-6" />
+            </div>
+
+            <div className="text-center space-y-1.5">
+              <h3 className="text-base font-extrabold text-white">¿Eliminar anuncio?</h3>
+              <p className="text-xs text-white/70 leading-relaxed">
+                Esta acción no se puede deshacer. Tu anuncio <strong className="text-white">"{selectedAdDetail.title}"</strong> se eliminará definitivamente y dejará de ser visible para la comunidad.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => setIsDeleteConfirmOpen(false)}
+                className="py-2.5 px-3 bg-white/10 hover:bg-white/20 text-white font-bold text-xs rounded-xl transition-all active:scale-95 cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                id="btn-confirm-delete-ad"
+                onClick={() => handleDeleteAd(selectedAdDetail)}
+                className="py-2.5 px-3 bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all active:scale-95 shadow-lg shadow-rose-900/40 cursor-pointer"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Sí, eliminar</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Create Ad Modal (Formulario de Publicar Anuncio - Pantalla Completa) */}
       {isCreateModalOpen && (
         <div
           id="modal-create-ad"
-          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
-          onClick={() => setIsCreateModalOpen(false)}
+          className="fixed inset-0 z-[100] bg-gradient-to-b from-[#001f54] via-[#003087] to-[#001428] text-white flex flex-col w-full h-full overflow-hidden animate-fade-in"
         >
-          <div
-            className="w-full max-w-md bg-[#0d224d] border border-white/15 rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh] text-white"
-            onClick={e => e.stopPropagation()}
-          >
-            {/* Header */}
-            <div className="px-5 py-4 border-b border-white/10 flex items-center justify-between bg-amber-400/10">
-              <div className="flex items-center gap-2 text-amber-300">
-                <Megaphone className="w-5 h-5 text-amber-400" />
-                <h3 className="text-sm font-extrabold">Publicar Anuncio</h3>
-              </div>
-              <button
-                onClick={() => setIsCreateModalOpen(false)}
-                className="text-white/60 hover:text-white"
-              >
-                <X className="w-5 h-5" />
-              </button>
+          {/* Header */}
+          <div className="h-14 px-4 border-b border-white/10 flex items-center justify-between bg-[#001845]/95 backdrop-blur-md shrink-0 z-10 shadow-md">
+            <button
+              type="button"
+              onClick={() => setIsCreateModalOpen(false)}
+              className="p-2 text-white/80 hover:text-white rounded-full hover:bg-white/10 transition-colors flex items-center gap-1.5 active:scale-95"
+              title="Volver"
+            >
+              <ArrowLeft className="w-5 h-5 stroke-[2.5]" />
+              <span className="text-xs font-bold hidden sm:inline">Volver</span>
+            </button>
+            <div className="flex items-center gap-2 text-amber-300 font-black text-sm sm:text-base">
+              <Megaphone className="w-5 h-5 text-amber-400 stroke-[2.5]" />
+              <span>Publicar Anuncio</span>
             </div>
+            <button
+              type="button"
+              onClick={() => setIsCreateModalOpen(false)}
+              className="p-2 text-white/60 hover:text-white rounded-full hover:bg-white/10 transition-colors active:scale-95"
+              title="Cerrar"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
 
-            {/* Form */}
-            <form onSubmit={handleCreateAdSubmit} className="p-5 overflow-y-auto space-y-3.5 text-xs">
+          {/* Form */}
+          <form onSubmit={handleCreateAdSubmit} className="flex-1 overflow-y-auto p-4 sm:p-6 max-w-xl mx-auto w-full space-y-4 text-xs pb-20">
               {/* 1. Foto / Logo (opcional) */}
               <div>
                 <label className="block text-[11px] font-bold text-white/80 mb-1">
@@ -803,7 +993,6 @@ export const ClassifiedAdsSection: React.FC = () => {
                 </button>
               </div>
             </form>
-          </div>
         </div>
       )}
     </div>

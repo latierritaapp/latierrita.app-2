@@ -441,6 +441,7 @@ export type ClassifiedCategory =
 
 export interface ClassifiedAdItem {
   id: string;
+  userId?: string;
   title: string;
   category: ClassifiedCategory;
   city: SpanishCity | 'Toda España';
@@ -453,6 +454,7 @@ export interface ClassifiedAdItem {
   price?: string;
   imageUrl?: string;
   date: string;
+  createdAt?: number;
   isPromoted?: boolean;
   tags: string[];
 }
