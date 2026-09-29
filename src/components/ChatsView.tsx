@@ -48,7 +48,8 @@ import {
   Clock,
   Keyboard,
   Bell,
-  Eraser
+  Eraser,
+  Pin
 } from 'lucide-react';
 import { SPANISH_CITIES } from '../data/mockData';
 import { FlagColombia, FlagSpain, CountryFlag } from './CountryFlag';
@@ -247,7 +248,9 @@ export const ChatsView: React.FC = () => {
     notifications,
     updateTicketStatus,
     voteInPoll,
-    rsvpToEvent
+    rsvpToEvent,
+    chatSearchQuery,
+    setChatSearchQuery
   } = useApp();
 
   const isStaffMember = (currentUser?.staffRole && currentUser.staffRole !== 'Usuario') ||
@@ -379,7 +382,8 @@ export const ChatsView: React.FC = () => {
   const [selectedUsersToAdd, setSelectedUsersToAdd] = useState<string[]>([]);
   const [createGroupUserSearch, setCreateGroupUserSearch] = useState('');
 
-  const [searchQuery, setSearchQuery] = useState('');
+  const searchQuery = chatSearchQuery;
+  const setSearchQuery = setChatSearchQuery;
   const [inputMessage, setInputMessage] = useState('');
   const [showQuickEmojis, setShowQuickEmojis] = useState(false);
   const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
@@ -933,6 +937,34 @@ export const ChatsView: React.FC = () => {
       });
   }, [chatRooms, blockedUserIds, searchQuery, currentUser, otherUsers, notifications]);
 
+  // Filter matches and last messages for pinned Comunidad & City chats in the unified list
+  const matchesGeneral = useMemo(() => {
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase().trim();
+    if ('comunidad'.includes(q) || 'general'.includes(q) || 'colombia'.includes(q) || 'españa'.includes(q)) return true;
+    return (generalChat?.messages || []).some(m => (m.text || '').toLowerCase().includes(q));
+  }, [searchQuery, generalChat]);
+
+  const matchesCity = useMemo(() => {
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase().trim();
+    const myCity = (currentUser.city || 'Madrid').toLowerCase();
+    if ('ciudad'.includes(q) || myCity.includes(q)) return true;
+    return (currentCityChat?.messages || []).some(m => (m.text || '').toLowerCase().includes(q));
+  }, [searchQuery, currentCityChat, currentUser.city]);
+
+  const lastGeneralMsg = useMemo(() => {
+    return Array.isArray(generalChat?.messages) && generalChat.messages.length > 0
+      ? generalChat.messages[generalChat.messages.length - 1]
+      : undefined;
+  }, [generalChat]);
+
+  const lastCityMsg = useMemo(() => {
+    return Array.isArray(currentCityChat?.messages) && currentCityChat.messages.length > 0
+      ? currentCityChat.messages[currentCityChat.messages.length - 1]
+      : undefined;
+  }, [currentCityChat]);
+
   // Handle Send Message
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault();
@@ -1034,28 +1066,7 @@ export const ChatsView: React.FC = () => {
         /* ========================================================================= */
         <div className="flex-1 flex flex-col overflow-y-auto">
           {/* Top actions within the private & groups session */}
-          <div className="p-3 bg-neutral-50/80 dark:bg-neutral-900/60 border-b border-neutral-200 dark:border-neutral-800 space-y-2.5">
-            {/* Search bar */}
-            <div className="relative">
-              <Search className="w-4 h-4 text-neutral-400 absolute left-3 top-1/2 -translate-y-1/2" />
-              <input
-                id="input-chat-search"
-                type="text"
-                value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-                placeholder="Buscar parceros o grupos colombianos..."
-                className="w-full pl-9 pr-8 py-2 text-xs bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-xl text-neutral-900 dark:text-white placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-amber-500"
-              />
-              {searchQuery && (
-                <button
-                  onClick={() => setSearchQuery('')}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              )}
-            </div>
-
+          <div className="p-3 bg-neutral-50/80 dark:bg-neutral-900/60 border-b border-neutral-200 dark:border-neutral-800 space-y-2">
             {/* Direct creation action buttons in the same session */}
             <div className="flex items-center gap-2">
               <button
@@ -1076,6 +1087,18 @@ export const ChatsView: React.FC = () => {
                 <span>+ Nuevo Chat Privado</span>
               </button>
             </div>
+
+            {searchQuery && (
+              <div className="flex items-center justify-between text-[11px] text-neutral-400 bg-black/20 px-2.5 py-1 rounded-lg">
+                <span>Filtrando por: <strong className="text-amber-400">"{searchQuery}"</strong></span>
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="text-neutral-400 hover:text-white flex items-center gap-0.5 text-[10px]"
+                >
+                  <X className="w-3 h-3" /> Limpiar
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Pending Group Invites Section (Accept / Reject) */}
@@ -1136,9 +1159,126 @@ export const ChatsView: React.FC = () => {
             </div>
           )}
 
-          {/* Unified Private & Group Chats List */}
+          {/* Pinned & Conversations List */}
           <div className="divide-y divide-neutral-100 dark:divide-neutral-800 flex-1">
-            {unifiedChatsList.length === 0 ? (
+            {/* 1. CHAT (COMUNIDAD) - SIEMPRE ANCLADO DE PRIMERO */}
+            {matchesGeneral && (
+              <div
+                id="chat-item-pinned-general"
+                onClick={() => {
+                  setChatTypeTab('general');
+                  if (generalChat) {
+                    setActiveChatId(generalChat.id);
+                  }
+                }}
+                className="px-4 py-3 hover:bg-neutral-50 dark:hover:bg-neutral-800/50 cursor-pointer flex items-center justify-between transition-colors bg-amber-400/[0.04] border-l-2 border-l-amber-400 select-none"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="relative shrink-0">
+                    <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-amber-400 via-amber-500 to-rose-500 flex items-center justify-center shadow-md border border-amber-300/40">
+                      <Users className="w-6 h-6 text-neutral-950 stroke-[2.2]" />
+                    </div>
+                    <div className="absolute -bottom-1 -right-1 rounded-full p-1 text-neutral-950 bg-amber-400 ring-2 ring-white dark:ring-neutral-900 shadow">
+                      <Pin className="w-2.5 h-2.5 fill-neutral-950 rotate-45" />
+                    </div>
+                  </div>
+
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-sm font-black text-neutral-900 dark:text-white truncate">
+                        Chat (Comunidad)
+                      </span>
+                      <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-amber-400/20 text-amber-500 dark:text-amber-300 border border-amber-400/40 inline-flex items-center gap-0.5 shrink-0 shadow-xs">
+                        <Pin className="w-2.5 h-2.5 fill-current rotate-45" />
+                        <span>Anclado</span>
+                      </span>
+                    </div>
+                    <p className="text-xs text-neutral-500 dark:text-neutral-400 truncate mt-0.5">
+                      {lastGeneralMsg ? (
+                        <>
+                          <span className="font-semibold text-neutral-700 dark:text-neutral-300">
+                            {lastGeneralMsg.senderId === currentUser.id ? 'Tú: ' : `${lastGeneralMsg.senderName || 'Parcero'}: `}
+                          </span>
+                          {lastGeneralMsg.text}
+                        </>
+                      ) : (
+                        '🇨🇴 Sala general de toda la comunidad colombiana en España'
+                      )}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0 ml-2">
+                  <span className="text-[11px] text-neutral-400">
+                    {lastGeneralMsg?.timestamp || ''}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* 2. CHAT (POR CIUDAD) - SIEMPRE ANCLADO DE SEGUNDO */}
+            {matchesCity && (
+              <div
+                id="chat-item-pinned-city"
+                onClick={() => {
+                  setChatTypeTab('city');
+                  if (currentCityChat) {
+                    setActiveChatId(currentCityChat.id);
+                  }
+                }}
+                className="px-4 py-3 hover:bg-neutral-50 dark:hover:bg-neutral-800/50 cursor-pointer flex items-center justify-between transition-colors bg-rose-500/[0.04] border-l-2 border-l-rose-500 select-none"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="relative shrink-0">
+                    <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-rose-500 via-rose-600 to-amber-500 flex items-center justify-center shadow-md border border-rose-400/40">
+                      <MapPin className="w-6 h-6 text-white stroke-[2.2]" />
+                    </div>
+                    <div className="absolute -bottom-1 -right-1 rounded-full p-1 text-white bg-rose-500 ring-2 ring-white dark:ring-neutral-900 shadow">
+                      <Pin className="w-2.5 h-2.5 fill-white rotate-45" />
+                    </div>
+                  </div>
+
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-sm font-black text-neutral-900 dark:text-white truncate">
+                        Chat ({currentUser.city || 'Ciudad'})
+                      </span>
+                      <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-rose-500/20 text-rose-500 dark:text-rose-300 border border-rose-500/40 inline-flex items-center gap-0.5 shrink-0 shadow-xs">
+                        <Pin className="w-2.5 h-2.5 fill-current rotate-45" />
+                        <span>Anclado</span>
+                      </span>
+                    </div>
+                    <p className="text-xs text-neutral-500 dark:text-neutral-400 truncate mt-0.5">
+                      {lastCityMsg ? (
+                        <>
+                          <span className="font-semibold text-neutral-700 dark:text-neutral-300">
+                            {lastCityMsg.senderId === currentUser.id ? 'Tú: ' : `${lastCityMsg.senderName || 'Parcero'}: `}
+                          </span>
+                          {lastCityMsg.text}
+                        </>
+                      ) : (
+                        `📍 Sala local de parceros en ${currentUser.city || 'España'}`
+                      )}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0 ml-2">
+                  <span className="text-[11px] text-neutral-400">
+                    {lastCityMsg?.timestamp || ''}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* 3. LOS DEMÁS CHATS PRIVADOS O GRUPOS */}
+            {unifiedChatsList.length > 0 && (
+              <div className="px-4 py-2 bg-neutral-100/60 dark:bg-white/[0.02] border-y border-neutral-200/50 dark:border-white/5 flex items-center justify-between text-[10px] font-bold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider select-none">
+                <span>Chats privados y grupos ({unifiedChatsList.length})</span>
+              </div>
+            )}
+
+            {unifiedChatsList.length === 0 && !matchesGeneral && !matchesCity ? (
               <div className="p-8 text-center text-neutral-400">
                 <MessageCircle className="w-10 h-10 mx-auto text-neutral-300 dark:text-neutral-600 mb-2" />
                 <p className="text-sm font-bold text-neutral-700 dark:text-neutral-300">
@@ -1430,23 +1570,34 @@ export const ChatsView: React.FC = () => {
             {/* Conversation Header */}
             <div className="relative z-40 px-4 py-2.5 border-b border-white/10 bg-[#003087]/70 backdrop-blur-md flex items-center justify-between shrink-0 text-white">
               <div className="flex items-center gap-2.5 min-w-0">
-                {/* Back button only when within a private or group chat */}
-                {chatTypeTab === 'messages' && (
-                  <button
-                    id="btn-back-to-messages-list"
-                    onClick={() => {
-                      setSelectedPrivateOrGroupId(null);
-                      setActiveChatId(null);
-                    }}
-                    className="p-1 -ml-1 text-white/80 hover:text-white hover:bg-white/10 rounded-full transition-colors"
-                    title="Volver a la lista de chats"
-                  >
-                    <ArrowLeft className="w-5 h-5" />
-                  </button>
-                )}
+                {/* Back button to return to the chat list from any active conversation */}
+                <button
+                  id="btn-back-to-messages-list"
+                  onClick={() => {
+                    setSelectedPrivateOrGroupId(null);
+                    setActiveChatId(null);
+                    setChatTypeTab('messages');
+                  }}
+                  className="p-1.5 -ml-1 text-white/80 hover:text-white hover:bg-white/10 rounded-full transition-colors active:scale-95"
+                  title="Volver a la bandeja de chats"
+                >
+                  <ArrowLeft className="w-5 h-5 stroke-[2.5]" />
+                </button>
 
-                {/* Hide avatar image for General Chat and City Chats */}
-                {activeChat.type !== 'general' && activeChat.type !== 'city' && (() => {
+                {/* Avatar for active conversation */}
+                {activeChat.type === 'general' ? (
+                  <div className="relative shrink-0">
+                    <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-amber-400 via-amber-500 to-rose-500 flex items-center justify-center text-neutral-950 font-bold shadow border border-amber-300/40">
+                      <Users className="w-5 h-5 text-neutral-950 stroke-[2.2]" />
+                    </div>
+                  </div>
+                ) : activeChat.type === 'city' ? (
+                  <div className="relative shrink-0">
+                    <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-rose-500 via-rose-600 to-amber-500 flex items-center justify-center text-white font-bold shadow border border-rose-400/40">
+                      <MapPin className="w-5 h-5 text-white stroke-[2.2]" />
+                    </div>
+                  </div>
+                ) : (() => {
                   const otherUser = activeChat.type === 'private' ? getOtherUserInPrivateChat(activeChat) : undefined;
                   const isTicket = activeChat.isTicketChat || !!activeChat.ticketCode;
                   const avatarSrc = isTicket
@@ -1489,7 +1640,9 @@ export const ChatsView: React.FC = () => {
                       {activeChat.isTicketChat || activeChat.ticketCode
                         ? `${activeChat.ticketCode || 'TICKET'} · Soporte La Tierrita`
                         : activeChat.type === 'general'
-                        ? 'Parceros en España.'
+                        ? 'Chat (Comunidad)'
+                        : activeChat.type === 'city'
+                        ? `Chat (${activeChat.city || currentUser.city || 'Ciudad'})`
                         : activeChat.type === 'private'
                         ? (() => {
                             const otherUser = getOtherUserInPrivateChat(activeChat);

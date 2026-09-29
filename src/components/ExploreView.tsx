@@ -27,8 +27,6 @@ export const ExploreView: React.FC = () => {
     myProfilePosts,
     otherUsers,
     currentUser,
-    exploreSearchQuery,
-    setExploreSearchQuery,
     likePost,
     addComment,
     setSelectedUserProfile,
@@ -73,19 +71,7 @@ export const ExploreView: React.FC = () => {
 
   // Sorted by popularity (likes + comments) and recency without erratic reshuffling
   const trendingPosts = useMemo(() => {
-    let result = [...allUserPosts];
-
-    // Filter if search query exists
-    if (exploreSearchQuery.trim()) {
-      const q = exploreSearchQuery.toLowerCase().trim();
-      result = result.filter(p => {
-        const matchCaption = p.caption?.toLowerCase().includes(q);
-        const matchUsername = p.username?.toLowerCase().includes(q);
-        const matchLocation = p.location?.toLowerCase().includes(q);
-        const matchCity = p.userCity?.toLowerCase().includes(q);
-        return matchCaption || matchUsername || matchLocation || matchCity;
-      });
-    }
+    const result = [...allUserPosts];
 
     // Sort descending by popularity (likes + comments * 2), then by ID/recency
     return result.sort((a, b) => {
@@ -96,7 +82,7 @@ export const ExploreView: React.FC = () => {
       }
       return b.id.localeCompare(a.id);
     });
-  }, [allUserPosts, exploreSearchQuery]);
+  }, [allUserPosts]);
 
   // Set of top 3 post IDs for fast checking
   const top3Ids = useMemo(() => {
@@ -179,30 +165,17 @@ export const ExploreView: React.FC = () => {
               </span>
             </h1>
             <p className="text-[11px] text-white/60">
-              {exploreSearchQuery ? (
-                <span>Resultados para "{exploreSearchQuery}"</span>
-              ) : (
-                <span>Publicaciones destacadas y en tendencia en La Tierrita</span>
-              )}
+              Publicaciones destacadas y en tendencia en La Tierrita
             </p>
           </div>
         </div>
-
-        {exploreSearchQuery && (
-          <button
-            onClick={() => setExploreSearchQuery('')}
-            className="text-[11px] font-semibold text-amber-300 hover:text-amber-200 px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/15 transition-all"
-          >
-            Limpiar filtro
-          </button>
-        )}
       </div>
 
       {/* 3-Column Grid of Trending Profile Posts */}
       {(trendingPosts || []).length > 0 ? (
         <div className="grid grid-cols-3 gap-0.5 sm:gap-1 p-0.5 sm:p-1">
           {(trendingPosts || []).map((post, idx) => {
-            const isTop3 = idx < 3 && !exploreSearchQuery;
+            const isTop3 = idx < 3;
             const author = getAuthorProfile(post);
             const authorAvatar = author?.avatar || post.userAvatar;
             return (
@@ -265,20 +238,14 @@ export const ExploreView: React.FC = () => {
         /* Empty State */
         <div className="py-20 px-4 text-center">
           <div className="w-14 h-14 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center mx-auto mb-3 text-white/40">
-            <Search className="w-7 h-7" />
+            <Flame className="w-7 h-7 text-amber-400/60" />
           </div>
           <h3 className="text-sm font-bold text-white mb-1">
-            No se encontraron publicaciones
+            Aún no hay publicaciones en tendencia
           </h3>
-          <p className="text-xs text-white/60 max-w-xs mx-auto mb-4">
-            No hay publicaciones en tendencia que coincidan con "{exploreSearchQuery}".
+          <p className="text-xs text-white/60 max-w-xs mx-auto">
+            ¡Comparte fotos o momentos con la comunidad de La Tierrita!
           </p>
-          <button
-            onClick={() => setExploreSearchQuery('')}
-            className="px-4 py-2 rounded-xl bg-amber-400 text-neutral-950 font-bold text-xs hover:bg-amber-300 transition-all shadow"
-          >
-            Ver todas las publicaciones en tendencia
-          </button>
         </div>
       )}
 

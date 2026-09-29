@@ -22,24 +22,45 @@ import { supabase } from './supabase';
 
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 
-// Use initializeFirestore with experimentalForceLongPolling to ensure robust connections in preview/iframe environments
+// Use initializeFirestore with experimentalAutoDetectLongPolling and ignoreUndefinedProperties for robust connections
 export const db = initializeFirestore(app, {
-  experimentalForceLongPolling: true
+  experimentalAutoDetectLongPolling: true,
+  ignoreUndefinedProperties: true
 }, firebaseConfig.firestoreDatabaseId);
 
 export const auth = null;
 
-// Test connection as required by Firebase skill
-async function testConnection() {
+// Test connection as required by Firebase skill with retry logic
+async function testConnection(retries = 3) {
   try {
     await getDocFromServer(fsDoc(db, 'test', 'connection'));
-  } catch (error) {
+  } catch (error: any) {
+    if (retries > 0 && (error?.code === 'unavailable' || error?.message?.includes('unavailable'))) {
+      setTimeout(() => {
+        testConnection(retries - 1);
+      }, 1500);
+      return;
+    }
     if (error instanceof Error && error.message.includes('the client is offline')) {
       console.error('Please check your Firebase configuration.');
     }
   }
 }
-testConnection();
+
+// Call test connection after initial render/idle to avoid racing connection setup
+if (typeof window !== 'undefined') {
+  if ('requestIdleCallback' in window) {
+    (window as any).requestIdleCallback(() => {
+      testConnection();
+    });
+  } else {
+    setTimeout(() => {
+      testConnection();
+    }, 1000);
+  }
+} else {
+  testConnection();
+}
 
 // Helpers to dynamically convert camelCase <-> snake_case for dual Supabase backup
 function camelToSnake(str: string): string {
@@ -273,7 +294,9 @@ export function onSnapshot(
       });
     },
     (err: any) => {
-      handleFirestoreError(err, OperationType.GET, ref?.path || ref?.id || null);
+      if (err?.code !== 'unavailable') {
+        handleFirestoreError(err, OperationType.GET, ref?.path || ref?.id || null);
+      }
       if (errorCallback) errorCallback(err);
     }
   );

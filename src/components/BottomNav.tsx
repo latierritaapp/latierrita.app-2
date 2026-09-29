@@ -8,7 +8,9 @@ export const BottomNav: React.FC = () => {
     setActiveTab,
     currentUser,
     selectedUserProfile,
-    chatRooms
+    chatRooms,
+    setChatTypeTab,
+    setActiveChatId
   } = useApp();
 
   const unreadMessagesCount = (chatRooms || [])
@@ -40,13 +42,17 @@ export const BottomNav: React.FC = () => {
         {/* 2. Chats */}
         <button
           id="tab-btn-chats"
-          onClick={() => setActiveTab('chats')}
+          onClick={() => {
+            setActiveTab('chats');
+            setChatTypeTab('messages');
+            setActiveChatId(null);
+          }}
           className={`relative p-2.5 rounded-2xl flex flex-col items-center justify-center transition-all active:scale-90 ${
             activeTab === 'chats'
               ? 'text-amber-400 bg-amber-400/10'
               : 'text-white/60 hover:text-white hover:bg-white/5'
           }`}
-          title="Chats de la comunidad"
+          title="Bandeja de chats"
           aria-label="Chats"
         >
           <div className="relative">

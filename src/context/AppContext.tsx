@@ -238,6 +238,8 @@ interface AppContextType {
   setActiveTab: (tab: 'feed' | 'explore' | 'chats' | 'notifications' | 'profile' | 'places') => void;
   exploreSearchQuery: string;
   setExploreSearchQuery: (query: string) => void;
+  chatSearchQuery: string;
+  setChatSearchQuery: (query: string) => void;
   placesSubTab: 'places' | 'ads';
   setPlacesSubTab: (tab: 'places' | 'ads') => void;
   chatTypeTab: 'general' | 'city' | 'messages';
@@ -569,7 +571,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           if (!fsProfilesSnap.empty) {
             fsProfilesSnap.forEach((docSnap: any) => {
               const data = docSnap.data();
-              if (data) {
+              if (data && (data.username || data.name || data.email)) {
                 const mapped = mapDBProfileToUserProfile({ id: docSnap.id, ...data });
                 const existingIndex = mappedList.findIndex(m => m.id === mapped.id || m.username === mapped.username || (m.email && mapped.email && m.email === mapped.email));
                 if (existingIndex >= 0) {
@@ -582,6 +584,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           }
         } catch (fsErr) {
           console.warn('Firestore profiles fetch note:', fsErr);
+        }
+
+        try {
+          const fsUsersSnap = await getDocs(collection(db, 'users'));
+          if (!fsUsersSnap.empty) {
+            fsUsersSnap.forEach((docSnap: any) => {
+              const data = docSnap.data();
+              if (data && (data.username || data.name || data.email)) {
+                const mapped = mapDBProfileToUserProfile({ id: docSnap.id, ...data });
+                const existingIndex = mappedList.findIndex(m => m.id === mapped.id || m.username === mapped.username || (m.email && mapped.email && m.email === mapped.email));
+                if (existingIndex >= 0) {
+                  mappedList[existingIndex] = { ...mappedList[existingIndex], ...mapped };
+                } else {
+                  mappedList.push(mapped);
+                }
+              }
+            });
+          }
+        } catch (fsUsersErr) {
+          console.warn('Firestore users fetch note:', fsUsersErr);
         }
 
         // 3. Fetch explicit official profile document from Firestore config
@@ -1063,8 +1085,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [activeTab]);
 
   const [exploreSearchQuery, setExploreSearchQuery] = useState('');
+  const [chatSearchQuery, setChatSearchQuery] = useState('');
   const [placesSubTab, setPlacesSubTab] = useState<'places' | 'ads'>('places');
-  const [chatTypeTab, setChatTypeTab] = useState<'general' | 'city' | 'messages'>('general');
+  const [chatTypeTab, setChatTypeTab] = useState<'general' | 'city' | 'messages'>('messages');
   const [selectedUserProfile, setSelectedUserProfileState] = useState<UserProfile | null>(null);
 
   const selectedUserProfileRef = useRef<UserProfile | null>(selectedUserProfile);
@@ -5007,6 +5030,8 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
         setActiveTab,
         exploreSearchQuery,
         setExploreSearchQuery,
+        chatSearchQuery,
+        setChatSearchQuery,
         placesSubTab,
         setPlacesSubTab,
         chatTypeTab,

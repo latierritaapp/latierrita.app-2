@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { useApp } from '../context/AppContext';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { useApp, isFictitiousUser } from '../context/AppContext';
 import {
   Heart,
   Plus,
@@ -16,10 +16,13 @@ import {
   MoreHorizontal,
   Share2,
   ShieldAlert,
-  UserX
+  UserX,
+  Users,
+  ChevronRight
 } from 'lucide-react';
 import { LaTierritaLogo } from './LaTierritaLogo';
 import { VerifiedBadge } from './VerifiedBadge';
+import { UserProfile } from '../types';
 
 export const Navbar: React.FC = () => {
   const {
@@ -27,6 +30,8 @@ export const Navbar: React.FC = () => {
     setActiveTab,
     exploreSearchQuery,
     setExploreSearchQuery,
+    chatSearchQuery,
+    setChatSearchQuery,
     placesSubTab,
     setPlacesSubTab,
     chatTypeTab,
@@ -45,12 +50,16 @@ export const Navbar: React.FC = () => {
     setSelectedUserProfile,
     setIsSettingsOpen,
     otherUsers,
+    posts,
     openReportModal,
     blockUser,
     triggerPlushNotification
   } = useApp();
 
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [isSearchDropdownOpen, setIsSearchDropdownOpen] = useState(false);
+  const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(-1);
+  const searchContainerRef = useRef<HTMLDivElement>(null);
 
   const isExploreView = activeTab === 'explore';
   const isProfileView = activeTab === 'profile';
@@ -65,6 +74,129 @@ export const Navbar: React.FC = () => {
   const isVisitingOtherProfile = isProfileView && Boolean(selectedUserProfile) && selectedUserProfile?.id !== currentUser.id && selectedUserProfile?.username !== currentUser.username;
 
   const pendingInvitesCount = (groupInvites || []).filter(i => i.status === 'pending').length;
+
+  // Compile a comprehensive list of unique real users available for search
+  const allSearchableUsers = useMemo(() => {
+    const list: UserProfile[] = [];
+    const seen = new Set<string>();
+
+    const addIfNew = (u: UserProfile | null | undefined) => {
+      if (!u || !u.id || !u.username) return;
+      if (isFictitiousUser(u.id, u.username)) return;
+      if (u.isDeleted || (u as any).is_deleted) return;
+      const key = (u.username || u.id).toLowerCase();
+      if (!seen.has(key)) {
+        seen.add(key);
+        list.push(u);
+      }
+    };
+
+    // 1. Official / staff account if present
+    const official = (otherUsers || []).find(u => u.email === 'latierritaapp@gmail.com' || u.username === 'latierrita_app');
+    if (official) addIfNew(official);
+
+    // 2. All other registered users
+    (otherUsers || []).forEach(u => addIfNew(u));
+
+    // 3. Authors from posts in case someone registered and posted recently
+    (posts || []).forEach(p => {
+      if (p.userId && p.username) {
+        addIfNew({
+          id: p.userId,
+          username: p.username,
+          name: p.username,
+          avatar: p.userAvatar || '',
+          bio: '',
+          city: p.userCity || 'España',
+          originCity: '',
+          followersCount: 0,
+          followingCount: 0,
+          postsCount: 0,
+          isVerified: (p as any).isVerified || false,
+          staffRole: (p as any).staffRole,
+          createdAt: ''
+        });
+      }
+    });
+
+    // 4. Current user
+    if (currentUser) {
+      addIfNew(currentUser);
+    }
+
+    return list;
+  }, [currentUser, otherUsers, posts]);
+
+  // Filtered users matching search query (matches name, username, city, or originCity)
+  const queryClean = exploreSearchQuery.trim().toLowerCase().replace(/^@/, '');
+  const suggestedUsers = useMemo(() => {
+    if (!queryClean) return [];
+
+    return allSearchableUsers
+      .filter(u => {
+        const uUsername = (u.username || '').toLowerCase();
+        const uName = (u.name || '').toLowerCase();
+        const uCity = (u.city || '').toLowerCase();
+        const uOrigin = (u.originCity || '').toLowerCase();
+        return (
+          uUsername.includes(queryClean) ||
+          uName.includes(queryClean) ||
+          uCity.includes(queryClean) ||
+          uOrigin.includes(queryClean)
+        );
+      })
+      .slice(0, 8);
+  }, [allSearchableUsers, queryClean]);
+
+  // Navigate directly to the selected user's profile
+  const handleSelectSuggestedUser = (user: UserProfile) => {
+    if (user.id === currentUser.id || user.username === currentUser.username) {
+      setSelectedUserProfile(null);
+    } else {
+      setSelectedUserProfile(user);
+    }
+    setActiveTab('profile');
+    setExploreSearchQuery('');
+    setIsSearchDropdownOpen(false);
+  };
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(e.target as Node)) {
+        setIsSearchDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Keyboard navigation support for user search
+  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Escape') {
+      setIsSearchDropdownOpen(false);
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (suggestedUsers.length > 0) {
+        setIsSearchDropdownOpen(true);
+        setSelectedSuggestionIndex(prev => (prev + 1) % suggestedUsers.length);
+      }
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (suggestedUsers.length > 0) {
+        setIsSearchDropdownOpen(true);
+        setSelectedSuggestionIndex(prev => (prev - 1 + suggestedUsers.length) % suggestedUsers.length);
+      }
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (suggestedUsers.length > 0) {
+        const targetUser = selectedSuggestionIndex >= 0 ? suggestedUsers[selectedSuggestionIndex] : suggestedUsers[0];
+        if (targetUser) {
+          handleSelectSuggestedUser(targetUser);
+        }
+      }
+    }
+  };
 
   const handleShareProfile = () => {
     if (navigator.clipboard) {
@@ -81,7 +213,7 @@ export const Navbar: React.FC = () => {
   return (
     <header className="sticky top-0 z-40 glass-header shadow-lg transition-all text-white">
       <div className="max-w-2xl mx-auto px-3 sm:px-4 h-14 relative flex items-center justify-between">
-        {/* CASE 1: EXPLORAR HEADER (Logo a la izquierda, barra de búsqueda al lado derecho, sin botón + ni corazón) */}
+        {/* CASE 1: EXPLORAR HEADER (Logo a la izquierda, barra de búsqueda de usuarios con sugerencias al lado derecho) */}
         {isExploreView ? (
           <div className="w-full flex items-center justify-between gap-3">
             {/* Logo al lado izquierdo */}
@@ -94,25 +226,166 @@ export const Navbar: React.FC = () => {
               <LaTierritaLogo className="h-9 sm:h-10 w-auto max-w-[130px] sm:max-w-[160px] drop-shadow-md hover:brightness-105 transition-all" />
             </button>
 
-            {/* Barra de búsqueda al lado derecho */}
-            <div className="flex-1 max-w-xs sm:max-w-sm relative">
+            {/* Barra de búsqueda de usuarios al lado derecho */}
+            <div className="flex-1 max-w-xs sm:max-w-sm relative" ref={searchContainerRef}>
               <Search className="w-4 h-4 text-white/50 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
               <input
                 id="input-navbar-explore-search"
                 type="text"
                 value={exploreSearchQuery}
-                onChange={e => setExploreSearchQuery(e.target.value)}
-                placeholder="Buscar parceros, ciudades..."
-                className="w-full pl-9 pr-8 py-2 text-xs bg-white/10 hover:bg-white/15 focus:bg-white/20 rounded-full text-white placeholder-white/50 focus:outline-none focus:ring-1 focus:ring-amber-400 border border-white/15 transition-all"
+                onChange={e => {
+                  setExploreSearchQuery(e.target.value);
+                  setIsSearchDropdownOpen(true);
+                  setSelectedSuggestionIndex(-1);
+                }}
+                onFocus={() => {
+                  if (exploreSearchQuery.trim()) {
+                    setIsSearchDropdownOpen(true);
+                  }
+                }}
+                onKeyDown={handleSearchKeyDown}
+                placeholder="Buscar usuarios o @parcero..."
+                autoComplete="off"
+                className="w-full pl-9 pr-8 py-2 text-xs bg-white/10 hover:bg-white/15 focus:bg-white/20 rounded-full text-white placeholder-white/50 focus:outline-none focus:ring-1 focus:ring-amber-400 border border-white/15 transition-all shadow-inner"
               />
               {exploreSearchQuery && (
                 <button
-                  onClick={() => setExploreSearchQuery('')}
+                  onClick={() => {
+                    setExploreSearchQuery('');
+                    setIsSearchDropdownOpen(false);
+                  }}
                   className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 rounded-full text-white/60 hover:text-white hover:bg-white/20 transition-colors"
                   title="Limpiar búsqueda"
                 >
                   <X className="w-3.5 h-3.5" />
                 </button>
+              )}
+
+              {/* Suggestions Dropdown for finding users */}
+              {isSearchDropdownOpen && exploreSearchQuery.trim().length > 0 && (
+                <div
+                  id="dropdown-explore-user-suggestions"
+                  className="absolute top-full right-0 w-[calc(100vw-28px)] sm:w-80 max-w-sm mt-2 bg-neutral-900/98 backdrop-blur-2xl border border-white/15 rounded-2xl shadow-2xl overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-150"
+                  style={{ maxHeight: 'min(420px, 70vh)' }}
+                >
+                  {/* Dropdown Header */}
+                  <div className="px-3.5 py-2.5 bg-white/[0.04] border-b border-white/10 flex items-center justify-between">
+                    <div className="flex items-center gap-1.5 text-[11px] font-bold text-amber-300">
+                      <Users className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Parceros sugeridos</span>
+                    </div>
+                    {suggestedUsers.length > 0 && (
+                      <span className="text-[10px] text-white/50 font-semibold">
+                        {suggestedUsers.length} encontrado{suggestedUsers.length !== 1 ? 's' : ''}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* List of matched users */}
+                  <div className="divide-y divide-white/5 overflow-y-auto max-h-[300px] overscroll-contain">
+                    {suggestedUsers.length > 0 ? (
+                      suggestedUsers.map((user, idx) => {
+                        const isSelected = selectedSuggestionIndex === idx;
+                        const isOfficial = user.email === 'latierritaapp@gmail.com' || user.username === 'latierrita_app' || user.id === 'user-staff';
+                        const isMe = user.id === currentUser.id || user.username === currentUser.username;
+                        const initial = (user.name?.[0] || user.username?.[0] || 'P').toUpperCase();
+
+                        return (
+                          <div
+                            key={user.id || user.username}
+                            onClick={() => handleSelectSuggestedUser(user)}
+                            onMouseEnter={() => setSelectedSuggestionIndex(idx)}
+                            className={`w-full px-3.5 py-2.5 flex items-center justify-between gap-3 text-left cursor-pointer transition-colors ${
+                              isSelected ? 'bg-amber-400/20 text-white' : 'hover:bg-white/10 text-white/90'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                              {/* User Avatar */}
+                              <div className="relative shrink-0">
+                                {user.avatar ? (
+                                  <img
+                                    src={user.avatar}
+                                    alt={user.name || user.username}
+                                    className="w-10 h-10 rounded-full object-cover border border-white/15 ring-1 ring-white/10"
+                                    referrerPolicy="no-referrer"
+                                    onError={e => {
+                                      (e.currentTarget as HTMLElement).style.display = 'none';
+                                    }}
+                                  />
+                                ) : null}
+                                <div
+                                  className={`w-10 h-10 rounded-full bg-gradient-to-tr from-amber-500 to-rose-500 items-center justify-center font-bold text-neutral-950 text-sm shadow-sm ${
+                                    user.avatar ? 'hidden' : 'flex'
+                                  }`}
+                                >
+                                  {initial}
+                                </div>
+                                {isMe && (
+                                  <div className="absolute -bottom-1 -right-1 px-1 rounded-full bg-amber-400 text-neutral-950 font-black text-[8px] uppercase tracking-tighter shadow">
+                                    Tú
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* User Info */}
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className="text-xs font-bold text-white truncate max-w-[130px]">
+                                    {user.name || user.username}
+                                  </span>
+                                  {(user.isVerified || isOfficial) && (
+                                    <VerifiedBadge size="sm" />
+                                  )}
+                                  {user.staffRole && user.staffRole !== 'Usuario' && (
+                                    <span className="text-[9px] px-1.5 py-0.2 font-black uppercase rounded bg-amber-400/25 text-amber-300 border border-amber-400/40 leading-none">
+                                      {user.staffRole}
+                                    </span>
+                                  )}
+                                </div>
+
+                                <div className="text-[11px] font-semibold text-amber-400/90 truncate">
+                                  @{user.username}
+                                </div>
+
+                                <div className="text-[10px] text-white/50 flex items-center gap-1 mt-0.5 truncate">
+                                  <MapPin className="w-2.5 h-2.5 text-neutral-400 shrink-0" />
+                                  <span>{user.city || 'España'}{user.originCity ? ` · de ${user.originCity}` : ''}</span>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* View profile call-to-action */}
+                            <div className="flex items-center gap-1 text-[11px] font-bold text-amber-400/80 group-hover:text-amber-300 shrink-0 pl-1">
+                              <span>Ver</span>
+                              <ChevronRight className="w-3.5 h-3.5" />
+                            </div>
+                          </div>
+                        );
+                      })
+                    ) : (
+                      /* No results state */
+                      <div className="py-6 px-4 text-center">
+                        <div className="w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center mx-auto mb-2 text-white/40">
+                          <UserX className="w-5 h-5 text-white/50" />
+                        </div>
+                        <p className="text-xs font-bold text-white mb-0.5">
+                          Sin resultados para "{exploreSearchQuery}"
+                        </p>
+                        <p className="text-[11px] text-white/50 max-w-[200px] mx-auto">
+                          Busca por nombre o nombre de usuario @parcero
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Dropdown Footer */}
+                  <div className="px-3 py-1.5 bg-black/50 border-t border-white/10 text-[10px] text-white/40 flex items-center justify-between select-none">
+                    <span>Haz clic en un parcero para ir a su perfil</span>
+                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-white/10 text-white/60 font-mono">
+                      ESC
+                    </span>
+                  </div>
+                </div>
               )}
             </div>
           </div>
@@ -146,63 +419,40 @@ export const Navbar: React.FC = () => {
             </button>
           </div>
         ) : isChatsView ? (
-          /* CASE 2: CHATS HEADER WITH 3 SUB-TABS (NO LOGO) */
-          <div className="w-full grid grid-cols-3 gap-1.5 py-1">
-            {/* Tab 1: Chat general */}
+          /* CASE 2: CHATS HEADER (Logo de la app a la izquierda, barra de búsqueda sustituyendo los sub-tabs) */
+          <div className="w-full flex items-center justify-between gap-3">
+            {/* Logo de la app al lado izquierdo */}
             <button
-              id="btn-nav-chat-general"
-              onClick={() => {
-                setChatTypeTab('general');
-                const gen = chatRooms.find(r => r.type === 'general');
-                if (gen) setActiveChatId(gen.id);
-              }}
-              className={`py-2 px-1 text-center rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1 active:scale-95 ${
-                chatTypeTab === 'general'
-                  ? 'bg-amber-400 text-neutral-950 shadow font-black'
-                  : 'bg-white/10 text-white/70 hover:text-white hover:bg-white/15'
-              }`}
+              id="nav-brand-logo-chats"
+              onClick={() => setActiveTab('feed')}
+              className="flex items-center shrink-0 focus:outline-none transition-transform active:scale-95 py-0.5"
+              title="Ir al inicio de La Tierrita"
             >
-              <span className="truncate">Comunidad</span>
+              <LaTierritaLogo className="h-9 sm:h-10 w-auto max-w-[130px] sm:max-w-[160px] drop-shadow-md hover:brightness-105 transition-all" />
             </button>
 
-            {/* Tab 2: Chat por ciudad */}
-            <button
-              id="btn-nav-chat-city"
-              onClick={() => {
-                setChatTypeTab('city');
-                const cityRoom =
-                  chatRooms.find(r => r.type === 'city' && r.city === currentUser.city) ||
-                  chatRooms.find(r => r.type === 'city');
-                if (cityRoom) setActiveChatId(cityRoom.id);
-              }}
-              className={`py-2 px-1 text-center rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1 truncate active:scale-95 ${
-                chatTypeTab === 'city'
-                  ? 'bg-rose-500 text-white shadow font-black'
-                  : 'bg-white/10 text-white/70 hover:text-white hover:bg-white/15'
-              }`}
-            >
-              <span className="truncate">{currentUser.city || 'Ciudad'}</span>
-            </button>
-
-            {/* Tab 3: Chats privados */}
-            <button
-              id="btn-nav-chat-private"
-              onClick={() => {
-                setChatTypeTab('messages');
-                setActiveChatId(null);
-              }}
-              className={`relative py-2 px-1 text-center rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1 active:scale-95 ${
-                chatTypeTab === 'messages'
-                  ? 'bg-sky-400 text-neutral-950 shadow font-black'
-                  : 'bg-white/10 text-white/70 hover:text-white hover:bg-white/15'
-              }`}
-              title="Chats privados y grupales"
-            >
-              <Send className="w-4 h-4 shrink-0" />
-              {pendingInvitesCount > 0 && (
-                <span className="w-2 h-2 rounded-full bg-sky-300 ring-1 ring-white shrink-0 animate-pulse" />
+            {/* Barra de búsqueda de chats sustituyendo el espacio de los sub-tabs */}
+            <div className="flex-1 max-w-xs sm:max-w-sm relative">
+              <Search className="w-4 h-4 text-white/50 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                id="input-navbar-chats-search"
+                type="text"
+                value={chatSearchQuery}
+                onChange={e => setChatSearchQuery(e.target.value)}
+                placeholder="Buscar chats, parceros o grupos..."
+                autoComplete="off"
+                className="w-full pl-9 pr-8 py-2 text-xs bg-white/10 hover:bg-white/15 focus:bg-white/20 rounded-full text-white placeholder-white/50 focus:outline-none focus:ring-1 focus:ring-amber-400 border border-white/15 transition-all shadow-inner"
+              />
+              {chatSearchQuery && (
+                <button
+                  onClick={() => setChatSearchQuery('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 rounded-full text-white/60 hover:text-white hover:bg-white/20 transition-colors"
+                  title="Limpiar búsqueda"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
               )}
-            </button>
+            </div>
           </div>
         ) : (
           /* CASE 3: STANDARD HEADER (Feed, Explore, Notifications, Profile) */
