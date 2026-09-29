@@ -76,6 +76,7 @@ export const PlacesView: React.FC = () => {
   const [newPlaceCity, setNewPlaceCity] = useState<SpanishCity>(currentUser.city || 'Madrid');
   const [newPlaceAddress, setNewPlaceAddress] = useState('');
   const [inGoogleMaps, setInGoogleMaps] = useState<'SI' | 'NO' | null>(null);
+  const [isOwner, setIsOwner] = useState<boolean | null>(null);
   const [newPlaceDescription, setNewPlaceDescription] = useState('');
   const [newPlacePhone, setNewPlacePhone] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -138,6 +139,7 @@ export const PlacesView: React.FC = () => {
       phone: newPlacePhone.trim() || undefined,
       website: socialWeb.trim() || undefined,
       inGoogleMaps: inGoogleMaps === 'SI',
+      isOwner: isOwner === true,
       socialLinks: {
         latierrita: socialLaTierrita.trim() || undefined,
         whatsapp: socialWhatsApp.trim() || undefined,
@@ -156,6 +158,7 @@ export const PlacesView: React.FC = () => {
     setNewPlaceCity(currentUser.city || 'Madrid');
     setNewPlaceAddress('');
     setInGoogleMaps(null);
+    setIsOwner(null);
     setNewPlaceDescription('');
     setNewPlacePhone('');
     setSocialLaTierrita('');
@@ -594,7 +597,7 @@ export const PlacesView: React.FC = () => {
           </div>
 
           <form onSubmit={handleSuggestSubmit} className="flex-1 overflow-y-auto p-4 sm:p-6 max-w-xl mx-auto w-full space-y-4 text-xs pb-20">
-              {/* 1. Foto / Logo opcional (Subir archivo) */}
+              {/* 1. Foto / Logo */}
               <div>
                 <label className="block text-[11px] font-bold text-white/80 mb-1 flex items-center gap-1">
                   <Camera className="w-3.5 h-3.5 text-amber-400" />
@@ -636,7 +639,7 @@ export const PlacesView: React.FC = () => {
                 )}
               </div>
 
-              {/* 2. Nombre del lugar* */}
+              {/* 2. Nombre del lugar */}
               <div>
                 <label className="block text-[11px] font-bold text-white/90 mb-1">
                   Nombre del lugar *
@@ -651,7 +654,27 @@ export const PlacesView: React.FC = () => {
                 />
               </div>
 
-              {/* 3. Categoría* - Ciudad* */}
+              {/* 3. Descripción */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-[11px] font-bold text-white/70">
+                    Descripción (opcional)
+                  </label>
+                  <span className={`text-[10px] font-mono ${newPlaceDescription.length >= 95 ? 'text-amber-300 font-bold' : 'text-white/50'}`}>
+                    {newPlaceDescription.length}/100
+                  </span>
+                </div>
+                <textarea
+                  rows={2}
+                  maxLength={100}
+                  value={newPlaceDescription}
+                  onChange={e => setNewPlaceDescription(e.target.value)}
+                  placeholder="Describe brevemente este lugar colombiano (máx. 100 caracteres)..."
+                  className="w-full bg-white/10 px-3 py-2 rounded-xl border border-white/15 text-white placeholder-white/40 focus:outline-none focus:ring-1 focus:ring-amber-400 resize-none font-medium"
+                />
+              </div>
+
+              {/* 4. Categoría - Ciudad */}
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="block text-[11px] font-bold text-white/90 mb-1">
@@ -693,7 +716,7 @@ export const PlacesView: React.FC = () => {
                 </div>
               </div>
 
-              {/* 4. Dirección* */}
+              {/* 5. Dirección */}
               <div>
                 <label className="block text-[11px] font-bold text-white/90 mb-1">
                   Dirección *
@@ -704,65 +727,11 @@ export const PlacesView: React.FC = () => {
                   value={newPlaceAddress}
                   onChange={e => setNewPlaceAddress(e.target.value)}
                   placeholder="ej. Calle de Bravo Murillo 120"
-                  className="w-full bg-white/10 px-3 py-2 rounded-xl border border-white/15 text-white placeholder-white/40 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                  className="w-full bg-white/10 px-3 py-2 rounded-xl border border-white/15 text-white placeholder-white/40 focus:outline-none focus:ring-1 focus:ring-amber-400 font-medium"
                 />
               </div>
 
-              {/* 5. ¿La ubicación está en Google Maps? Checking SI o NO (opcional) */}
-              <div className="p-3 bg-white/5 rounded-2xl border border-white/10 space-y-2">
-                <span className="block text-[11px] font-bold text-white/80">
-                  ¿La ubicación está en Google Maps? (opcional)
-                </span>
-                <div className="flex items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setInGoogleMaps(inGoogleMaps === 'SI' ? null : 'SI')}
-                    className={`flex-1 py-2 px-3 rounded-xl font-bold flex items-center justify-center gap-1.5 transition-all text-xs border ${
-                      inGoogleMaps === 'SI'
-                        ? 'bg-emerald-500 text-white border-emerald-400 shadow'
-                        : 'bg-white/10 text-white/70 border-white/10 hover:bg-white/15'
-                    }`}
-                  >
-                    <Check className={`w-3.5 h-3.5 ${inGoogleMaps === 'SI' ? 'stroke-[3]' : 'opacity-50'}`} />
-                    <span>SÍ</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setInGoogleMaps(inGoogleMaps === 'NO' ? null : 'NO')}
-                    className={`flex-1 py-2 px-3 rounded-xl font-bold flex items-center justify-center gap-1.5 transition-all text-xs border ${
-                      inGoogleMaps === 'NO'
-                        ? 'bg-rose-500 text-white border-rose-400 shadow'
-                        : 'bg-white/10 text-white/70 border-white/10 hover:bg-white/15'
-                    }`}
-                  >
-                    <X className={`w-3.5 h-3.5 ${inGoogleMaps === 'NO' ? 'stroke-[3]' : 'opacity-50'}`} />
-                    <span>NO</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* 6. Descripción (Máximo 100 caracteres) opcional */}
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="text-[11px] font-bold text-white/70">
-                    Descripción (opcional)
-                  </label>
-                  <span className={`text-[10px] font-mono ${newPlaceDescription.length >= 95 ? 'text-amber-300 font-bold' : 'text-white/50'}`}>
-                    {newPlaceDescription.length}/100
-                  </span>
-                </div>
-                <textarea
-                  rows={2}
-                  maxLength={100}
-                  value={newPlaceDescription}
-                  onChange={e => setNewPlaceDescription(e.target.value)}
-                  placeholder="Describe brevemente este lugar colombiano (máx. 100 caracteres)..."
-                  className="w-full bg-white/10 px-3 py-2 rounded-xl border border-white/15 text-white placeholder-white/40 focus:outline-none focus:ring-1 focus:ring-amber-400 resize-none"
-                />
-              </div>
-
-              {/* 7. Teléfono (opcional) */}
+              {/* 6. Teléfono */}
               <div>
                 <label className="block text-[11px] font-bold text-white/70 mb-1 flex items-center gap-1">
                   <Phone className="w-3.5 h-3.5 text-amber-400" />
@@ -773,11 +742,82 @@ export const PlacesView: React.FC = () => {
                   value={newPlacePhone}
                   onChange={e => setNewPlacePhone(e.target.value)}
                   placeholder="+34 600 000 000"
-                  className="w-full bg-white/10 px-3 py-2 rounded-xl border border-white/15 text-white placeholder-white/40 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                  className="w-full bg-white/10 px-3 py-2 rounded-xl border border-white/15 text-white placeholder-white/40 focus:outline-none focus:ring-1 focus:ring-amber-400 font-medium"
                 />
               </div>
 
-              {/* 8. Redes sociales (opcional) - Acordeón desplegable */}
+              {/* 7. Google Maps - Propietario (Compacto con botones pequeños) */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* Google Maps Check */}
+                <div className="p-2.5 bg-white/5 rounded-2xl border border-white/10 space-y-1.5 flex flex-col justify-between">
+                  <span className="block text-[11px] font-bold text-white/80 leading-tight">
+                    ¿La ubicación está en Google Maps? (opcional)
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setInGoogleMaps(inGoogleMaps === 'SI' ? null : 'SI')}
+                      className={`px-3 py-1 rounded-lg font-bold flex items-center justify-center gap-1 transition-all text-[11px] border w-16 cursor-pointer ${
+                        inGoogleMaps === 'SI'
+                          ? 'bg-emerald-500 text-white border-emerald-400 shadow'
+                          : 'bg-white/10 text-white/70 border-white/10 hover:bg-white/15'
+                      }`}
+                    >
+                      <Check className={`w-3 h-3 ${inGoogleMaps === 'SI' ? 'stroke-[3]' : 'opacity-50'}`} />
+                      <span>SÍ</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setInGoogleMaps(inGoogleMaps === 'NO' ? null : 'NO')}
+                      className={`px-3 py-1 rounded-lg font-bold flex items-center justify-center gap-1 transition-all text-[11px] border w-16 cursor-pointer ${
+                        inGoogleMaps === 'NO'
+                          ? 'bg-rose-500 text-white border-rose-400 shadow'
+                          : 'bg-white/10 text-white/70 border-white/10 hover:bg-white/15'
+                      }`}
+                    >
+                      <X className={`w-3 h-3 ${inGoogleMaps === 'NO' ? 'stroke-[3]' : 'opacity-50'}`} />
+                      <span>NO</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* ¿Eres el propietario/a? Check */}
+                <div className="p-2.5 bg-white/5 rounded-2xl border border-white/10 space-y-1.5 flex flex-col justify-between">
+                  <span className="block text-[11px] font-bold text-white/80 leading-tight">
+                    ¿Eres el propietario/a?
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsOwner(isOwner === true ? null : true)}
+                      className={`px-3 py-1 rounded-lg font-bold flex items-center justify-center gap-1 transition-all text-[11px] border w-16 cursor-pointer ${
+                        isOwner === true
+                          ? 'bg-emerald-500 text-white border-emerald-400 shadow'
+                          : 'bg-white/10 text-white/70 border-white/10 hover:bg-white/15'
+                      }`}
+                    >
+                      <Check className={`w-3 h-3 ${isOwner === true ? 'stroke-[3]' : 'opacity-50'}`} />
+                      <span>SÍ</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setIsOwner(isOwner === false ? null : false)}
+                      className={`px-3 py-1 rounded-lg font-bold flex items-center justify-center gap-1 transition-all text-[11px] border w-16 cursor-pointer ${
+                        isOwner === false
+                          ? 'bg-rose-500 text-white border-rose-400 shadow'
+                          : 'bg-white/10 text-white/70 border-white/10 hover:bg-white/15'
+                      }`}
+                    >
+                      <X className={`w-3 h-3 ${isOwner === false ? 'stroke-[3]' : 'opacity-50'}`} />
+                      <span>NO</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* 8. Redes sociales */}
               <div className="bg-white/5 rounded-2xl border border-white/10 overflow-hidden transition-all">
                 <button
                   type="button"
@@ -809,7 +849,6 @@ export const PlacesView: React.FC = () => {
 
                 {showSocials && (
                   <div className="p-3.5 pt-2 border-t border-white/10 space-y-2.5 animate-in fade-in duration-150">
-                    {/* Row 1: La Tierrita -- WhatsApp */}
                     <div className="grid grid-cols-2 gap-2">
                       <div>
                         <label className="block text-[10px] font-bold text-white/60 mb-0.5">
@@ -844,7 +883,6 @@ export const PlacesView: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* Row 2: Instagram -- Facebook */}
                     <div className="grid grid-cols-2 gap-2">
                       <div>
                         <label className="block text-[10px] font-bold text-white/60 mb-0.5">
@@ -876,7 +914,6 @@ export const PlacesView: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* Row 3: TikTok -- X */}
                     <div className="grid grid-cols-2 gap-2">
                       <div>
                         <label className="block text-[10px] font-bold text-white/60 mb-0.5">

@@ -14,7 +14,7 @@ export const StartupAdModal: React.FC = () => {
     return () => clearInterval(interval);
   }, [startupAdOpen]);
 
-  if (!startupAdOpen || !startupAdConfig || startupAdConfig.active === false) return null;
+  if (!startupAdOpen || !startupAdConfig || startupAdConfig.active === false || !startupAdConfig.imageUrl) return null;
 
   return (
     <div

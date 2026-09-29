@@ -242,6 +242,7 @@ export interface PlaceSuggestion {
   city: SpanishCity;
   address: string;
   inGoogleMaps?: boolean;
+  isOwner?: boolean;
   phone?: string;
   description?: string;
   imageUrl?: string;
@@ -414,6 +415,7 @@ export interface ChatRoom {
     address: string;
     phone?: string;
     inGoogleMaps?: boolean;
+    isOwner?: boolean;
     description?: string;
     imageUrl?: string;
     website?: string;

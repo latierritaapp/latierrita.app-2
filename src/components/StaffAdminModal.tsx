@@ -472,9 +472,6 @@ export const StaffAdminModal: React.FC<{ isFullScreenRoute?: boolean }> = ({ isF
 
   const handleSavePopupConfig = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!popupTitle.trim() || !popupImageUrl.trim()) {
-      return;
-    }
     await updateStartupAdConfig({
       id: 'startup_ad',
       title: popupTitle,
@@ -488,6 +485,32 @@ export const StaffAdminModal: React.FC<{ isFullScreenRoute?: boolean }> = ({ isF
       ctaUrl: popupCtaUrl || 'https://latierrita.es/eventos',
       active: popupActive,
       imageUrl: popupImageUrl,
+      showBadgeText: popupShowBadgeText,
+      showTitle: popupShowTitle,
+      showDescription: popupShowDescription,
+      showDiscount: popupShowDiscount,
+      showCta: popupShowCta,
+      showReportButton: popupShowReportButton
+    });
+  };
+
+  const handleDeactivatePopupConfig = async () => {
+    setPopupActive(false);
+    setPopupImageUrl('');
+    setPopupTitle('');
+    await updateStartupAdConfig({
+      id: 'startup_ad',
+      title: '',
+      subtitle: '',
+      badgeText: 'Publicidad Oficial STAFF',
+      discountBadge: '',
+      description: '',
+      discountCode: '',
+      discountValidity: '',
+      ctaText: '',
+      ctaUrl: '',
+      active: false,
+      imageUrl: '',
       showBadgeText: popupShowBadgeText,
       showTitle: popupShowTitle,
       showDescription: popupShowDescription,
@@ -2131,14 +2154,16 @@ export const StaffAdminModal: React.FC<{ isFullScreenRoute?: boolean }> = ({ isF
                                     </button>
 
                                     {/* 4. Iniciar chat */}
-                                    <button
-                                      onClick={() => setSelectedSuggestionForStaffChat(s)}
-                                      className="px-2.5 py-1 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold rounded-lg text-[10px] flex items-center gap-1 cursor-pointer transition-all shadow-sm"
-                                      title="Abrir chat en vivo con el usuario"
-                                    >
-                                      <MessageSquare className="w-3 h-3" />
-                                      <span>Iniciar chat</span>
-                                    </button>
+                                    {s.userId !== 'anonymous' && s.chatRoomId && (
+                                      <button
+                                        onClick={() => setSelectedSuggestionForStaffChat(s)}
+                                        className="px-2.5 py-1 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold rounded-lg text-[10px] flex items-center gap-1 cursor-pointer transition-all shadow-sm"
+                                        title="Abrir chat en vivo con el usuario"
+                                      >
+                                        <MessageSquare className="w-3 h-3" />
+                                        <span>Iniciar chat</span>
+                                      </button>
+                                    )}
 
                                     {/* ADMIN Delete only */}
                                     {currentUser?.staffRole === 'ADMIN' && (
@@ -3123,12 +3148,22 @@ export const StaffAdminModal: React.FC<{ isFullScreenRoute?: boolean }> = ({ isF
                         </div>
                       </div>
 
-                      <button
-                        type="submit"
-                        className="w-full mt-2 py-3 bg-amber-400 hover:bg-amber-300 text-neutral-950 font-black text-xs rounded-xl shadow-lg transition-all active:scale-95 flex items-center justify-center gap-1.5 cursor-pointer"
-                      >
-                        <span>Guardar Configuración de Publicidad de Inicio</span>
-                      </button>
+                      <div className="flex flex-col sm:flex-row gap-2 mt-2">
+                        <button
+                          type="submit"
+                          className="flex-1 py-3 bg-amber-400 hover:bg-amber-300 text-neutral-950 font-black text-xs rounded-xl shadow-lg transition-all active:scale-95 flex items-center justify-center gap-1.5 cursor-pointer"
+                        >
+                          <span>Guardar Configuración de Publicidad</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleDeactivatePopupConfig}
+                          className="py-3 px-4 bg-rose-600/80 hover:bg-rose-600 text-white font-bold text-xs rounded-xl shadow-lg transition-all active:scale-95 flex items-center justify-center gap-1.5 cursor-pointer"
+                        >
+                          <X className="w-4 h-4" />
+                          <span>Desactivar y Borrar Anuncio</span>
+                        </button>
+                      </div>
                     </form>
                   </div>
                 )}

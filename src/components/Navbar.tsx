@@ -92,7 +92,6 @@ export const Navbar: React.FC = () => {
 
     const addIfNew = (u: UserProfile | null | undefined) => {
       if (!u || !u.id || !u.username) return;
-      if (isFictitiousUser(u.id, u.username)) return;
       if (u.isDeleted || (u as any).is_deleted) return;
       const key = (u.username || u.id).toLowerCase();
       if (!seen.has(key)) {
@@ -144,6 +143,9 @@ export const Navbar: React.FC = () => {
 
     return allSearchableUsers
       .filter(u => {
+        if (currentUser && (u.id === currentUser.id || (u.username && currentUser.username && u.username.toLowerCase() === currentUser.username.toLowerCase()))) {
+          return false;
+        }
         const uUsername = (u.username || '').toLowerCase();
         const uName = (u.name || '').toLowerCase();
         const uCity = (u.city || '').toLowerCase();
@@ -156,7 +158,7 @@ export const Navbar: React.FC = () => {
         );
       })
       .slice(0, 8);
-  }, [allSearchableUsers, queryClean]);
+  }, [allSearchableUsers, queryClean, currentUser]);
 
   // Navigate directly to the selected user's profile
   const handleSelectSuggestedUser = (user: UserProfile) => {
@@ -275,7 +277,7 @@ export const Navbar: React.FC = () => {
               {isSearchDropdownOpen && exploreSearchQuery.trim().length > 0 && (
                 <div
                   id="dropdown-explore-user-suggestions"
-                  className="absolute top-full right-0 w-[calc(100vw-28px)] sm:w-80 max-w-sm mt-2 bg-neutral-900/98 backdrop-blur-2xl border border-white/15 rounded-2xl shadow-2xl overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-150"
+                  className="absolute top-full right-0 w-72 sm:w-80 max-w-xs sm:max-w-sm mt-2 bg-neutral-900/98 backdrop-blur-2xl border border-white/15 rounded-2xl shadow-2xl overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-150"
                   style={{ maxHeight: 'min(420px, 70vh)' }}
                 >
                   {/* Dropdown Header */}

@@ -22,6 +22,7 @@ import { SettingsModal } from './components/SettingsModal';
 import { ReportModal } from './components/ReportModal';
 import { StaffAdminModal } from './components/StaffAdminModal';
 import { ResetPasswordModal } from './components/ResetPasswordModal';
+import { SuggestPlaceRouteView } from './components/SuggestPlaceRouteView';
 
 const AppContent: React.FC = () => {
   const { activeTab, selectedUserProfile, isStaffAdminOpen, setIsStaffAdminOpen } = useApp();
@@ -33,6 +34,20 @@ const AppContent: React.FC = () => {
       setIsStaffAdminOpen(true);
     }
   }, [isAdminSlug, isStaffAdminOpen, setIsStaffAdminOpen]);
+
+  const isSuggestPlaceSlug = window.location.pathname === '/sugerir-lugar' || window.location.pathname === '/sugerir_lugar';
+
+  if (isSuggestPlaceSlug) {
+    return (
+      <div
+        id="app-root-gradient"
+        className="min-h-screen text-neutral-100 flex flex-col font-sans transition-colors duration-200 antialiased selection:bg-amber-400 selection:text-neutral-950 bg-[#001428]"
+      >
+        <SuggestPlaceRouteView />
+        <PlushNotificationToast />
+      </div>
+    );
+  }
 
   if (isAdminSlug) {
     return (
@@ -108,6 +123,22 @@ const AppContent: React.FC = () => {
 };
 
 const AppGate: React.FC = () => {
+  const isSuggestPlaceSlug = window.location.pathname === '/sugerir-lugar' || window.location.pathname === '/sugerir_lugar';
+
+  if (isSuggestPlaceSlug) {
+    return (
+      <AppProvider>
+        <div
+          id="app-root-gradient"
+          className="min-h-screen text-neutral-100 flex flex-col font-sans transition-colors duration-200 antialiased selection:bg-amber-400 selection:text-neutral-950 bg-[#001428]"
+        >
+          <SuggestPlaceRouteView />
+          <PlushNotificationToast />
+        </div>
+      </AppProvider>
+    );
+  }
+
   const { firebaseUser, userProfile, loading } = useAuth();
 
   if (loading) {

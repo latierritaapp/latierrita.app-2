@@ -1,68 +1,9 @@
-import { initializeApp, getApps, getApp } from 'firebase/app';
-import {
-  getFirestore,
-  collection as fsCollection,
-  doc as fsDoc,
-  getDoc as fsGetDoc,
-  getDocs as fsGetDocs,
-  setDoc as fsSetDoc,
-  updateDoc as fsUpdateDoc,
-  deleteDoc as fsDeleteDoc,
-  onSnapshot as fsOnSnapshot,
-  addDoc as fsAddDoc,
-  query as fsQuery,
-  where as fsWhere,
-  limit as fsLimit,
-  getDocFromServer,
-  QueryConstraint,
-  initializeFirestore
-} from 'firebase/firestore';
-import firebaseConfig from '../../firebase-applet-config.json';
 import { supabase } from './supabase';
 
-const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
-
-// Use initializeFirestore with experimentalAutoDetectLongPolling and ignoreUndefinedProperties for robust connections
-export const db = initializeFirestore(app, {
-  experimentalAutoDetectLongPolling: true,
-  ignoreUndefinedProperties: true
-}, firebaseConfig.firestoreDatabaseId);
-
+export const db = {};
 export const auth = null;
 
-// Test connection as required by Firebase skill with retry logic
-async function testConnection(retries = 3) {
-  try {
-    await getDocFromServer(fsDoc(db, 'test', 'connection'));
-  } catch (error: any) {
-    if (retries > 0 && (error?.code === 'unavailable' || error?.message?.includes('unavailable'))) {
-      setTimeout(() => {
-        testConnection(retries - 1);
-      }, 1500);
-      return;
-    }
-    if (error instanceof Error && error.message.includes('the client is offline')) {
-      console.error('Please check your Firebase configuration.');
-    }
-  }
-}
-
-// Call test connection after initial render/idle to avoid racing connection setup
-if (typeof window !== 'undefined') {
-  if ('requestIdleCallback' in window) {
-    (window as any).requestIdleCallback(() => {
-      testConnection();
-    });
-  } else {
-    setTimeout(() => {
-      testConnection();
-    }, 1000);
-  }
-} else {
-  testConnection();
-}
-
-// Helpers to dynamically convert camelCase <-> snake_case for dual Supabase backup
+// Helpers to convert camelCase <-> snake_case
 function camelToSnake(str: string): string {
   return str.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
 }
@@ -80,42 +21,22 @@ function convertKeysToSnake(obj: any): any {
 // 1. COLLECTION REF
 export function collection(database: any, name: string) {
   const colName = name === 'users' ? 'profiles' : name;
-  return fsCollection(db, colName);
+  return { path: colName, id: colName };
 }
 
 // 2. DOCUMENT REF
 export function doc(database: any, colOrPath: any, id?: string) {
-  if (typeof colOrPath === 'string') {
-    const colName = colOrPath === 'users' ? 'profiles' : colOrPath;
-    if (id) {
-      return fsDoc(db, colName, id);
-    }
-    return fsDoc(db, colName);
-  }
-  if (id) {
-    return fsDoc(colOrPath, id);
-  }
-  return fsDoc(colOrPath);
+  const colName = typeof colOrPath === 'string' ? (colOrPath === 'users' ? 'profiles' : colOrPath) : (colOrPath?.path || 'profiles');
+  const docId = id || (typeof colOrPath === 'string' ? '' : '');
+  return {
+    path: `${colName}/${docId}`,
+    id: docId,
+    parent: { id: colName }
+  };
 }
 
 // 3. GET DOC
 export async function getDoc(docRef: any) {
-  try {
-    const snap = await fsGetDoc(docRef);
-    const isExists = snap && (typeof snap.exists === 'function' ? snap.exists() : Boolean(snap.exists));
-    if (isExists) {
-      const snapData = snap.data() || {};
-      return {
-        exists: () => true,
-        data: () => ({ id: snap.id, ...snapData }),
-        id: snap.id
-      };
-    }
-  } catch (e) {
-    console.warn('Firestore getDoc note:', e);
-  }
-
-  // Fallback to Supabase
   try {
     const colName = docRef?.parent?.id || docRef?.path?.split('/')[0];
     const docId = docRef?.id;
@@ -140,18 +61,6 @@ export async function getDoc(docRef: any) {
 
 // 4. SET DOC
 export async function setDoc(docRef: any, data: any, options?: { merge?: boolean }) {
-  // Primary: Real-time Cloud Firestore write
-  try {
-    if (options) {
-      await fsSetDoc(docRef, data, options);
-    } else {
-      await fsSetDoc(docRef, data);
-    }
-  } catch (err) {
-    console.warn('Firestore setDoc warning, syncing locally:', err);
-  }
-
-  // Non-blocking background sync to Supabase backup
   try {
     const colName = docRef?.parent?.id || docRef?.path?.split('/')[0];
     const docId = docRef?.id;
@@ -159,17 +68,13 @@ export async function setDoc(docRef: any, data: any, options?: { merge?: boolean
       const snakePayload = { ...convertKeysToSnake(data), id: docId };
       await supabase.from(colName).upsert([snakePayload], { onConflict: 'id' });
     }
-  } catch {}
+  } catch (err) {
+    console.warn('Supabase setDoc warning:', err);
+  }
 }
 
 // 5. UPDATE DOC
 export async function updateDoc(docRef: any, data: any) {
-  try {
-    await fsUpdateDoc(docRef, data);
-  } catch (err) {
-    console.warn('Firestore updateDoc warning:', err);
-  }
-
   try {
     const colName = docRef?.parent?.id || docRef?.path?.split('/')[0];
     const docId = docRef?.id;
@@ -177,27 +82,24 @@ export async function updateDoc(docRef: any, data: any) {
       const snakePayload = convertKeysToSnake(data);
       await supabase.from(colName).update(snakePayload).eq('id', docId);
     }
-  } catch {}
+  } catch (err) {
+    console.warn('Supabase updateDoc warning:', err);
+  }
 }
 
 // 6. DELETE DOC
 export async function deleteDoc(docRef: any) {
-  try {
-    await fsDeleteDoc(docRef);
-  } catch (err) {
-    console.warn('Firestore deleteDoc warning:', err);
-  }
-
   try {
     const colName = docRef?.parent?.id || docRef?.path?.split('/')[0];
     const docId = docRef?.id;
     if (colName && docId) {
       await supabase.from(colName).delete().eq('id', docId);
     }
-  } catch {}
+  } catch (err) {
+    console.warn('Supabase deleteDoc warning:', err);
+  }
 }
 
-// Structured error handling for Firestore
 export enum OperationType {
   CREATE = 'create',
   UPDATE = 'update',
@@ -207,151 +109,141 @@ export enum OperationType {
   WRITE = 'write',
 }
 
-export interface FirestoreErrorInfo {
-  error: string;
-  operationType: OperationType;
-  path: string | null;
-  authInfo: {
-    userId?: string | null;
-    email?: string | null;
-    emailVerified?: boolean | null;
-    isAnonymous?: boolean | null;
-    tenantId?: string | null;
-    providerInfo?: {
-      providerId?: string | null;
-      email?: string | null;
-    }[];
-  };
-}
-
 export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
-  const errInfo: FirestoreErrorInfo = {
-    error: error instanceof Error ? error.message : String(error),
-    authInfo: {
-      userId: null,
-      email: null,
-      emailVerified: null,
-      isAnonymous: null,
-      tenantId: null,
-      providerInfo: []
-    },
-    operationType,
-    path
-  };
-  console.warn('Firestore Error: ', JSON.stringify(errInfo));
-  return errInfo;
+  return { error: String(error), operationType, path, authInfo: {} };
 }
 
-// 7. ON SNAPSHOT (Cloud Firestore Real-Time Stream across all connected clients)
+// 7. ON SNAPSHOT
 export function onSnapshot(
   ref: any,
   callback: (snapshot: any) => void,
   errorCallback?: (err: any) => void
 ) {
-  return fsOnSnapshot(
-    ref,
-    (snapshot: any) => {
-      if (!snapshot) {
+  let isCancelled = false;
+
+  const fetchData = async () => {
+    try {
+      const colName = ref?.path || ref?.parent?.id || (typeof ref?.id === 'string' ? ref.id : null);
+      if (!colName) return;
+      const table = colName === 'users' ? 'profiles' : colName;
+
+      // Check if it's a single doc snapshot
+      const isSingleDoc = ref?.id && ref?.parent?.id;
+      if (isSingleDoc) {
+        const { data } = await supabase.from(table).select('*').eq('id', ref.id).maybeSingle();
+        if (!isCancelled) {
+          callback({
+            exists: () => Boolean(data),
+            data: () => data ? { id: ref.id, ...data } : null,
+            id: ref.id
+          });
+        }
+        return;
+      }
+
+      // Query snapshot
+      const { data } = await supabase.from(table).select('*');
+      if (!isCancelled && Array.isArray(data)) {
+        const docs = data.map((item: any) => ({
+          id: item.id || `sup-${Math.random()}`,
+          data: () => ({ id: item.id, ...item }),
+          exists: () => true
+        }));
         callback({
-          empty: true,
-          docs: [],
-          forEach: () => {},
-          exists: () => false,
+          empty: docs.length === 0,
+          forEach: (cb: any) => docs.forEach(cb),
+          docs,
+          exists: () => docs.length > 0,
           data: () => null
         });
-        return;
       }
-
-      // Single Document Snapshot (e.g. onSnapshot(doc(...)))
-      if (typeof snapshot.exists === 'function' && !('docs' in snapshot)) {
-        const isExists = snapshot.exists();
-        const snapData = isExists ? (snapshot.data() || {}) : null;
-        const wrappedDoc = {
-          id: snapshot.id,
-          data: () => snapData ? { id: snapshot.id, ...snapData } : null,
-          exists: () => isExists
-        };
-        callback(wrappedDoc);
-        return;
-      }
-
-      // Query Snapshot (e.g. onSnapshot(collection(...)))
-      const docs = (snapshot?.docs || []).map((d: any) => {
-        const dData = d.data() || {};
-        const dExists = typeof d.exists === 'function' ? d.exists() : true;
-        return {
-          id: d.id,
-          data: () => ({ id: d.id, ...dData }),
-          exists: () => dExists
-        };
-      });
-      callback({
-        empty: snapshot?.empty ?? docs.length === 0,
-        forEach: (cb: any) => docs.forEach(cb),
-        docs,
-        exists: () => docs.length > 0,
-        data: () => null
-      });
-    },
-    (err: any) => {
-      if (err?.code !== 'unavailable') {
-        handleFirestoreError(err, OperationType.GET, ref?.path || ref?.id || null);
-      }
-      if (errorCallback) errorCallback(err);
+    } catch (err) {
+      if (errorCallback && !isCancelled) errorCallback(err);
     }
-  );
+  };
+
+  fetchData();
+
+  // Also subscribe to Supabase realtime if table exists
+  const colName = ref?.path || ref?.parent?.id || (typeof ref?.id === 'string' ? ref.id : null);
+  const table = colName === 'users' ? 'profiles' : colName;
+  let channel: any = null;
+  if (table && typeof table === 'string' && !table.includes('/')) {
+    try {
+      channel = supabase
+        .channel(`public_${table}_changes`)
+        .on('postgres_changes', { event: '*', schema: 'public', table }, () => {
+          fetchData();
+        })
+        .subscribe();
+    } catch {}
+  }
+
+  return () => {
+    isCancelled = true;
+    if (channel) {
+      try { supabase.removeChannel(channel); } catch {}
+    }
+  };
 }
 
 // 8. QUERY & CONSTRAINTS
-export function query(colRef: any, ...constraints: QueryConstraint[]) {
-  return fsQuery(colRef, ...constraints);
+export function query(colRef: any, ...constraints: any[]) {
+  return colRef;
 }
 
 export function where(field: string, op: any, value: any) {
-  return fsWhere(field, op, value);
+  return { field, op, value };
 }
 
 export function limit(num: number) {
-  return fsLimit(num);
+  return { limit: num };
 }
 
 // 9. GET DOCS
 export async function getDocs(queryRef: any) {
   try {
-    const snap = await fsGetDocs(queryRef);
-    const docs = (snap?.docs || []).map((d) => {
-      const dData = d.data() || {};
-      return {
-        id: d.id,
-        data: () => ({ id: d.id, ...dData }),
-        exists: () => d.exists()
-      };
-    });
-    return {
-      empty: snap.empty,
-      docs,
-      forEach: (cb: any) => docs.forEach(cb)
-    };
-  } catch (e) {
-    handleFirestoreError(e, OperationType.LIST, queryRef?.path || null);
-    return {
-      empty: true,
-      docs: [],
-      forEach: () => {}
-    };
-  }
+    const colName = queryRef?.path || queryRef?.parent?.id || queryRef?.id;
+    if (colName) {
+      const table = colName === 'users' ? 'profiles' : colName;
+      const { data } = await supabase.from(table).select('*');
+      if (Array.isArray(data)) {
+        const docs = data.map((item: any) => ({
+          id: item.id || `sup-${Math.random()}`,
+          data: () => ({ id: item.id, ...item }),
+          exists: () => true
+        }));
+        return {
+          empty: docs.length === 0,
+          docs,
+          forEach: (cb: any) => docs.forEach(cb)
+        };
+      }
+    }
+  } catch {}
+
+  return {
+    empty: true,
+    docs: [],
+    forEach: () => {}
+  };
 }
 
 // 10. ADD DOC
 export async function addDoc(colRef: any, data: any) {
   try {
-    const docRef = await fsAddDoc(colRef, data);
+    const colName = colRef?.path || colRef?.id;
+    const newId = `doc-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+    if (colName) {
+      const table = colName === 'users' ? 'profiles' : colName;
+      const snakePayload = { ...convertKeysToSnake(data), id: newId };
+      await supabase.from(table).upsert([snakePayload]);
+    }
     return {
-      id: docRef.id,
-      data: () => ({ id: docRef.id, ...data })
+      id: newId,
+      data: () => ({ id: newId, ...data })
     };
   } catch (e) {
-    handleFirestoreError(e, OperationType.CREATE, colRef?.path || null);
     throw e;
   }
 }

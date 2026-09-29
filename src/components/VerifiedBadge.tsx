@@ -15,7 +15,8 @@ export const VerifiedBadge: React.FC<VerifiedBadgeProps> = ({
   size = 'w-4 h-4',
   title = 'Cuenta verificada'
 }) => {
-  const combinedClass = className ? className : size;
+  const resolvedSize = size === 'sm' ? 'w-3.5 h-3.5' : size === 'lg' ? 'w-5 h-5' : (size || 'w-4 h-4');
+  const combinedClass = [resolvedSize, className].filter(Boolean).join(' ');
 
   return (
     <span

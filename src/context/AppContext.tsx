@@ -267,11 +267,13 @@ interface AppContextType {
     city: SpanishCity;
     address: string;
     inGoogleMaps?: boolean;
+    isOwner?: boolean;
     phone?: string;
     description?: string;
     imageUrl?: string;
     website?: string;
     socialLinks?: any;
+    isAnonymous?: boolean;
   }) => Promise<string>;
   updatePlaceSuggestionStatus: (
     id: string,
@@ -314,8 +316,12 @@ interface FirestoreErrorInfo {
 }
 
 const handleFirestoreError = (error: unknown, operationType: OperationType, path: string | null) => {
+  const errMsg = error instanceof Error ? error.message : String(error);
+  if (errMsg.includes('Quota limit exceeded') || errMsg.includes('resource-exhausted') || errMsg.includes('quota')) {
+    return;
+  }
   const errInfo: FirestoreErrorInfo = {
-    error: error instanceof Error ? error.message : String(error),
+    error: errMsg,
     authInfo: {
       userId: null,
       email: null,
@@ -327,6 +333,14 @@ const handleFirestoreError = (error: unknown, operationType: OperationType, path
     path
   };
   console.warn('Database non-fatal warning: ', JSON.stringify(errInfo));
+};
+
+const logWarnIfNotQuota = (prefix: string, error: any) => {
+  const msg = String(error?.message || error?.details || error || '');
+  if (msg.includes('Quota limit exceeded') || msg.includes('resource-exhausted') || msg.includes('quota') || msg.includes('network-request-failed') || msg.includes('Failed to fetch')) {
+    return;
+  }
+  console.warn(prefix, msg);
 };
 
 export const FICTITIOUS_USERNAMES = [
@@ -348,20 +362,6 @@ export const FICTITIOUS_IDS = [
 ];
 
 export const isFictitiousUser = (id?: string, username?: string): boolean => {
-  if (!id && !username) return false;
-  const cleanId = (id || '').toLowerCase();
-  const cleanUsername = (username || '').toLowerCase();
-  if (FICTITIOUS_IDS.includes(cleanId)) return true;
-  if (FICTITIOUS_USERNAMES.includes(cleanUsername)) return true;
-  if (
-    cleanUsername.includes('juancamilo_es') ||
-    cleanUsername.includes('mariana_bcn') ||
-    cleanUsername.includes('carlos_valencia') ||
-    cleanUsername.includes('valen_madrid') ||
-    cleanUsername.includes('andres_sevilla')
-  ) {
-    return true;
-  }
   return false;
 };
 
@@ -653,6 +653,35 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           }
         } catch (offErr) {
           console.warn('Official profile fetch note:', offErr);
+        }
+
+        // Fetch follows from Supabase to sync follower/following relationships and counts
+        try {
+          const { data: followsData, error: followsErr } = await supabase
+            .from('follows')
+            .select('*');
+          if (!followsErr && Array.isArray(followsData) && followsData.length > 0) {
+            const currentUserId = currentUserRef.current?.id;
+            if (currentUserId) {
+              const myFollowing = followsData
+                .filter((f: any) => f.follower_id === currentUserId)
+                .map((f: any) => f.following_id);
+              if (myFollowing.length > 0) {
+                setFollowingIds(prev => Array.from(new Set([...prev, ...myFollowing])));
+              }
+            }
+
+            mappedList.forEach(user => {
+              const userFollowers = followsData.filter((f: any) => f.following_id === user.id).length;
+              const userFollowing = followsData.filter((f: any) => f.follower_id === user.id).length;
+              if (userFollowers > 0) user.followersCount = userFollowers;
+              if (userFollowing > 0 && !isStaffAccount(user.id, user.username, user.email)) {
+                user.followingCount = userFollowing;
+              }
+            });
+          }
+        } catch (fErr) {
+          console.warn('Supabase follows sync note:', fErr);
         }
 
         const current = currentUserRef.current;
@@ -996,23 +1025,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } catch {}
   }, [isStaffAdminOpen]);
 
-  // Default config for the startup popup ad
+  // Default config for the startup popup ad (Disabled by default so no stale fallback image appears)
   const DEFAULT_STARTUP_AD: StartupAdConfig = {
     id: 'startup_ad',
-    imageUrl: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=1000&auto=format&fit=crop&q=80',
-    title: 'Gran Festival Tricolor 2026',
-    subtitle: '🇨🇴 Madrid & Barcelona',
+    imageUrl: '',
+    title: '',
+    subtitle: '',
     badgeText: 'Publicidad Oficial STAFF',
-    discountBadge: '20% Dcto Exclusivo',
-    description: '¡El mayor encuentro cultural y musical de colombianos en España! Orquestas en vivo, comida típica paisa, costeña y valluna, y zona de emprendimiento.',
-    discountCode: 'LATIE2026',
-    discountValidity: 'Válido 48h',
-    ctaText: 'Ver Boletos y Reservar',
-    ctaUrl: 'https://latierrita.es/eventos',
-    active: true
+    discountBadge: '',
+    description: '',
+    discountCode: '',
+    discountValidity: '',
+    ctaText: '',
+    ctaUrl: '',
+    active: false
   };
 
-  const [startupAdConfig, setStartupAdConfig] = useState<StartupAdConfig | null>(DEFAULT_STARTUP_AD);
+  const [startupAdConfig, setStartupAdConfig] = useState<StartupAdConfig | null>(() => {
+    try {
+      const saved = localStorage.getItem('latierrita_startup_ad');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed === 'object') return parsed;
+      }
+    } catch {}
+    return DEFAULT_STARTUP_AD;
+  });
 
   // Startup Ad (shows on initial open or whenever a new login/registration enters)
   const [startupAdOpen, setStartupAdOpen] = useState<boolean>(() => {
@@ -1084,7 +1122,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   } | null>(null);
 
   // Notifications
-  const [notifications, setNotifications] = useState<AppNotification[]>(INITIAL_NOTIFICATIONS);
+  const [notifications, setNotifications] = useState<AppNotification[]>(() => {
+    try {
+      const saved = localStorage.getItem('latierrita_notifications');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch {}
+    return INITIAL_NOTIFICATIONS;
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('latierrita_notifications', JSON.stringify(notifications));
+    } catch {}
+  }, [notifications]);
+
   const [plushToast, setPlushToast] = useState<AppNotification | null>(null);
 
   // Navigation
@@ -2207,9 +2261,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const unsub = onSnapshot(doc(db, 'config', 'startup_ad'), async (docSnap) => {
         const isExists = docSnap && (typeof docSnap.exists === 'function' ? docSnap.exists() : Boolean(docSnap.exists));
         if (isExists && docSnap.data()) {
-          setStartupAdConfig({ id: docSnap.id, ...docSnap.data() } as StartupAdConfig);
+          const data = { id: docSnap.id, ...docSnap.data() } as StartupAdConfig;
+          setStartupAdConfig(data);
+          try {
+            localStorage.setItem('latierrita_startup_ad', JSON.stringify(data));
+          } catch {}
         } else {
           setStartupAdConfig(DEFAULT_STARTUP_AD);
+          try {
+            localStorage.removeItem('latierrita_startup_ad');
+          } catch {}
         }
       }, (error) => {
         setStartupAdConfig(DEFAULT_STARTUP_AD);
@@ -2508,11 +2569,13 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
     city: SpanishCity;
     address: string;
     inGoogleMaps?: boolean;
+    isOwner?: boolean;
     phone?: string;
     description?: string;
     imageUrl?: string;
     website?: string;
     socialLinks?: any;
+    isAnonymous?: boolean;
   }): Promise<string> => {
     try {
       // Generate suggestion code (e.g. SUG-001)
@@ -2527,91 +2590,99 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
         minute: '2-digit'
       });
 
-      const placeChatId = `chat-placesug_${code.toLowerCase()}_${currentUser.id}`;
+      const isAnon = data.isAnonymous || !currentUser;
+
+      const placeChatId = isAnon ? '' : `chat-placesug_${code.toLowerCase()}_${currentUser.id}`;
 
       // Build initial place information message
       const initialMessageSummary = `📍 Sugerencia de Sitio #${code} registrada con éxito.
 
-• Nombre del lugar: ${data.placeName}
-• Categoría: ${data.category}
-• Ciudad: ${data.city}
-• Dirección: ${data.address}
-• ¿Aparece en Google Maps?: ${data.inGoogleMaps ? 'Sí' : 'No'}
-• Teléfono: ${data.phone || 'No especificado'}
-• Redes / Web: ${data.website || data.socialLinks?.instagram || data.socialLinks?.whatsapp || 'No especificado'}
+• Nombre del Lugar: ${data.placeName}
 • Descripción: ${data.description || 'Sin descripción adicional'}
+• Categoría - Ciudad: ${data.category} - ${data.city}
+• Dirección: ${data.address}
+• Teléfono: ${data.phone || 'No especificado'}
+• Google Maps: ${data.inGoogleMaps ? 'Sí' : 'No'}
+• ¿Es propietario/a?: ${data.isOwner ? 'Sí' : 'No'}
+• Redes sociales: ${data.website || data.socialLinks?.instagram || data.socialLinks?.whatsapp || 'No especificado'}
 • Fecha: ${dateFormatted}
 
 ⏳ Estado: Pendiente de revisión por el equipo de Soporte.
 Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (Admin o Soporte) inicie la conversación.`;
 
-      const newPlaceRoom: ChatRoom = {
-        id: placeChatId,
-        type: 'private',
-        name: `${code} - Sugerencia: ${data.placeName}`,
-        avatar: data.imageUrl || 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=200&auto=format&fit=crop&q=80',
-        members: [currentUser.id, 'user-staff'],
-        admins: ['user-staff'],
-        createdBy: currentUser.id,
-        createdAt: now.toISOString().split('T')[0],
-        isPlaceSuggestionChat: true,
-        isTicketChat: true,
-        placeSuggestionCode: code,
-        placeSuggestionStatus: 'pendientes',
-        placeSuggestionLockedForUser: true,
-        placeSuggestionDetails: {
-          placeName: data.placeName,
-          category: data.category,
-          city: data.city,
-          address: data.address,
-          phone: data.phone,
-          inGoogleMaps: data.inGoogleMaps,
-          description: data.description,
-          imageUrl: data.imageUrl,
-          website: data.website,
-          socialLinks: data.socialLinks,
-          date: dateFormatted
-        },
-        messages: [
-          {
-            id: `msg-placesug-init-${Date.now()}`,
-            senderId: currentUser.id,
-            senderName: currentUser.name || currentUser.username,
-            senderAvatar: currentUser.avatar || DEFAULT_SILHOUETTE_AVATAR,
-            text: initialMessageSummary,
+      let newPlaceRoom: ChatRoom | null = null;
+
+      if (!isAnon && currentUser) {
+        newPlaceRoom = {
+          id: placeChatId,
+          type: 'private',
+          name: `${code} - Sugerencia: ${data.placeName}`,
+          avatar: data.imageUrl || 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=200&auto=format&fit=crop&q=80',
+          members: [currentUser.id, 'user-staff'],
+          admins: ['user-staff'],
+          createdBy: currentUser.id,
+          createdAt: now.toISOString().split('T')[0],
+          isPlaceSuggestionChat: true,
+          isTicketChat: true,
+          placeSuggestionCode: code,
+          placeSuggestionStatus: 'pendientes',
+          placeSuggestionLockedForUser: true,
+          placeSuggestionDetails: {
+            placeName: data.placeName,
+            category: data.category,
+            city: data.city,
+            address: data.address,
+            phone: data.phone,
+            inGoogleMaps: data.inGoogleMaps,
+            isOwner: data.isOwner,
+            description: data.description,
             imageUrl: data.imageUrl,
-            timestamp: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            createdAt: Date.now(),
-            isEncrypted: true,
-            encryptedHash: 'SHA256:placesug-start'
-          }
-        ]
-      };
+            website: data.website,
+            socialLinks: data.socialLinks,
+            date: dateFormatted
+          },
+          messages: [
+            {
+              id: `msg-placesug-init-${Date.now()}`,
+              senderId: currentUser.id,
+              senderName: currentUser.name || currentUser.username,
+              senderAvatar: currentUser.avatar || DEFAULT_SILHOUETTE_AVATAR,
+              text: initialMessageSummary,
+              imageUrl: data.imageUrl,
+              timestamp: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+              createdAt: Date.now(),
+              isEncrypted: true,
+              encryptedHash: 'SHA256:placesug-start'
+            }
+          ]
+        };
 
-      // Add to local state & Firestore
-      setChatRooms(prev => {
-        const filtered = prev.filter(r => r.id !== placeChatId && r.placeSuggestionCode !== code);
-        return [newPlaceRoom, ...filtered];
-      });
+        // Add to local state & Firestore
+        setChatRooms(prev => {
+          const filtered = prev.filter(r => r.id !== placeChatId && r.placeSuggestionCode !== code);
+          return [newPlaceRoom!, ...filtered];
+        });
 
-      try {
-        await setDoc(doc(db, 'chat_rooms', placeChatId), newPlaceRoom);
-      } catch (e) {
-        console.warn('Failed to write place suggestion chat room in Firestore:', e);
+        try {
+          await setDoc(doc(db, 'chat_rooms', placeChatId), newPlaceRoom);
+        } catch (e) {
+          console.warn('Failed to write place suggestion chat room in Firestore:', e);
+        }
       }
 
       // Create suggestion record in Firestore collection
       const newSuggestion: Omit<PlaceSuggestion, 'id'> = {
-        userId: currentUser.id,
-        userName: currentUser.name || currentUser.username || 'Usuario',
-        userUsername: currentUser.username || 'usuario',
-        userAvatar: currentUser.avatar || DEFAULT_SILHOUETTE_AVATAR,
+        userId: isAnon ? 'anonymous' : currentUser.id,
+        userName: isAnon ? 'Invitado / Público' : (currentUser.name || currentUser.username || 'Usuario'),
+        userUsername: isAnon ? 'invitado' : (currentUser.username || 'usuario'),
+        userAvatar: isAnon ? DEFAULT_SILHOUETTE_AVATAR : (currentUser.avatar || DEFAULT_SILHOUETTE_AVATAR),
         code,
         placeName: data.placeName,
         category: data.category,
         city: data.city,
         address: data.address,
         inGoogleMaps: data.inGoogleMaps,
+        isOwner: data.isOwner,
         phone: data.phone,
         description: data.description,
         imageUrl: data.imageUrl,
@@ -2632,17 +2703,19 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
       setPlaceSuggestions(prev => [createdSuggestion, ...prev]);
 
       // Update room with placeSuggestionId
-      newPlaceRoom.placeSuggestionId = docRef.id;
-      setChatRooms(prev => prev.map(r => r.id === placeChatId ? { ...r, placeSuggestionId: docRef.id } : r));
-      try {
-        await setDoc(doc(db, 'chat_rooms', placeChatId), { ...newPlaceRoom, placeSuggestionId: docRef.id }, { merge: true });
-      } catch {}
+      if (!isAnon && placeChatId && newPlaceRoom) {
+        newPlaceRoom.placeSuggestionId = docRef.id;
+        setChatRooms(prev => prev.map(r => r.id === placeChatId ? { ...r, placeSuggestionId: docRef.id } : r));
+        try {
+          await setDoc(doc(db, 'chat_rooms', placeChatId), { ...newPlaceRoom, placeSuggestionId: docRef.id }, { merge: true });
+        } catch {}
 
-      triggerPlushNotification({
-        type: 'system',
-        title: `Sugerencia enviada (${code})`,
-        message: 'Tu sugerencia de lugar se ha enviado a Soporte y se ha creado una conversación en tus chats.',
-      });
+        triggerPlushNotification({
+          type: 'system',
+          title: `Sugerencia enviada (${code})`,
+          message: 'Tu sugerencia de lugar se ha enviado a Soporte y se ha creado una conversación en tus chats.',
+        });
+      }
 
       return code;
     } catch (error) {
@@ -3584,11 +3657,17 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
 
   const updateStartupAdConfig = async (config: StartupAdConfig) => {
     try {
+      setStartupAdConfig(config);
+      try {
+        localStorage.setItem('latierrita_startup_ad', JSON.stringify(config));
+      } catch {}
       await setDoc(doc(db, 'config', 'startup_ad'), config);
       triggerPlushNotification({
         type: 'system',
-        title: 'Publicidad de Inicio Actualizada',
-        message: 'La publicidad emergente oficial del STAFF ha sido actualizada con éxito.',
+        title: config.active ? 'Publicidad de Inicio Actualizada' : 'Publicidad Desactivada',
+        message: config.active
+          ? 'La publicidad emergente oficial del STAFF ha sido guardada con éxito.'
+          : 'La publicidad emergente ha sido desactivada y removida de la app.',
       });
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, 'config/startup_ad');
@@ -5345,6 +5424,10 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
 
   const clearNotifications = () => {
     setNotifications([]);
+    try {
+      localStorage.removeItem('latierrita_notifications');
+      localStorage.setItem('latierrita_notifications', '[]');
+    } catch {}
   };
 
   const unreadNotificationsCount = notifications.filter(n => !n.read).length;
