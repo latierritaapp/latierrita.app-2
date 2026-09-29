@@ -26,6 +26,31 @@ import { SPANISH_CITIES } from '../data/citiesData';
 import { SpanishCity } from '../types';
 import { FlagColombia, FlagSpain } from './CountryFlag';
 
+export const getCooldownInfo = (lastChangeDateStr: string | undefined, cooldownDays: number) => {
+  if (!lastChangeDateStr) {
+    return { isLocked: false, remainingMs: 0, formattedTime: '' };
+  }
+  const lastTime = new Date(lastChangeDateStr).getTime();
+  if (isNaN(lastTime)) {
+    return { isLocked: false, remainingMs: 0, formattedTime: '' };
+  }
+  const cooldownMs = cooldownDays * 24 * 60 * 60 * 1000;
+  const elapsed = Date.now() - lastTime;
+  if (elapsed >= cooldownMs) {
+    return { isLocked: false, remainingMs: 0, formattedTime: '' };
+  }
+  const remainingMs = cooldownMs - elapsed;
+  const days = Math.floor(remainingMs / (24 * 60 * 60 * 1000));
+  const hours = Math.ceil((remainingMs % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
+  let formattedTime = '';
+  if (days > 0) {
+    formattedTime = `${days} día${days > 1 ? 's' : ''}${hours > 0 ? ` y ${hours} hora${hours > 1 ? 's' : ''}` : ''}`;
+  } else {
+    formattedTime = `${hours} hora${hours > 1 ? 's' : ''}`;
+  }
+  return { isLocked: true, remainingMs, formattedTime };
+};
+
 export const EditProfileModal: React.FC = () => {
   const { isEditProfileOpen, setIsEditProfileOpen, currentUser, updateProfile, triggerPlushNotification } = useApp();
 
@@ -43,6 +68,10 @@ export const EditProfileModal: React.FC = () => {
   const [facebook, setFacebook] = useState(currentUser.socialLinks?.facebook || '');
   const [tiktok, setTiktok] = useState(currentUser.socialLinks?.tiktok || '');
   const [xAccount, setXAccount] = useState(currentUser.socialLinks?.x || '');
+
+  // Cooldown status (3 días para nombre completo, 7 días para nombre de usuario)
+  const nameCooldown = getCooldownInfo(currentUser.lastNameChangeDate, 3);
+  const usernameCooldown = getCooldownInfo(currentUser.lastUsernameChangeDate, 7);
 
   // UI state
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -137,10 +166,24 @@ export const EditProfileModal: React.FC = () => {
       return;
     }
 
+    // Validar enfriamiento de nombre (3 días)
+    const isNameChanged = name.trim() !== (currentUser.name || '').trim();
+    if (isNameChanged && nameCooldown.isLocked) {
+      setValidationError(`No puedes cambiar tu nombre completo todavía. Debes esperar ${nameCooldown.formattedTime} (tiempo de enfriamiento: 3 días).`);
+      return;
+    }
+
+    // Validar enfriamiento de nombre de usuario (7 días)
+    const isUsernameChanged = cleanUsername !== (currentUser.username || '').trim().toLowerCase();
+    if (isUsernameChanged && usernameCooldown.isLocked) {
+      setValidationError(`No puedes cambiar tu nombre de usuario todavía. Debes esperar ${usernameCooldown.formattedTime} (tiempo de enfriamiento: 7 días).`);
+      return;
+    }
+
     const nowIso = new Date().toISOString();
     const updatedData: Parameters<typeof updateProfile>[0] = {
-      name: name.trim(),
-      username: cleanUsername,
+      name: isNameChanged ? name.trim() : currentUser.name,
+      username: isUsernameChanged ? cleanUsername : currentUser.username,
       bio: bio.trim(),
       website: website.trim(),
       age: parsedAge,
@@ -155,10 +198,10 @@ export const EditProfileModal: React.FC = () => {
       }
     };
 
-    if (name.trim() !== currentUser.name) {
+    if (isNameChanged) {
       updatedData.lastNameChangeDate = nowIso;
     }
-    if (cleanUsername !== currentUser.username) {
+    if (isUsernameChanged) {
       updatedData.lastUsernameChangeDate = nowIso;
     }
 
@@ -311,40 +354,66 @@ export const EditProfileModal: React.FC = () => {
           {/* Campos Principales */}
           <div className="space-y-3.5 divide-y divide-neutral-100 dark:divide-neutral-800/80">
             {/* 2. Nombre (Cada 3 días) */}
-            <div className="pt-2 flex flex-col gap-1">
+            <div className="pt-2 flex flex-col gap-1.5">
               <div className="flex items-center justify-between">
                 <label className="text-[11px] font-bold text-neutral-500 dark:text-neutral-400 flex items-center gap-1">
                   <User className="w-3 h-3 text-amber-500" />
                   <span>Nombre completo</span>
                 </label>
-                <span className="text-[10px] text-amber-600 dark:text-amber-400 font-semibold">
-                  (Cada 3 días)
-                </span>
+                {nameCooldown.isLocked ? (
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-rose-500/15 text-rose-600 dark:text-rose-400 font-bold border border-rose-500/25 flex items-center gap-1">
+                    <Lock className="w-2.5 h-2.5" />
+                    <span>Bloqueado ({nameCooldown.formattedTime})</span>
+                  </span>
+                ) : (
+                  <span className="text-[10px] text-amber-600 dark:text-amber-400 font-semibold">
+                    (Cada 3 días)
+                  </span>
+                )}
               </div>
-              <input
-                id="edit-field-name"
-                type="text"
-                required
-                value={name}
-                onChange={e => setName(e.target.value)}
-                placeholder="Tu nombre completo"
-                className="w-full bg-neutral-100 dark:bg-neutral-800 text-neutral-900 dark:text-white px-3.5 py-2 text-xs rounded-xl border border-neutral-200 dark:border-neutral-700 focus:outline-none focus:ring-1 focus:ring-amber-500 font-medium"
-              />
-              <p className="text-[10px] text-neutral-400 dark:text-neutral-500">
-                Solo puedes cambiar tu nombre una vez cada 3 días para mantener la identidad comunitaria.
+              <div className="relative flex items-center">
+                <input
+                  id="edit-field-name"
+                  type="text"
+                  required
+                  disabled={nameCooldown.isLocked}
+                  value={name}
+                  onChange={e => setName(e.target.value)}
+                  placeholder="Tu nombre completo"
+                  className={`w-full px-3.5 py-2 text-xs rounded-xl border focus:outline-none font-medium transition-all ${
+                    nameCooldown.isLocked
+                      ? 'bg-neutral-100/70 dark:bg-neutral-800/50 text-neutral-400 dark:text-neutral-500 border-neutral-200 dark:border-neutral-700/60 cursor-not-allowed pr-8 select-none'
+                      : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-900 dark:text-white border-neutral-200 dark:border-neutral-700 focus:ring-1 focus:ring-amber-500'
+                  }`}
+                />
+                {nameCooldown.isLocked && (
+                  <Lock className="w-3.5 h-3.5 text-rose-500 dark:text-rose-400 absolute right-3 pointer-events-none" />
+                )}
+              </div>
+              <p className={`text-[10px] ${nameCooldown.isLocked ? 'text-rose-600 dark:text-rose-400 font-medium' : 'text-neutral-400 dark:text-neutral-500'}`}>
+                {nameCooldown.isLocked
+                  ? `⏳ Modificaste tu nombre recientemente. Podrás volver a cambiarlo en ${nameCooldown.formattedTime}.`
+                  : 'Solo puedes cambiar tu nombre una vez cada 3 días para mantener la identidad comunitaria.'}
               </p>
             </div>
 
             {/* 3. Nombre de usuario (Cada 7 días) */}
-            <div className="pt-3 flex flex-col gap-1">
+            <div className="pt-3 flex flex-col gap-1.5">
               <div className="flex items-center justify-between">
                 <label className="text-[11px] font-bold text-neutral-500 dark:text-neutral-400 flex items-center gap-1">
                   <AtSign className="w-3 h-3 text-blue-500" />
                   <span>Nombre de usuario</span>
                 </label>
-                <span className="text-[10px] text-blue-600 dark:text-blue-400 font-semibold">
-                  (Cada 7 días)
-                </span>
+                {usernameCooldown.isLocked ? (
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-rose-500/15 text-rose-600 dark:text-rose-400 font-bold border border-rose-500/25 flex items-center gap-1">
+                    <Lock className="w-2.5 h-2.5" />
+                    <span>Bloqueado ({usernameCooldown.formattedTime})</span>
+                  </span>
+                ) : (
+                  <span className="text-[10px] text-blue-600 dark:text-blue-400 font-semibold">
+                    (Cada 7 días)
+                  </span>
+                )}
               </div>
               <div className="relative flex items-center">
                 <span className="absolute left-3 text-neutral-400 text-xs font-semibold">@</span>
@@ -352,14 +421,24 @@ export const EditProfileModal: React.FC = () => {
                   id="edit-field-username"
                   type="text"
                   required
+                  disabled={usernameCooldown.isLocked}
                   value={username}
                   onChange={e => setUsername(e.target.value)}
                   placeholder="usuario"
-                  className="w-full pl-7 pr-3.5 py-2 bg-neutral-100 dark:bg-neutral-800 text-neutral-900 dark:text-white text-xs rounded-xl border border-neutral-200 dark:border-neutral-700 focus:outline-none focus:ring-1 focus:ring-amber-500 font-medium"
+                  className={`w-full pl-7 pr-3.5 py-2 text-xs rounded-xl border focus:outline-none font-medium transition-all ${
+                    usernameCooldown.isLocked
+                      ? 'bg-neutral-100/70 dark:bg-neutral-800/50 text-neutral-400 dark:text-neutral-500 border-neutral-200 dark:border-neutral-700/60 cursor-not-allowed pr-8 select-none'
+                      : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-900 dark:text-white border-neutral-200 dark:border-neutral-700 focus:ring-1 focus:ring-amber-500'
+                  }`}
                 />
+                {usernameCooldown.isLocked && (
+                  <Lock className="w-3.5 h-3.5 text-rose-500 dark:text-rose-400 absolute right-3 pointer-events-none" />
+                )}
               </div>
-              <p className="text-[10px] text-neutral-400 dark:text-neutral-500">
-                Solo puedes cambiar tu nombre de usuario una vez cada 7 días.
+              <p className={`text-[10px] ${usernameCooldown.isLocked ? 'text-rose-600 dark:text-rose-400 font-medium' : 'text-neutral-400 dark:text-neutral-500'}`}>
+                {usernameCooldown.isLocked
+                  ? `⏳ Modificaste tu usuario recientemente. Podrás volver a cambiarlo en ${usernameCooldown.formattedTime}.`
+                  : 'Solo puedes cambiar tu nombre de usuario una vez cada 7 días.'}
               </p>
             </div>
 

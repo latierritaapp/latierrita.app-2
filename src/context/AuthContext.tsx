@@ -156,6 +156,8 @@ export const mapDBProfileToUserProfile = (db: any): UserProfile => {
     deletedAt: db.deleted_at || db.deletedAt || undefined,
     retentionExpiresAt: db.retention_expires_at || db.retentionExpiresAt || undefined,
     deletedReason: db.deleted_reason || db.deletedReason || '',
+    lastNameChangeDate: db.last_name_change_date || db.lastNameChangeDate || undefined,
+    lastUsernameChangeDate: db.last_username_change_date || db.lastUsernameChangeDate || undefined,
     createdAt: db.created_at || db.createdAt || new Date().toISOString(),
     socialLinks: {
       instagram,
@@ -208,6 +210,14 @@ const buildDBProfileUpdatePayload = (data: Partial<UserProfile>): Record<string,
     payload.avatar_url = data.avatar;
     payload.avatar = data.avatar;
   }
+  if (data.lastNameChangeDate !== undefined) {
+    payload.last_name_change_date = data.lastNameChangeDate;
+    payload.lastNameChangeDate = data.lastNameChangeDate;
+  }
+  if (data.lastUsernameChangeDate !== undefined) {
+    payload.last_username_change_date = data.lastUsernameChangeDate;
+    payload.lastUsernameChangeDate = data.lastUsernameChangeDate;
+  }
   if (data.socialLinks) {
     if (data.socialLinks.instagram !== undefined) payload.instagram = data.socialLinks.instagram.trim();
     if (data.socialLinks.facebook !== undefined) payload.facebook = data.socialLinks.facebook.trim();
@@ -247,6 +257,10 @@ const mapUserProfileToDBProfile = (profile: Partial<UserProfile>): any => {
     x: profile.socialLinks?.x || '',
     social_links: profile.socialLinks || {},
     socialLinks: profile.socialLinks || {},
+    last_name_change_date: profile.lastNameChangeDate || null,
+    lastNameChangeDate: profile.lastNameChangeDate || null,
+    last_username_change_date: profile.lastUsernameChangeDate || null,
+    lastUsernameChangeDate: profile.lastUsernameChangeDate || null,
     created_at: profile.createdAt || new Date().toISOString()
   };
   return db;

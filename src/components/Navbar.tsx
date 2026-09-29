@@ -511,9 +511,21 @@ export const Navbar: React.FC = () => {
                   <ArrowLeft className="w-5 h-5 stroke-[2.5]" />
                   <span>Volver</span>
                 </button>
-              ) : (
+              ) : isProfileView ? (
+                /* PERFIL: Botón + para crear historias o publicaciones */
                 <button
                   id="btn-nav-create-menu"
+                  onClick={() => setIsCreateMenuOpen(true)}
+                  className="p-2 text-white/90 hover:text-amber-400 rounded-full hover:bg-white/10 transition-all active:scale-95"
+                  title="Crear historia o publicación"
+                  aria-label="Crear historia o publicación"
+                >
+                  <Plus className="w-6 h-6 stroke-[2.5]" />
+                </button>
+              ) : (
+                /* INICIO (Feed) y demás vistas: Botón de Bandeja de Chats */
+                <button
+                  id="btn-nav-chat-feed"
                   onClick={() => {
                     setActiveTab('chats');
                     setChatTypeTab('messages');
