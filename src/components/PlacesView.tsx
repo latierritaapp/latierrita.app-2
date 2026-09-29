@@ -53,6 +53,7 @@ export const PlacesView: React.FC = () => {
   const {
     places,
     addPlace,
+    suggestPlace,
     currentUser,
     placesSubTab,
     openReportModal,
@@ -120,22 +121,18 @@ export const PlacesView: React.FC = () => {
     });
   }, [places, searchQuery, selectedCity, selectedCategory]);
 
-  const handleSuggestSubmit = (e: React.FormEvent) => {
+  const handleSuggestSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newPlaceName.trim() || !newPlaceAddress.trim()) return;
 
-    addPlace({
-      name: newPlaceName.trim(),
+    await suggestPlace({
+      placeName: newPlaceName.trim(),
       category: newPlaceCategory,
       city: newPlaceCity,
       address: newPlaceAddress.trim(),
       imageUrl:
         newPlaceImageUrl.trim() ||
         'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=600&auto=format&fit=crop&q=80',
-      rating: 5.0,
-      reviewsCount: 1,
-      priceRange: '€€',
-      specialty: newPlaceCategory === 'Restaurante/Cafe' ? 'Comida típica y café' : newPlaceCategory,
       description:
         newPlaceDescription.trim() || 'Lugar recomendado por la comunidad de parceros en España.',
       phone: newPlacePhone.trim() || undefined,
@@ -149,9 +146,7 @@ export const PlacesView: React.FC = () => {
         tiktok: socialTikTok.trim() || undefined,
         x: socialX.trim() || undefined,
         web: socialWeb.trim() || undefined
-      },
-      isVerified: false,
-      tags: [newPlaceCategory, newPlaceCity, 'Recomendado por parceros']
+      }
     });
 
     // Reset Form

@@ -130,6 +130,34 @@
         "createdAt": { "type": "number", "description": "Creation timestamp epoch" },
         "isPromoted": { "type": "boolean", "description": "Promoted flag" }
       }
+    },
+    "PlaceSuggestion": {
+      "collection": "place_suggestions",
+      "description": "User suggested place submissions sent to Support for review and approval",
+      "fields": {
+        "id": { "type": "string", "description": "Suggestion document ID" },
+        "userId": { "type": "string", "description": "Suggesting user ID" },
+        "userName": { "type": "string", "description": "Suggesting user name" },
+        "userUsername": { "type": "string", "description": "Suggesting user username" },
+        "userAvatar": { "type": "string", "description": "Suggesting user avatar URL" },
+        "code": { "type": "string", "description": "Sequential suggestion code (e.g. SUG-001)" },
+        "placeName": { "type": "string", "description": "Name of suggested place" },
+        "category": { "type": "string", "description": "Place category" },
+        "city": { "type": "string", "description": "City in Spain" },
+        "address": { "type": "string", "description": "Place address" },
+        "inGoogleMaps": { "type": "boolean", "description": "Whether location appears in Google Maps" },
+        "phone": { "type": "string", "description": "Optional contact phone number" },
+        "description": { "type": "string", "description": "Optional description max 100 chars" },
+        "imageUrl": { "type": "string", "description": "Optional image/logo URL" },
+        "website": { "type": "string", "description": "Optional website URL" },
+        "status": { "type": "string", "description": "Status: pendientes, en_proceso, aprobado, rechazado" },
+        "date": { "type": "string", "description": "Submission date string" },
+        "createdAt": { "type": "number", "description": "Creation timestamp epoch" },
+        "chatRoomId": { "type": "string", "description": "ID of associated support chat room" },
+        "assignedStaffName": { "type": "string", "description": "Staff member name assigned" },
+        "assignedStaffRole": { "type": "string", "description": "Staff member role" }
+      }
     }
   }
 }
+

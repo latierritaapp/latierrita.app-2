@@ -15,6 +15,8 @@ import {
   ContentReport,
   SpanishCity,
   PlaceItem,
+  PlaceCategory,
+  PlaceSuggestion,
   SupportTicket,
   VerificationRequest,
   StaffMember,
@@ -258,6 +260,29 @@ interface AppContextType {
   // Places
   places: PlaceItem[];
   addPlace: (place: Omit<PlaceItem, 'id'>) => void;
+  placeSuggestions: PlaceSuggestion[];
+  suggestPlace: (data: {
+    placeName: string;
+    category: PlaceCategory;
+    city: SpanishCity;
+    address: string;
+    inGoogleMaps?: boolean;
+    phone?: string;
+    description?: string;
+    imageUrl?: string;
+    website?: string;
+    socialLinks?: any;
+  }) => Promise<string>;
+  updatePlaceSuggestionStatus: (
+    id: string,
+    status: 'pendientes' | 'en_proceso' | 'aprobado' | 'rechazado',
+    responseNote?: string
+  ) => Promise<void>;
+  updatePlaceSuggestionDetails: (
+    id: string,
+    updatedData: Partial<PlaceSuggestion>
+  ) => Promise<void>;
+  deletePlaceSuggestion: (id: string) => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -1165,6 +1190,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Support, Verification, Staff & Deleted Accounts state
   const [supportTickets, setSupportTickets] = useState<SupportTicket[]>([]);
+  const [placeSuggestions, setPlaceSuggestions] = useState<PlaceSuggestion[]>([]);
   const [verificationRequests, setVerificationRequests] = useState<VerificationRequest[]>([]);
   const [staffMembers, setStaffMembers] = useState<StaffMember[]>([]);
   const [deletedAccounts, setDeletedAccounts] = useState<DeletedAccount[]>(INITIAL_DELETED_ACCOUNTS);
@@ -1199,7 +1225,50 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, []);
 
+  // Sync place_suggestions in real-time from Firestore
+  useEffect(() => {
+    try {
+      const unsub = onSnapshot(collection(db, 'place_suggestions'), (snapshot) => {
+        if (!snapshot.empty) {
+          const list: PlaceSuggestion[] = [];
+          snapshot.forEach((docSnap: any) => {
+            list.push({ id: docSnap.id, ...docSnap.data() } as PlaceSuggestion);
+          });
+          list.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+          setPlaceSuggestions(list);
+        } else {
+          setPlaceSuggestions([]);
+        }
+      }, (err) => {
+        console.warn('Firestore place_suggestions snapshot listener:', err);
+      });
+      return () => unsub();
+    } catch (e) {
+      console.warn('Failed to listen to place_suggestions in Firestore:', e);
+    }
+  }, []);
 
+  // Sync support_tickets in real-time from Firestore
+  useEffect(() => {
+    try {
+      const unsub = onSnapshot(collection(db, 'support_tickets'), (snapshot) => {
+        if (!snapshot.empty) {
+          const list: SupportTicket[] = [];
+          snapshot.forEach((docSnap: any) => {
+            list.push({ id: docSnap.id, ...docSnap.data() } as SupportTicket);
+          });
+          setSupportTickets(list);
+        } else {
+          setSupportTickets([]);
+        }
+      }, (err) => {
+        console.warn('Firestore support_tickets snapshot listener:', err);
+      });
+      return () => unsub();
+    } catch (e) {
+      console.warn('Failed to listen to support_tickets in Firestore:', e);
+    }
+  }, []);
 
   // Load Banners from IndexedDB and Sync with Firestore
   // Sync Deleted Banners Globally from Firestore
@@ -2059,6 +2128,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, []);
 
+  // Sync Place Suggestions
+  useEffect(() => {
+    try {
+      const unsub = onSnapshot(collection(db, 'place_suggestions'), (snapshot) => {
+        if (snapshot.empty) {
+          setPlaceSuggestions([]);
+        } else {
+          const list: PlaceSuggestion[] = [];
+          snapshot.forEach((docSnap: any) => {
+            list.push({ id: docSnap.id, ...docSnap.data() } as PlaceSuggestion);
+          });
+          list.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+          setPlaceSuggestions(list);
+        }
+      }, (error) => {
+        setPlaceSuggestions([]);
+        console.warn('Place suggestions listener error:', error?.message || error);
+      });
+      return () => unsub();
+    } catch (e) {
+      setPlaceSuggestions([]);
+      console.warn('Failed to listen to place_suggestions in DB:', e);
+    }
+  }, []);
+
   // Sync Verification Requests
   useEffect(() => {
     try {
@@ -2404,6 +2498,340 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, 'support_tickets');
       throw error;
+    }
+  };
+
+  // Place Suggestions actions
+  const suggestPlace = async (data: {
+    placeName: string;
+    category: PlaceCategory;
+    city: SpanishCity;
+    address: string;
+    inGoogleMaps?: boolean;
+    phone?: string;
+    description?: string;
+    imageUrl?: string;
+    website?: string;
+    socialLinks?: any;
+  }): Promise<string> => {
+    try {
+      // Generate suggestion code (e.g. SUG-001)
+      const count = placeSuggestions.length + 1;
+      const code = `SUG-${String(count).padStart(3, '0')}`;
+      const now = new Date();
+      const dateFormatted = now.toLocaleDateString('es-ES', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+
+      const placeChatId = `chat-placesug_${code.toLowerCase()}_${currentUser.id}`;
+
+      // Build initial place information message
+      const initialMessageSummary = `📍 Sugerencia de Sitio #${code} registrada con éxito.
+
+• Nombre del lugar: ${data.placeName}
+• Categoría: ${data.category}
+• Ciudad: ${data.city}
+• Dirección: ${data.address}
+• ¿Aparece en Google Maps?: ${data.inGoogleMaps ? 'Sí' : 'No'}
+• Teléfono: ${data.phone || 'No especificado'}
+• Redes / Web: ${data.website || data.socialLinks?.instagram || data.socialLinks?.whatsapp || 'No especificado'}
+• Descripción: ${data.description || 'Sin descripción adicional'}
+• Fecha: ${dateFormatted}
+
+⏳ Estado: Pendiente de revisión por el equipo de Soporte.
+Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (Admin o Soporte) inicie la conversación.`;
+
+      const newPlaceRoom: ChatRoom = {
+        id: placeChatId,
+        type: 'private',
+        name: `${code} - Sugerencia: ${data.placeName}`,
+        avatar: data.imageUrl || 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=200&auto=format&fit=crop&q=80',
+        members: [currentUser.id, 'user-staff'],
+        admins: ['user-staff'],
+        createdBy: currentUser.id,
+        createdAt: now.toISOString().split('T')[0],
+        isPlaceSuggestionChat: true,
+        isTicketChat: true,
+        placeSuggestionCode: code,
+        placeSuggestionStatus: 'pendientes',
+        placeSuggestionLockedForUser: true,
+        placeSuggestionDetails: {
+          placeName: data.placeName,
+          category: data.category,
+          city: data.city,
+          address: data.address,
+          phone: data.phone,
+          inGoogleMaps: data.inGoogleMaps,
+          description: data.description,
+          imageUrl: data.imageUrl,
+          website: data.website,
+          socialLinks: data.socialLinks,
+          date: dateFormatted
+        },
+        messages: [
+          {
+            id: `msg-placesug-init-${Date.now()}`,
+            senderId: currentUser.id,
+            senderName: currentUser.name || currentUser.username,
+            senderAvatar: currentUser.avatar || DEFAULT_SILHOUETTE_AVATAR,
+            text: initialMessageSummary,
+            imageUrl: data.imageUrl,
+            timestamp: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            createdAt: Date.now(),
+            isEncrypted: true,
+            encryptedHash: 'SHA256:placesug-start'
+          }
+        ]
+      };
+
+      // Add to local state & Firestore
+      setChatRooms(prev => {
+        const filtered = prev.filter(r => r.id !== placeChatId && r.placeSuggestionCode !== code);
+        return [newPlaceRoom, ...filtered];
+      });
+
+      try {
+        await setDoc(doc(db, 'chat_rooms', placeChatId), newPlaceRoom);
+      } catch (e) {
+        console.warn('Failed to write place suggestion chat room in Firestore:', e);
+      }
+
+      // Create suggestion record in Firestore collection
+      const newSuggestion: Omit<PlaceSuggestion, 'id'> = {
+        userId: currentUser.id,
+        userName: currentUser.name || currentUser.username || 'Usuario',
+        userUsername: currentUser.username || 'usuario',
+        userAvatar: currentUser.avatar || DEFAULT_SILHOUETTE_AVATAR,
+        code,
+        placeName: data.placeName,
+        category: data.category,
+        city: data.city,
+        address: data.address,
+        inGoogleMaps: data.inGoogleMaps,
+        phone: data.phone,
+        description: data.description,
+        imageUrl: data.imageUrl,
+        website: data.website,
+        socialLinks: data.socialLinks,
+        status: 'pendientes',
+        date: dateFormatted,
+        createdAt: Date.now(),
+        chatRoomId: placeChatId
+      };
+
+      const docRef = await addDoc(collection(db, 'place_suggestions'), newSuggestion);
+      const createdSuggestion: PlaceSuggestion = {
+        ...newSuggestion,
+        id: docRef.id
+      };
+
+      setPlaceSuggestions(prev => [createdSuggestion, ...prev]);
+
+      // Update room with placeSuggestionId
+      newPlaceRoom.placeSuggestionId = docRef.id;
+      setChatRooms(prev => prev.map(r => r.id === placeChatId ? { ...r, placeSuggestionId: docRef.id } : r));
+      try {
+        await setDoc(doc(db, 'chat_rooms', placeChatId), { ...newPlaceRoom, placeSuggestionId: docRef.id }, { merge: true });
+      } catch {}
+
+      triggerPlushNotification({
+        type: 'system',
+        title: `Sugerencia enviada (${code})`,
+        message: 'Tu sugerencia de lugar se ha enviado a Soporte y se ha creado una conversación en tus chats.',
+      });
+
+      return code;
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, 'place_suggestions');
+      throw error;
+    }
+  };
+
+  const updatePlaceSuggestionStatus = async (
+    id: string,
+    status: 'pendientes' | 'en_proceso' | 'aprobado' | 'rechazado',
+    responseNote?: string
+  ) => {
+    const target = placeSuggestions.find(s => s.id === id);
+    if (!target) return;
+
+    const assignedStaffName = currentUser.name || currentUser.username;
+    const assignedStaffRole = currentUser.staffRole || 'Soporte';
+
+    const updatePayload: Partial<PlaceSuggestion> = {
+      status,
+      assignedStaffName,
+      assignedStaffRole
+    };
+
+    try {
+      await updateDoc(doc(db, 'place_suggestions', id), updatePayload);
+      setPlaceSuggestions(prev => prev.map(s => s.id === id ? { ...s, ...updatePayload } : s));
+
+      // If approved, automatically add to places directory
+      if (status === 'aprobado') {
+        const placeObj: Omit<PlaceItem, 'id'> = {
+          userId: target.userId,
+          name: target.placeName,
+          category: target.category,
+          city: target.city,
+          address: target.address,
+          imageUrl: target.imageUrl || 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=600&auto=format&fit=crop&q=80',
+          rating: 5.0,
+          reviewsCount: 1,
+          priceRange: '€€',
+          specialty: target.category === 'Restaurante/Cafe' ? 'Comida típica y especialidades' : target.category,
+          description: target.description || 'Lugar recomendado por la comunidad de parceros en España.',
+          phone: target.phone,
+          website: target.website,
+          inGoogleMaps: target.inGoogleMaps,
+          socialLinks: target.socialLinks,
+          isVerified: false,
+          tags: [target.category, target.city, 'Recomendado por parceros']
+        };
+        addPlace(placeObj);
+      }
+
+      // Synchronize linked ChatRoom with automated notification message
+      const roomId = target.chatRoomId;
+      const targetRoom = chatRooms.find(r => r.id === roomId || r.placeSuggestionCode === target.code || r.placeSuggestionId === id);
+
+      if (targetRoom) {
+        let statusMessageText = '';
+
+        if (status === 'en_proceso') {
+          statusMessageText = `👨‍💼 ${assignedStaffName} (${assignedStaffRole}) del equipo de Soporte ha tomado la sugerencia (${target.code}) de "${target.placeName}". Se encuentra actualmente En Proceso de verificación y revisión. El chat ha sido habilitado para cualquier consulta.`;
+        } else if (status === 'aprobado') {
+          statusMessageText = `✅ ¡Felicidades! La sugerencia (${target.code}) para el lugar "${target.placeName}" ha sido APROBADA e integrada en el directorio oficial de lugares de La Tierrita. ¡Muchas gracias por contribuir con la comunidad!`;
+        } else if (status === 'rechazado') {
+          statusMessageText = `❌ La sugerencia (${target.code}) para el lugar "${target.placeName}" ha sido revisada por el equipo de Soporte y no ha sido aprobada en esta ocasión. Agradecemos tu participación.`;
+        } else if (status === 'pendientes') {
+          statusMessageText = `⏳ La sugerencia (${target.code}) está en estado Pendiente de revisión.`;
+        }
+
+        if (responseNote && responseNote.trim()) {
+          statusMessageText += `\n\nNota del equipo: ${responseNote.trim()}`;
+        }
+
+        const newMsg: ChatMessage = {
+          id: `msg-placesug-status-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          senderId: 'system',
+          senderName: 'Soporte La Tierrita',
+          senderAvatar: 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=200&auto=format&fit=crop&q=80',
+          text: statusMessageText,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          createdAt: Date.now(),
+          isEncrypted: true,
+          encryptedHash: 'SHA256:placesug-status-update'
+        };
+
+        const isLocked = status === 'pendientes';
+
+        const updatedRoom: ChatRoom = {
+          ...targetRoom,
+          placeSuggestionStatus: status,
+          placeSuggestionLockedForUser: isLocked,
+          messages: [...targetRoom.messages, newMsg]
+        };
+
+        setChatRooms(prev => prev.map(r => r.id === targetRoom.id ? updatedRoom : r));
+
+        try {
+          await setDoc(doc(db, 'chat_rooms', targetRoom.id), updatedRoom, { merge: true });
+        } catch (e) {
+          console.warn('Failed to update place suggestion chat room in Firestore:', e);
+        }
+      }
+
+      triggerPlushNotification({
+        type: 'system',
+        title: 'Estado de Sugerencia Actualizado',
+        message: `La sugerencia ${target.code} (${target.placeName}) ha sido marcada como "${status.toUpperCase()}".`
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `place_suggestions/${id}`);
+    }
+  };
+
+  const updatePlaceSuggestionDetails = async (id: string, updatedData: Partial<PlaceSuggestion>) => {
+    try {
+      const target = placeSuggestions.find(s => s.id === id);
+      if (!target) return;
+
+      const mergedSuggestion: PlaceSuggestion = { ...target, ...updatedData };
+
+      setPlaceSuggestions(prev => prev.map(s => s.id === id ? mergedSuggestion : s));
+
+      await setDoc(doc(db, 'place_suggestions', id), mergedSuggestion, { merge: true });
+
+      // Synchronize associated ChatRoom
+      const roomId = target.chatRoomId;
+      const targetRoom = chatRooms.find(r => r.id === roomId || r.placeSuggestionCode === target.code || r.placeSuggestionId === id);
+
+      if (targetRoom) {
+        const updatedRoom: ChatRoom = {
+          ...targetRoom,
+          name: updatedData.placeName ? `${target.code} - Sugerencia: ${updatedData.placeName}` : targetRoom.name,
+          avatar: updatedData.imageUrl || targetRoom.avatar,
+          placeSuggestionDetails: {
+            ...targetRoom.placeSuggestionDetails,
+            placeName: mergedSuggestion.placeName,
+            category: mergedSuggestion.category,
+            city: mergedSuggestion.city,
+            address: mergedSuggestion.address,
+            phone: mergedSuggestion.phone,
+            inGoogleMaps: mergedSuggestion.inGoogleMaps,
+            description: mergedSuggestion.description,
+            imageUrl: mergedSuggestion.imageUrl,
+            website: mergedSuggestion.website,
+            socialLinks: mergedSuggestion.socialLinks,
+            date: mergedSuggestion.date || targetRoom.placeSuggestionDetails?.date || new Date().toISOString().split('T')[0]
+          }
+        };
+
+        setChatRooms(prev => prev.map(r => r.id === targetRoom.id ? updatedRoom : r));
+
+        try {
+          await setDoc(doc(db, 'chat_rooms', targetRoom.id), updatedRoom, { merge: true });
+        } catch (e) {
+          console.warn('Failed to update place suggestion chat room details in Firestore:', e);
+        }
+      }
+
+      triggerPlushNotification({
+        type: 'system',
+        title: 'Información Actualizada',
+        message: `Los datos del lugar ${target.code} (${mergedSuggestion.placeName}) han sido actualizados con éxito.`
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `place_suggestions/${id}`);
+    }
+  };
+
+  const deletePlaceSuggestion = async (id: string) => {
+    try {
+      const target = placeSuggestions.find(s => s.id === id);
+      await deleteDoc(doc(db, 'place_suggestions', id));
+      setPlaceSuggestions(prev => prev.filter(s => s.id !== id));
+
+      if (target?.chatRoomId) {
+        setChatRooms(prev => prev.filter(r => r.id !== target.chatRoomId && r.placeSuggestionCode !== target.code));
+        try {
+          await deleteDoc(doc(db, 'chat_rooms', target.chatRoomId));
+        } catch {}
+      }
+
+      triggerPlushNotification({
+        type: 'system',
+        title: 'Sugerencia Eliminada',
+        message: `La sugerencia ${target?.code || ''} ha sido eliminada.`
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `place_suggestions/${id}`);
     }
   };
 
@@ -5054,7 +5482,12 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
         setIsSettingsOpen,
 
         places,
-        addPlace
+        addPlace,
+        placeSuggestions,
+        suggestPlace,
+        updatePlaceSuggestionStatus,
+        updatePlaceSuggestionDetails,
+        deletePlaceSuggestion
       }}
     >
       {children}

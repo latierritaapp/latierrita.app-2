@@ -191,6 +191,12 @@ export interface StartupAdConfig {
   ctaText: string;
   ctaUrl: string;
   active: boolean;
+  showBadgeText?: boolean;
+  showTitle?: boolean;
+  showDescription?: boolean;
+  showDiscount?: boolean;
+  showCta?: boolean;
+  showReportButton?: boolean;
 }
 
 export type TicketType = 'TS' | 'TRU' | 'TRP' | 'TRH' | 'TRM' | 'TRG' | 'TRA' | 'TRI';
@@ -220,6 +226,39 @@ export interface SupportTicket {
   additionalDetails?: string;
   chatRoomId?: string;
   assignedStaffId?: string;
+  assignedStaffName?: string;
+  assignedStaffRole?: StaffRole;
+}
+
+export interface PlaceSuggestion {
+  id: string;
+  userId: string;
+  userName: string;
+  userUsername: string;
+  userAvatar: string;
+  code: string;
+  placeName: string;
+  category: PlaceCategory;
+  city: SpanishCity;
+  address: string;
+  inGoogleMaps?: boolean;
+  phone?: string;
+  description?: string;
+  imageUrl?: string;
+  website?: string;
+  socialLinks?: {
+    latierrita?: string;
+    whatsapp?: string;
+    instagram?: string;
+    facebook?: string;
+    tiktok?: string;
+    x?: string;
+    web?: string;
+  };
+  status: 'pendientes' | 'en_proceso' | 'aprobado' | 'rechazado';
+  date: string;
+  createdAt?: number;
+  chatRoomId?: string;
   assignedStaffName?: string;
   assignedStaffRole?: StaffRole;
 }
@@ -315,6 +354,7 @@ export interface ChatMessage {
   };
   audioUrl?: string;
   audioDuration?: number; // duration in seconds
+  imageUrl?: string; // image or attachment image URL
   senderStaffRole?: StaffRole;
   poll?: ChatPoll;
   event?: ChatEvent;
@@ -359,6 +399,25 @@ export interface ChatRoom {
     reporterName: string;
     reason: string;
     additionalDetails?: string;
+    date: string;
+  };
+  // Place suggestion chat enhancements:
+  isPlaceSuggestionChat?: boolean;
+  placeSuggestionId?: string;
+  placeSuggestionCode?: string;
+  placeSuggestionStatus?: 'pendientes' | 'en_proceso' | 'aprobado' | 'rechazado';
+  placeSuggestionLockedForUser?: boolean;
+  placeSuggestionDetails?: {
+    placeName: string;
+    category: string;
+    city: string;
+    address: string;
+    phone?: string;
+    inGoogleMaps?: boolean;
+    description?: string;
+    imageUrl?: string;
+    website?: string;
+    socialLinks?: any;
     date: string;
   };
 }

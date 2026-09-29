@@ -41,9 +41,11 @@ import {
   Edit3,
   ShieldAlert,
   Send,
-  ArrowLeft
+  ArrowLeft,
+  Compass,
+  Download
 } from 'lucide-react';
-import { AdCategory, AD_CAROUSEL_CATEGORIES, StaffRole, TicketType, UserProfile, SpanishCity, SupportTicket } from '../types';
+import { AdCategory, AD_CAROUSEL_CATEGORIES, StaffRole, TicketType, UserProfile, SpanishCity, SupportTicket, PlaceSuggestion, PlaceCategory, PlaceItem } from '../types';
 import { SPANISH_CITIES } from '../data/citiesData';
 import { optimizeBannerImage } from '../lib/imageOptimizer';
 import { VerifiedBadge } from './VerifiedBadge';
@@ -88,7 +90,12 @@ export const StaffAdminModal: React.FC<{ isFullScreenRoute?: boolean }> = ({ isF
     updateStartupAdConfig,
     simulateAppRestart,
     staffAdminTab,
-    setStaffAdminTab
+    setStaffAdminTab,
+    places,
+    placeSuggestions,
+    updatePlaceSuggestionStatus,
+    updatePlaceSuggestionDetails,
+    deletePlaceSuggestion
   } = useApp();
 
   const adminMainTab = staffAdminTab;
@@ -143,7 +150,76 @@ export const StaffAdminModal: React.FC<{ isFullScreenRoute?: boolean }> = ({ isF
   };
 
   // Subtabs for Administracion
-  const [adminSubTab, setAdminSubTab] = useState<'usuarios' | 'verificacion' | 'staff' | 'popup_emergente' | 'documentacion'>('usuarios');
+  const [adminSubTab, setAdminSubTab] = useState<'usuarios' | 'verificacion' | 'staff' | 'documentacion'>('usuarios');
+
+  // Editing Place Suggestion State
+  const [editingSuggestion, setEditingSuggestion] = useState<PlaceSuggestion | null>(null);
+  const [editPlaceForm, setEditPlaceForm] = useState<{
+    placeName: string;
+    category: PlaceCategory;
+    city: SpanishCity;
+    address: string;
+    phone: string;
+    website: string;
+    inGoogleMaps: boolean;
+    description: string;
+    imageUrl: string;
+    instagram: string;
+    whatsapp: string;
+  }>({
+    placeName: '',
+    category: 'Restaurante/Cafe',
+    city: 'Madrid',
+    address: '',
+    phone: '',
+    website: '',
+    inGoogleMaps: false,
+    description: '',
+    imageUrl: '',
+    instagram: '',
+    whatsapp: ''
+  });
+
+  const handleOpenEditSuggestion = (s: PlaceSuggestion) => {
+    setEditingSuggestion(s);
+    setEditPlaceForm({
+      placeName: s.placeName || '',
+      category: s.category || 'Restaurante/Cafe',
+      city: s.city || 'Madrid',
+      address: s.address || '',
+      phone: s.phone || '',
+      website: s.website || '',
+      inGoogleMaps: !!s.inGoogleMaps,
+      description: s.description || '',
+      imageUrl: s.imageUrl || '',
+      instagram: s.socialLinks?.instagram || '',
+      whatsapp: s.socialLinks?.whatsapp || ''
+    });
+  };
+
+  const handleSaveEditSuggestion = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingSuggestion) return;
+
+    await updatePlaceSuggestionDetails(editingSuggestion.id, {
+      placeName: editPlaceForm.placeName,
+      category: editPlaceForm.category,
+      city: editPlaceForm.city,
+      address: editPlaceForm.address,
+      phone: editPlaceForm.phone,
+      website: editPlaceForm.website,
+      inGoogleMaps: editPlaceForm.inGoogleMaps,
+      description: editPlaceForm.description,
+      imageUrl: editPlaceForm.imageUrl,
+      socialLinks: {
+        ...editingSuggestion.socialLinks,
+        instagram: editPlaceForm.instagram,
+        whatsapp: editPlaceForm.whatsapp
+      }
+    });
+
+    setEditingSuggestion(null);
+  };
 
   // Forms State: Startup Floating Ad
   const [popupTitle, setPopupTitle] = useState('');
@@ -157,6 +233,14 @@ export const StaffAdminModal: React.FC<{ isFullScreenRoute?: boolean }> = ({ isF
   const [popupCtaUrl, setPopupCtaUrl] = useState('');
   const [popupActive, setPopupActive] = useState(true);
   const [popupImageUrl, setPopupImageUrl] = useState('');
+
+  // Visibility switches
+  const [popupShowBadgeText, setPopupShowBadgeText] = useState(true);
+  const [popupShowTitle, setPopupShowTitle] = useState(true);
+  const [popupShowDescription, setPopupShowDescription] = useState(true);
+  const [popupShowDiscount, setPopupShowDiscount] = useState(true);
+  const [popupShowCta, setPopupShowCta] = useState(true);
+  const [popupShowReportButton, setPopupShowReportButton] = useState(true);
 
   // Sync startupAdConfig to local form states on load/change
   useEffect(() => {
@@ -172,6 +256,12 @@ export const StaffAdminModal: React.FC<{ isFullScreenRoute?: boolean }> = ({ isF
       setPopupCtaUrl(startupAdConfig.ctaUrl || '');
       setPopupActive(startupAdConfig.active ?? true);
       setPopupImageUrl(startupAdConfig.imageUrl || '');
+      setPopupShowBadgeText(startupAdConfig.showBadgeText ?? true);
+      setPopupShowTitle(startupAdConfig.showTitle ?? true);
+      setPopupShowDescription(startupAdConfig.showDescription ?? true);
+      setPopupShowDiscount(startupAdConfig.showDiscount ?? true);
+      setPopupShowCta(startupAdConfig.showCta ?? true);
+      setPopupShowReportButton(startupAdConfig.showReportButton ?? true);
     }
   }, [startupAdConfig, adminSubTab]);
   const [userMgmtFilter, setUserMgmtFilter] = useState<'todos' | 'eliminados'>('todos');
@@ -190,13 +280,20 @@ export const StaffAdminModal: React.FC<{ isFullScreenRoute?: boolean }> = ({ isF
   const [newStaffRole, setNewStaffRole] = useState<StaffRole>('MOD');
 
   // Subtabs for Soporte
-  const [soporteSubTab, setSoporteSubTab] = useState<'tickets' | 'comunidad'>('tickets');
+  const [soporteSubTab, setSoporteSubTab] = useState<'tickets' | 'comunidad' | 'lugares'>('tickets');
   const [ticketTypeFilter, setTicketTypeFilter] = useState<'ALL' | TicketType>('ALL');
   const [ticketStatusFilter, setTicketStatusFilter] = useState<'pendientes' | 'en_proceso' | 'resueltos'>('pendientes');
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
   const [ticketResponseText, setTicketResponseText] = useState('');
   const [selectedTicketForStaffChat, setSelectedTicketForStaffChat] = useState<SupportTicket | null>(null);
   const [staffChatMessageText, setStaffChatMessageText] = useState('');
+
+  // States for Soporte - Gestión de lugares
+  const [selectedSuggestionForStaffChat, setSelectedSuggestionForStaffChat] = useState<PlaceSuggestion | null>(null);
+  const [placeSuggestionStatusFilter, setPlaceSuggestionStatusFilter] = useState<'ALL' | 'pendientes' | 'en_proceso' | 'aprobado' | 'rechazado'>('pendientes');
+  const [placeSuggestionSearchQuery, setPlaceSuggestionSearchQuery] = useState('');
+  const [placeSuggestionCategoryFilter, setPlaceSuggestionCategoryFilter] = useState<string>('ALL');
+  const [staffPlaceChatMessageText, setStaffPlaceChatMessageText] = useState('');
 
   // Forms State: Feed Post
   const [feedTitle, setFeedTitle] = useState('');
@@ -306,6 +403,21 @@ export const StaffAdminModal: React.FC<{ isFullScreenRoute?: boolean }> = ({ isF
     t => (ticketTypeFilter === 'ALL' || t.type === ticketTypeFilter) && (ticketStatusFilter === 'pendientes' ? t.status === 'pendientes' : ticketStatusFilter === 'en_proceso' ? t.status === 'en_proceso' : t.status === 'resueltos')
   );
 
+  // Place Suggestions filtered
+  const filteredPlaceSuggestions = (placeSuggestions || []).filter(s => {
+    const matchesStatus = placeSuggestionStatusFilter === 'ALL' || s.status === placeSuggestionStatusFilter;
+    const matchesCategory = placeSuggestionCategoryFilter === 'ALL' || s.category === placeSuggestionCategoryFilter;
+    const query = placeSuggestionSearchQuery.trim().toLowerCase();
+    const matchesQuery = !query ||
+      s.placeName.toLowerCase().includes(query) ||
+      s.code.toLowerCase().includes(query) ||
+      s.city.toLowerCase().includes(query) ||
+      s.address.toLowerCase().includes(query) ||
+      s.userName.toLowerCase().includes(query) ||
+      s.userUsername.toLowerCase().includes(query);
+    return matchesStatus && matchesCategory && matchesQuery;
+  });
+
   // File upload helper from device gallery with automatic lightweight compression
   const handleRefreshBanners = async () => {
     setIsRefreshingBanners(true);
@@ -375,7 +487,13 @@ export const StaffAdminModal: React.FC<{ isFullScreenRoute?: boolean }> = ({ isF
       ctaText: popupCtaText || 'Ver Boletos y Reservar',
       ctaUrl: popupCtaUrl || 'https://latierrita.es/eventos',
       active: popupActive,
-      imageUrl: popupImageUrl
+      imageUrl: popupImageUrl,
+      showBadgeText: popupShowBadgeText,
+      showTitle: popupShowTitle,
+      showDescription: popupShowDescription,
+      showDiscount: popupShowDiscount,
+      showCta: popupShowCta,
+      showReportButton: popupShowReportButton
     });
   };
 
@@ -712,26 +830,70 @@ export const StaffAdminModal: React.FC<{ isFullScreenRoute?: boolean }> = ({ isF
             {(activeRole === 'Soporte' || (activeRole === 'ADMIN' && adminMainTab === 'soporte')) && (
               <div className="space-y-4">
                 {/* Soporte Header Subtabs */}
-                <div className="flex items-center gap-2 border-b border-white/10 pb-3">
+                <div className="flex items-center gap-2 border-b border-white/10 pb-3 flex-wrap">
                   <button
-                    onClick={() => setSoporteSubTab('tickets')}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                    onClick={() => {
+                      setSoporteSubTab('tickets');
+                      setSelectedTicketForStaffChat(null);
+                    }}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
                       soporteSubTab === 'tickets'
-                        ? 'bg-cyan-400 text-neutral-950 shadow'
+                        ? 'bg-cyan-400 text-neutral-950 shadow font-black'
                         : 'bg-white/10 text-white/70 hover:text-white'
                     }`}
                   >
-                    Gestión de tickets
+                    <HelpCircle className="w-3.5 h-3.5 shrink-0" />
+                    <span>Gestión de tickets</span>
+                    {supportTickets.filter(t => t.status === 'pendientes').length > 0 && (
+                      <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
+                        soporteSubTab === 'tickets' ? 'bg-neutral-950 text-cyan-300' : 'bg-cyan-400 text-neutral-950'
+                      }`}>
+                        {supportTickets.filter(t => t.status === 'pendientes').length}
+                      </span>
+                    )}
                   </button>
                   <button
-                    onClick={() => setSoporteSubTab('comunidad')}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                    onClick={() => {
+                      setSoporteSubTab('comunidad');
+                      setSelectedSuggestionForStaffChat(null);
+                      setSelectedTicketForStaffChat(null);
+                    }}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
                       soporteSubTab === 'comunidad'
-                        ? 'bg-cyan-400 text-neutral-950 shadow'
+                        ? 'bg-cyan-400 text-neutral-950 shadow font-black'
                         : 'bg-white/10 text-white/70 hover:text-white'
                     }`}
                   >
-                    Gestión de la comunidad
+                    <ShieldAlert className="w-3.5 h-3.5 shrink-0" />
+                    <span>Gestión de la comunidad</span>
+                    {reports.length > 0 && (
+                      <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
+                        soporteSubTab === 'comunidad' ? 'bg-neutral-950 text-cyan-300' : 'bg-cyan-400 text-neutral-950'
+                      }`}>
+                        {reports.length}
+                      </span>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setSoporteSubTab('lugares');
+                      setSelectedSuggestionForStaffChat(null);
+                    }}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                      soporteSubTab === 'lugares'
+                        ? 'bg-cyan-400 text-neutral-950 shadow font-black'
+                        : 'bg-white/10 text-white/70 hover:text-white'
+                    }`}
+                  >
+                    <Compass className="w-3.5 h-3.5 shrink-0" />
+                    <span>Gestión de lugares</span>
+                    {(placeSuggestions || []).filter(s => s.status === 'pendientes').length > 0 && (
+                      <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
+                        soporteSubTab === 'lugares' ? 'bg-neutral-950 text-cyan-300' : 'bg-cyan-400 text-neutral-950'
+                      }`}>
+                        {(placeSuggestions || []).filter(s => s.status === 'pendientes').length}
+                      </span>
+                    )}
                   </button>
                 </div>
 
@@ -952,7 +1114,31 @@ export const StaffAdminModal: React.FC<{ isFullScreenRoute?: boolean }> = ({ isF
                                         )}
                                         <span className="ml-auto text-[9px]">{msg.timestamp}</span>
                                       </div>
-                                      <p className="break-words">{msg.text}</p>
+                                      {msg.imageUrl && (
+                                        <div className="my-1.5 rounded-xl overflow-hidden border border-white/10 bg-black/40 space-y-1">
+                                          <img
+                                            src={msg.imageUrl}
+                                            alt="Foto enviada por el usuario"
+                                            className="max-h-52 w-full object-cover rounded-t-xl"
+                                            referrerPolicy="no-referrer"
+                                          />
+                                          <div className="p-2 flex items-center justify-between gap-2 bg-neutral-900/90">
+                                            <span className="text-[10px] text-white/80 font-medium truncate">Foto adjunta</span>
+                                            <a
+                                              href={msg.imageUrl}
+                                              download="lugar_sugerido.jpg"
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              onClick={(e) => e.stopPropagation()}
+                                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-400 hover:bg-amber-300 text-neutral-950 font-black text-[10px] transition-colors shrink-0 shadow-xs cursor-pointer"
+                                            >
+                                              <Download className="w-3 h-3" />
+                                              <span>Descargar</span>
+                                            </a>
+                                          </div>
+                                        </div>
+                                      )}
+                                      <p className="break-words whitespace-pre-wrap">{msg.text}</p>
                                     </div>
 
                                     {isMe && (
@@ -1339,6 +1525,643 @@ export const StaffAdminModal: React.FC<{ isFullScreenRoute?: boolean }> = ({ isF
                         )}
                       </div>
                     </div>
+                  </div>
+                )}
+
+                {/* Subtab 3: Gestión de lugares */}
+                {soporteSubTab === 'lugares' && (
+                  <div className="space-y-4">
+                    {/* View 1: Embedded Staff Place Suggestion Chat with User */}
+                    {selectedSuggestionForStaffChat ? (() => {
+                      const activeSug = (placeSuggestions || []).find(s => s.id === selectedSuggestionForStaffChat.id) || selectedSuggestionForStaffChat;
+                      const linkedRoom = chatRooms.find(r =>
+                        r.id === activeSug.chatRoomId ||
+                        r.placeSuggestionCode === activeSug.code ||
+                        r.placeSuggestionId === activeSug.id ||
+                        (r.type === 'private' && activeSug.userId && r.id.includes(activeSug.userId))
+                      );
+
+                      const handleStaffSendPlaceMessage = (textToSend?: string) => {
+                        const content = (textToSend || staffPlaceChatMessageText).trim();
+                        if (!content) return;
+
+                        // If suggestion was pending, automatically assign to this staff and move to 'en_proceso'
+                        if (activeSug.status === 'pendientes') {
+                          updatePlaceSuggestionStatus(activeSug.id, 'en_proceso');
+                        }
+
+                        const targetRoomId = linkedRoom ? linkedRoom.id : (activeSug.chatRoomId || `chat-placesug_${activeSug.code.toLowerCase()}_${activeSug.userId}`);
+                        if (targetRoomId) {
+                          sendMessage(targetRoomId, content);
+                        }
+                        setStaffPlaceChatMessageText('');
+                      };
+
+                      return (
+                        <div className="bg-[#00172e] border border-cyan-500/30 rounded-2xl overflow-hidden shadow-2xl flex flex-col h-[600px]">
+                          {/* Chat Header inside Staff Panel */}
+                          <div className="p-3 bg-[#001c38] border-b border-white/10 flex flex-wrap items-center justify-between gap-2 shrink-0">
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => setSelectedSuggestionForStaffChat(null)}
+                                className="p-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-colors flex items-center gap-1 text-xs font-bold"
+                                title="Volver al listado de sugerencias de lugares"
+                              >
+                                <ArrowLeft className="w-4 h-4" />
+                                <span className="hidden sm:inline">Volver</span>
+                              </button>
+                              <span className="text-xs font-mono font-black px-2.5 py-0.5 rounded-lg bg-amber-400 text-neutral-950 shadow-sm">
+                                {activeSug.code}
+                              </span>
+                              <div>
+                                <h4 className="text-xs font-black text-white flex items-center gap-1.5">
+                                  <span>{activeSug.placeName}</span>
+                                  <span className="text-[10px] px-2 py-0.2 rounded-md bg-white/10 text-cyan-300 font-semibold">
+                                    {activeSug.category}
+                                  </span>
+                                </h4>
+                                <p className="text-[10px] text-white/60">
+                                  Sugerido por: <strong className="text-white">{activeSug.userName}</strong> (@{activeSug.userUsername}) · {activeSug.city}
+                                </p>
+                              </div>
+                            </div>
+
+                            {/* Status & Quick Action Buttons */}
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                                activeSug.status === 'aprobado'
+                                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                                  : activeSug.status === 'en_proceso'
+                                  ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40'
+                                  : activeSug.status === 'rechazado'
+                                  ? 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+                                  : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                              }`}>
+                                {activeSug.status === 'aprobado' ? 'Aprobado' : activeSug.status === 'en_proceso' ? 'En Proceso' : activeSug.status === 'rechazado' ? 'Rechazado' : 'Pendiente'}
+                              </span>
+
+                              {/* 1. En proceso */}
+                              <button
+                                onClick={() => updatePlaceSuggestionStatus(activeSug.id, 'en_proceso')}
+                                className={`px-2.5 py-1 text-neutral-950 font-bold rounded-lg text-[10px] flex items-center gap-1 cursor-pointer transition-all shadow-sm ${
+                                  activeSug.status === 'en_proceso' ? 'bg-cyan-300 opacity-60' : 'bg-cyan-400 hover:bg-cyan-300'
+                                }`}
+                                title="Marcar En Proceso y habilitar chat al usuario"
+                              >
+                                <Shield className="w-3 h-3" />
+                                <span>En proceso</span>
+                              </button>
+
+                              {/* 2. Aprobado */}
+                              <button
+                                onClick={() => updatePlaceSuggestionStatus(activeSug.id, 'aprobado')}
+                                className={`px-2.5 py-1 text-neutral-950 font-bold rounded-lg text-[10px] flex items-center gap-1 cursor-pointer transition-all shadow-sm ${
+                                  activeSug.status === 'aprobado' ? 'bg-emerald-400 opacity-60' : 'bg-emerald-500 hover:bg-emerald-400'
+                                }`}
+                                title="Aprobar e integrar en directorio oficial"
+                              >
+                                <CheckCircle className="w-3 h-3" />
+                                <span>Aprobado</span>
+                              </button>
+
+                              {/* 3. Rechazado */}
+                              <button
+                                onClick={() => updatePlaceSuggestionStatus(activeSug.id, 'rechazado')}
+                                className={`px-2.5 py-1 text-white font-bold rounded-lg text-[10px] flex items-center gap-1 cursor-pointer transition-all shadow-sm ${
+                                  activeSug.status === 'rechazado' ? 'bg-rose-600 opacity-60' : 'bg-rose-600 hover:bg-rose-500'
+                                }`}
+                                title="Rechazar sugerencia y avisar al usuario"
+                              >
+                                <XCircle className="w-3 h-3" />
+                                <span>Rechazado</span>
+                              </button>
+
+                              {currentUser?.staffRole === 'ADMIN' && (
+                                <button
+                                  onClick={() => {
+                                    if (window.confirm(`¿Estás seguro de que deseas eliminar definitivamente la sugerencia ${activeSug.code}? Solo los ADMIN tienen esta facultad.`)) {
+                                      deletePlaceSuggestion(activeSug.id);
+                                      setSelectedSuggestionForStaffChat(null);
+                                    }
+                                  }}
+                                  className="px-2 py-1 bg-rose-700/80 hover:bg-rose-700 text-white font-bold rounded-lg text-[10px] flex items-center gap-1 cursor-pointer transition-all shadow-sm"
+                                  title="Eliminar sugerencia definitivamente (Solo ADMIN)"
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                  <span className="hidden sm:inline">Eliminar</span>
+                                </button>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Collapsible Place Suggestion Form Information Banner */}
+                          <div className="bg-black/35 border-b border-white/10 p-3 text-[11px] space-y-2 shrink-0 max-h-48 overflow-y-auto">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 text-white/80">
+                              <div>
+                                <span className="text-white/40 block text-[10px]">Nombre del Lugar:</span>
+                                <strong className="text-white text-xs">{activeSug.placeName}</strong>
+                              </div>
+                              <div>
+                                <span className="text-white/40 block text-[10px]">Categoría y Ciudad:</span>
+                                <span className="text-amber-300 font-semibold">{activeSug.category} · {activeSug.city}</span>
+                              </div>
+                              <div>
+                                <span className="text-white/40 block text-[10px]">Dirección:</span>
+                                <span className="text-white/90">{activeSug.address}</span>
+                              </div>
+                              <div>
+                                <span className="text-white/40 block text-[10px]">¿Aparece en Google Maps?:</span>
+                                <span className={activeSug.inGoogleMaps ? 'text-emerald-300 font-bold' : 'text-amber-300'}>
+                                  {activeSug.inGoogleMaps ? 'Sí, verificado en Maps' : 'No especificado / No aparece'}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-white/40 block text-[10px]">Teléfono de contacto:</span>
+                                <span className="text-white/90">{activeSug.phone || 'No especificado'}</span>
+                              </div>
+                              <div>
+                                <span className="text-white/40 block text-[10px]">Fecha de Envío:</span>
+                                <span className="text-white/70">{activeSug.date}</span>
+                              </div>
+                            </div>
+
+                            {/* Social / Web Links */}
+                            {(activeSug.website || activeSug.socialLinks?.instagram || activeSug.socialLinks?.whatsapp || activeSug.socialLinks?.tiktok || activeSug.socialLinks?.facebook) && (
+                              <div className="pt-1.5 border-t border-white/5 flex flex-wrap items-center gap-2 text-[10px]">
+                                <span className="text-white/40 font-bold">Redes y Web:</span>
+                                {activeSug.website && (
+                                  <a href={activeSug.website.startsWith('http') ? activeSug.website : `https://${activeSug.website}`} target="_blank" rel="noreferrer" className="px-2 py-0.5 bg-white/10 hover:bg-white/20 rounded-md text-cyan-300 flex items-center gap-1">
+                                    <Globe className="w-3 h-3" /> Web
+                                  </a>
+                                )}
+                                {activeSug.socialLinks?.instagram && (
+                                  <span className="px-2 py-0.5 bg-pink-500/20 text-pink-300 rounded-md border border-pink-500/30">
+                                    Instagram: @{activeSug.socialLinks.instagram.replace('@', '')}
+                                  </span>
+                                )}
+                                {activeSug.socialLinks?.whatsapp && (
+                                  <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-300 rounded-md border border-emerald-500/30">
+                                    WhatsApp: {activeSug.socialLinks.whatsapp}
+                                  </span>
+                                )}
+                                {activeSug.socialLinks?.tiktok && (
+                                  <span className="px-2 py-0.5 bg-white/10 text-white/90 rounded-md">
+                                    TikTok: @{activeSug.socialLinks.tiktok.replace('@', '')}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+
+                            {activeSug.description && (
+                              <div className="pt-1 border-t border-white/5">
+                                <span className="text-white/40 block text-[10px]">Descripción / Información del usuario:</span>
+                                <p className="italic text-white/90 bg-white/5 p-1.5 rounded-lg mt-0.5">
+                                  "{activeSug.description}"
+                                </p>
+                              </div>
+                            )}
+
+                            {activeSug.imageUrl && (
+                              <div className="pt-1 flex items-center gap-2">
+                                <span className="text-white/40 text-[10px]">Foto adjunta:</span>
+                                <img src={activeSug.imageUrl} alt={activeSug.placeName} className="w-10 h-10 rounded-lg object-cover border border-white/20" />
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Live Chat Message Feed */}
+                          <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-[#001224] no-scrollbar">
+                            {(!linkedRoom || !linkedRoom.messages || linkedRoom.messages.length === 0) ? (
+                              <div className="p-8 text-center text-white/50 text-xs space-y-2">
+                                <MessageSquare className="w-8 h-8 mx-auto text-white/30" />
+                                <p>No hay mensajes aún en la conversación de este lugar.</p>
+                                <p className="text-[11px] text-cyan-300">
+                                  Escribe un mensaje abajo para iniciar la atención directa con el usuario.
+                                </p>
+                              </div>
+                            ) : (
+                              (linkedRoom.messages || []).map(msg => {
+                                const isMe = msg.senderId === currentUser.id;
+                                const isSystem = msg.senderId === 'system';
+
+                                if (isSystem) {
+                                  return (
+                                    <div key={msg.id} className="flex justify-center my-2">
+                                      <div className="bg-amber-500/10 border border-amber-500/20 text-amber-300 text-[10px] px-3 py-1.5 rounded-xl text-center flex items-center gap-1.5 max-w-md">
+                                        <Compass className="w-3.5 h-3.5 shrink-0 text-amber-400" />
+                                        <span className="leading-snug">{msg.text}</span>
+                                      </div>
+                                    </div>
+                                  );
+                                }
+
+                                return (
+                                  <div
+                                    key={msg.id}
+                                    className={`flex gap-2 items-end ${isMe ? 'justify-end' : 'justify-start'}`}
+                                  >
+                                    {!isMe && (
+                                      <img
+                                        src={msg.senderAvatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80'}
+                                        alt={msg.senderName}
+                                        className="w-6 h-6 rounded-full object-cover shrink-0 border border-white/20"
+                                      />
+                                    )}
+
+                                    <div
+                                      className={`max-w-[78%] rounded-2xl px-3.5 py-2 text-xs leading-relaxed shadow ${
+                                        isMe
+                                          ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white rounded-br-xs'
+                                          : 'bg-white/10 text-white rounded-bl-xs border border-white/10'
+                                      }`}
+                                    >
+                                      <div className="flex items-center gap-1.5 mb-0.5 text-[10px] opacity-80">
+                                        <span className="font-bold">{msg.senderName}</span>
+                                        {msg.senderStaffRole && (
+                                          <span className="px-1 py-0.2 rounded text-[8px] font-black bg-amber-400 text-neutral-950 uppercase">
+                                            {msg.senderStaffRole}
+                                          </span>
+                                        )}
+                                        <span className="ml-auto text-[9px]">{msg.timestamp}</span>
+                                      </div>
+                                      <p className="break-words whitespace-pre-line">{msg.text}</p>
+                                    </div>
+
+                                    {isMe && (
+                                      <img
+                                        src={currentUser.avatar}
+                                        alt={currentUser.name}
+                                        className="w-6 h-6 rounded-full object-cover shrink-0 border border-cyan-400/50"
+                                      />
+                                    )}
+                                  </div>
+                                );
+                              })
+                            )}
+                          </div>
+
+                          {/* Quick Staff Response Canned Buttons */}
+                          <div className="px-3 py-1.5 bg-[#00172e] border-t border-white/10 flex items-center gap-1.5 overflow-x-auto no-scrollbar shrink-0">
+                            <span className="text-[10px] text-white/50 shrink-0 font-bold">Respuestas rápidas:</span>
+                            <button
+                              type="button"
+                              onClick={() => handleStaffSendPlaceMessage('👋 Hola, estamos revisando la información de tu sugerencia de sitio desde el equipo de Soporte. ¿Podrías confirmarnos los horarios de atención y especialidades del lugar?')}
+                              className="px-2 py-0.5 bg-white/10 hover:bg-white/20 text-white/80 hover:text-white rounded-lg text-[10px] whitespace-nowrap transition-colors cursor-pointer"
+                            >
+                              👋 Saludo inicial
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleStaffSendPlaceMessage('🔍 Tu sugerencia se encuentra actualmente en proceso de validación y verificación por el equipo de moderadores y soporte.')}
+                              className="px-2 py-0.5 bg-white/10 hover:bg-white/20 text-white/80 hover:text-white rounded-lg text-[10px] whitespace-nowrap transition-colors cursor-pointer"
+                            >
+                              🔍 En revisión
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleStaffSendPlaceMessage('✅ ¡Buenas noticias! Tu sugerencia ha sido aprobada e integrada en el catálogo de lugares de La Tierrita. ¡Gracias por sumar a la comunidad!')}
+                              className="px-2 py-0.5 bg-white/10 hover:bg-white/20 text-white/80 hover:text-white rounded-lg text-[10px] whitespace-nowrap transition-colors cursor-pointer"
+                            >
+                              ✅ Aprobación
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleStaffSendPlaceMessage('❌ Hemos revisado la información enviada pero en este momento no es posible incluir el lugar debido a falta de datos verificables.')}
+                              className="px-2 py-0.5 bg-white/10 hover:bg-white/20 text-white/80 hover:text-white rounded-lg text-[10px] whitespace-nowrap transition-colors cursor-pointer"
+                            >
+                              ❌ No aprobado
+                            </button>
+                          </div>
+
+                          {/* Interactive Staff Input Bar */}
+                          <form
+                            onSubmit={(e) => {
+                              e.preventDefault();
+                              handleStaffSendPlaceMessage();
+                            }}
+                            className="p-3 bg-[#001c38] border-t border-white/10 flex items-center gap-2 shrink-0"
+                          >
+                            <input
+                              type="text"
+                              value={staffPlaceChatMessageText}
+                              onChange={(e) => setStaffPlaceChatMessageText(e.target.value)}
+                              placeholder={`Escribir respuesta a ${activeSug.userName} sobre "${activeSug.placeName}"...`}
+                              className="flex-1 bg-white/10 text-white placeholder-white/40 text-xs px-3.5 py-2.5 rounded-xl border border-white/15 focus:outline-none focus:border-cyan-400"
+                            />
+                            <button
+                              type="submit"
+                              disabled={!staffPlaceChatMessageText.trim()}
+                              className="px-4 py-2.5 bg-cyan-400 hover:bg-cyan-300 disabled:opacity-40 text-neutral-950 font-black rounded-xl text-xs flex items-center gap-1.5 transition-all shadow-md cursor-pointer"
+                            >
+                              <Send className="w-3.5 h-3.5" />
+                              <span className="hidden sm:inline">Enviar</span>
+                            </button>
+                          </form>
+                        </div>
+                      );
+                    })() : (
+                      /* View 2: Place Suggestions Table / List with Status Filters and Search */
+                      <div className="space-y-4">
+                        {/* Header description and search */}
+                        <div className="p-3.5 bg-white/5 border border-white/10 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                          <div>
+                            <h4 className="text-xs font-black text-amber-300 uppercase tracking-wider flex items-center gap-1.5">
+                              <Compass className="w-4 h-4" />
+                              <span>Gestión de Lugares Sugeridos</span>
+                            </h4>
+                            <p className="text-[11px] text-white/70">
+                              Revisa, cambia el estado y chatea con los usuarios que sugieren nuevos sitios para La Tierrita.
+                            </p>
+                          </div>
+
+                          <div className="relative min-w-[200px]">
+                            <Search className="w-3.5 h-3.5 text-white/40 absolute left-3 top-1/2 -translate-y-1/2" />
+                            <input
+                              type="text"
+                              value={placeSuggestionSearchQuery}
+                              onChange={(e) => setPlaceSuggestionSearchQuery(e.target.value)}
+                              placeholder="Buscar sitio, código o usuario..."
+                              className="w-full pl-8 pr-3 py-1.5 bg-black/40 border border-white/15 rounded-xl text-xs text-white placeholder:text-white/40 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Status Filter Badges */}
+                        <div className="flex flex-wrap items-center justify-between gap-2 bg-white/5 p-2 rounded-2xl border border-white/10">
+                          <div className="flex flex-wrap items-center gap-1">
+                            <button
+                              onClick={() => setPlaceSuggestionStatusFilter('ALL')}
+                              className={`px-2.5 py-1 rounded-lg text-xs font-extrabold transition-all ${
+                                placeSuggestionStatusFilter === 'ALL'
+                                  ? 'bg-white text-neutral-950 shadow'
+                                  : 'text-white/70 hover:bg-white/10'
+                              }`}
+                            >
+                              Todos ({placeSuggestions.length})
+                            </button>
+                            <button
+                              onClick={() => setPlaceSuggestionStatusFilter('pendientes')}
+                              className={`px-2.5 py-1 rounded-lg text-xs font-extrabold transition-all ${
+                                placeSuggestionStatusFilter === 'pendientes'
+                                  ? 'bg-amber-400 text-neutral-950 shadow'
+                                  : 'text-white/70 hover:bg-white/10'
+                              }`}
+                            >
+                              Pendientes ({placeSuggestions.filter(s => s.status === 'pendientes').length})
+                            </button>
+                            <button
+                              onClick={() => setPlaceSuggestionStatusFilter('en_proceso')}
+                              className={`px-2.5 py-1 rounded-lg text-xs font-extrabold transition-all ${
+                                placeSuggestionStatusFilter === 'en_proceso'
+                                  ? 'bg-cyan-400 text-neutral-950 shadow'
+                                  : 'text-white/70 hover:bg-white/10'
+                              }`}
+                            >
+                              En Proceso ({placeSuggestions.filter(s => s.status === 'en_proceso').length})
+                            </button>
+                            <button
+                              onClick={() => setPlaceSuggestionStatusFilter('aprobado')}
+                              className={`px-2.5 py-1 rounded-lg text-xs font-extrabold transition-all ${
+                                placeSuggestionStatusFilter === 'aprobado'
+                                  ? 'bg-emerald-400 text-neutral-950 shadow'
+                                  : 'text-white/70 hover:bg-white/10'
+                              }`}
+                            >
+                              Aprobados ({placeSuggestions.filter(s => s.status === 'aprobado').length})
+                            </button>
+                            <button
+                              onClick={() => setPlaceSuggestionStatusFilter('rechazado')}
+                              className={`px-2.5 py-1 rounded-lg text-xs font-extrabold transition-all ${
+                                placeSuggestionStatusFilter === 'rechazado'
+                                  ? 'bg-rose-500 text-white shadow'
+                                  : 'text-white/70 hover:bg-white/10'
+                              }`}
+                            >
+                              Rechazados ({placeSuggestions.filter(s => s.status === 'rechazado').length})
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Suggestions List */}
+                        <div className="space-y-3">
+                          {filteredPlaceSuggestions.length === 0 ? (
+                            <div className="p-8 text-center text-white/50 bg-white/5 border border-white/10 rounded-2xl text-xs space-y-1">
+                              <Compass className="w-8 h-8 text-white/20 mx-auto" />
+                              <p className="font-semibold text-white/70">No hay sugerencias registradas</p>
+                              <p className="text-[11px]">En este filtro de estado "{placeSuggestionStatusFilter}".</p>
+                            </div>
+                          ) : (
+                            filteredPlaceSuggestions.map(s => (
+                              <div
+                                key={s.id}
+                                className="p-4 bg-white/5 border border-white/10 rounded-2xl space-y-3 hover:bg-white/[0.08] transition-all shadow-sm"
+                              >
+                                {/* Header: Code, Name, Category, City, Status */}
+                                <div className="flex items-center justify-between gap-2 flex-wrap">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-[11px] font-black px-2.5 py-0.5 bg-black/40 text-amber-300 rounded-md border border-amber-400/30 font-mono">
+                                      {s.code}
+                                    </span>
+                                    <span className="text-sm font-bold text-white">{s.placeName}</span>
+                                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/10 text-cyan-300 font-semibold">
+                                      {s.category}
+                                    </span>
+                                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/10 text-amber-300 font-semibold">
+                                      {s.city}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <span className={`text-[9px] font-bold px-2.5 py-0.5 rounded-full border ${
+                                      s.status === 'aprobado'
+                                        ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                                        : s.status === 'en_proceso'
+                                        ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40'
+                                        : s.status === 'rechazado'
+                                        ? 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+                                        : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                                    }`}>
+                                      {s.status === 'aprobado' ? 'Aprobado' : s.status === 'en_proceso' ? 'En Proceso' : s.status === 'rechazado' ? 'Rechazado' : 'Pendiente'}
+                                    </span>
+                                    <span className="text-[10px] text-white/50">{s.date}</span>
+                                  </div>
+                                </div>
+
+                                {/* Main Details Grid */}
+                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 text-xs text-white/80 bg-black/25 p-3 rounded-xl border border-white/5">
+                                  <div className="flex items-start gap-1.5">
+                                    <MapPin className="w-3.5 h-3.5 text-rose-400 shrink-0 mt-0.5" />
+                                    <div>
+                                      <span className="text-white/40 block text-[10px]">Dirección:</span>
+                                      <span className="text-white font-medium">{s.address}</span>
+                                    </div>
+                                  </div>
+
+                                  <div className="flex items-start gap-1.5">
+                                    <Globe className="w-3.5 h-3.5 text-blue-400 shrink-0 mt-0.5" />
+                                    <div>
+                                      <span className="text-white/40 block text-[10px]">Google Maps:</span>
+                                      <span className={s.inGoogleMaps ? 'text-emerald-300 font-bold' : 'text-white/70'}>
+                                        {s.inGoogleMaps ? 'Aparece en Google Maps' : 'No verificado en Maps'}
+                                      </span>
+                                    </div>
+                                  </div>
+
+                                  <div className="flex items-start gap-1.5">
+                                    <Phone className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
+                                    <div>
+                                      <span className="text-white/40 block text-[10px]">Teléfono:</span>
+                                      <span className="text-white">{s.phone || 'No especificado'}</span>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* Social Links if present */}
+                                {(s.website || s.socialLinks?.instagram || s.socialLinks?.whatsapp || s.socialLinks?.tiktok) && (
+                                  <div className="flex flex-wrap items-center gap-2 text-[10px] text-white/70">
+                                    <span className="text-white/40 font-bold">Enlaces:</span>
+                                    {s.website && (
+                                      <a href={s.website.startsWith('http') ? s.website : `https://${s.website}`} target="_blank" rel="noreferrer" className="px-2 py-0.5 bg-white/10 hover:bg-white/20 rounded text-cyan-300 flex items-center gap-1">
+                                        <Globe className="w-2.5 h-2.5" /> {s.website}
+                                      </a>
+                                    )}
+                                    {s.socialLinks?.instagram && (
+                                      <span className="px-2 py-0.5 bg-pink-500/10 text-pink-300 rounded border border-pink-500/20">
+                                        IG: @{s.socialLinks.instagram.replace('@', '')}
+                                      </span>
+                                    )}
+                                    {s.socialLinks?.whatsapp && (
+                                      <span className="px-2 py-0.5 bg-emerald-500/10 text-emerald-300 rounded border border-emerald-500/20">
+                                        WA: {s.socialLinks.whatsapp}
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
+
+                                {/* Description */}
+                                {s.description && (
+                                  <p className="text-xs text-white/75 bg-white/5 p-2 rounded-xl italic">
+                                    "{s.description}"
+                                  </p>
+                                )}
+
+                                {/* User attached image preview & download */}
+                                {s.imageUrl && (
+                                  <div className="flex items-center gap-3 bg-black/40 p-2.5 rounded-xl border border-white/10">
+                                    <img
+                                      src={s.imageUrl}
+                                      alt={s.placeName}
+                                      className="w-16 h-16 rounded-lg object-cover border border-white/20 shrink-0"
+                                    />
+                                    <div className="flex-1 min-w-0 space-y-1">
+                                      <span className="text-[10px] text-amber-300 font-bold block uppercase tracking-wider">Imagen adjunta enviada por usuario</span>
+                                      <p className="text-[11px] text-white/70 truncate">{s.imageUrl}</p>
+                                    </div>
+                                    <a
+                                      href={s.imageUrl}
+                                      download={`lugar_${s.code}.jpg`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="px-3 py-1.5 bg-amber-400 hover:bg-amber-300 text-neutral-950 font-black rounded-lg text-xs flex items-center gap-1.5 transition-colors shrink-0 cursor-pointer shadow-sm"
+                                    >
+                                      <Download className="w-3.5 h-3.5" />
+                                      <span>Descargar Imagen</span>
+                                    </a>
+                                  </div>
+                                )}
+
+                                {/* User info & 4 Action Buttons */}
+                                <div className="flex items-center justify-between pt-2 text-[11px] border-t border-white/10 gap-2 flex-wrap">
+                                  <div className="flex items-center gap-2">
+                                    <img
+                                      src={s.userAvatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80'}
+                                      alt={s.userName}
+                                      className="w-5 h-5 rounded-full object-cover"
+                                    />
+                                    <span className="text-white/70 font-medium">
+                                      Sugerido por: <strong className="text-white">{s.userName}</strong> (@{s.userUsername})
+                                    </span>
+                                  </div>
+
+                                  {/* The 4 Action Buttons + Edit */}
+                                  <div className="flex items-center gap-1.5 flex-wrap ml-auto">
+                                    {/* Editar lugar (Antes de ser publicado) */}
+                                    <button
+                                      type="button"
+                                      onClick={() => handleOpenEditSuggestion(s)}
+                                      className="px-2.5 py-1 bg-amber-400 hover:bg-amber-300 text-neutral-950 font-extrabold rounded-lg text-[10px] flex items-center gap-1 cursor-pointer transition-all shadow-sm"
+                                      title="Editar la información de este lugar antes de ser aprobado o publicado"
+                                    >
+                                      <Edit3 className="w-3 h-3" />
+                                      <span>Editar lugar</span>
+                                    </button>
+                                    {/* 1. En proceso */}
+                                    <button
+                                      onClick={() => updatePlaceSuggestionStatus(s.id, 'en_proceso')}
+                                      className={`px-2.5 py-1 text-neutral-950 font-bold rounded-lg text-[10px] flex items-center gap-1 cursor-pointer transition-all shadow-sm ${
+                                        s.status === 'en_proceso' ? 'bg-cyan-300 ring-2 ring-white/40' : 'bg-cyan-400 hover:bg-cyan-300'
+                                      }`}
+                                      title="Poner en proceso y notificar al usuario en el chat"
+                                    >
+                                      <Shield className="w-3 h-3" />
+                                      <span>En proceso</span>
+                                    </button>
+
+                                    {/* 2. Aprobado */}
+                                    <button
+                                      onClick={() => updatePlaceSuggestionStatus(s.id, 'aprobado')}
+                                      className={`px-2.5 py-1 text-neutral-950 font-bold rounded-lg text-[10px] flex items-center gap-1 cursor-pointer transition-all shadow-sm ${
+                                        s.status === 'aprobado' ? 'bg-emerald-400 ring-2 ring-white/40' : 'bg-emerald-500 hover:bg-emerald-400'
+                                      }`}
+                                      title="Aprobar lugar, publicarlo en directorio y notificar al usuario en el chat"
+                                    >
+                                      <CheckCircle className="w-3 h-3" />
+                                      <span>Aprobado</span>
+                                    </button>
+
+                                    {/* 3. Rechazado */}
+                                    <button
+                                      onClick={() => updatePlaceSuggestionStatus(s.id, 'rechazado')}
+                                      className={`px-2.5 py-1 text-white font-bold rounded-lg text-[10px] flex items-center gap-1 cursor-pointer transition-all shadow-sm ${
+                                        s.status === 'rechazado' ? 'bg-rose-600 ring-2 ring-white/40' : 'bg-rose-600 hover:bg-rose-500'
+                                      }`}
+                                      title="Rechazar lugar y notificar al usuario en el chat"
+                                    >
+                                      <XCircle className="w-3 h-3" />
+                                      <span>Rechazado</span>
+                                    </button>
+
+                                    {/* 4. Iniciar chat */}
+                                    <button
+                                      onClick={() => setSelectedSuggestionForStaffChat(s)}
+                                      className="px-2.5 py-1 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold rounded-lg text-[10px] flex items-center gap-1 cursor-pointer transition-all shadow-sm"
+                                      title="Abrir chat en vivo con el usuario"
+                                    >
+                                      <MessageSquare className="w-3 h-3" />
+                                      <span>Iniciar chat</span>
+                                    </button>
+
+                                    {/* ADMIN Delete only */}
+                                    {currentUser?.staffRole === 'ADMIN' && (
+                                      <button
+                                        onClick={() => {
+                                          if (window.confirm(`¿Estás seguro de que deseas eliminar definitivamente la sugerencia ${s.code}?`)) {
+                                            deletePlaceSuggestion(s.id);
+                                          }
+                                        }}
+                                        className="px-2 py-1 bg-rose-700/70 hover:bg-rose-700 text-white font-bold rounded-lg text-[10px] flex items-center gap-1 cursor-pointer transition-all shadow-sm"
+                                        title="Eliminar sugerencia (Solo ADMIN)"
+                                      >
+                                        <Trash2 className="w-3 h-3" />
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -2036,6 +2859,98 @@ export const StaffAdminModal: React.FC<{ isFullScreenRoute?: boolean }> = ({ isF
                         </label>
                       </div>
 
+                      {/* Element Visibility Switches */}
+                      <div className="bg-[#00172e] border border-white/10 p-3 rounded-xl space-y-2.5">
+                        <span className="text-[11px] font-black text-amber-300 block uppercase tracking-wider">
+                          ⚙️ Visibilidad Opcional de Elementos en la Ventana Emergente:
+                        </span>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                          {/* 1. Badge Superior */}
+                          <div className="flex items-center justify-between bg-white/5 p-2 rounded-lg border border-white/10">
+                            <span className="text-white/80 font-medium text-[11px]">Badge Superior ("Publicidad Oficial")</span>
+                            <label className="relative inline-flex items-center cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={popupShowBadgeText}
+                                onChange={e => setPopupShowBadgeText(e.target.checked)}
+                                className="sr-only peer"
+                              />
+                              <div className="w-9 h-5 bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-400"></div>
+                            </label>
+                          </div>
+
+                          {/* 2. Título y Subtítulo */}
+                          <div className="flex items-center justify-between bg-white/5 p-2 rounded-lg border border-white/10">
+                            <span className="text-white/80 font-medium text-[11px]">Título y Subtítulo</span>
+                            <label className="relative inline-flex items-center cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={popupShowTitle}
+                                onChange={e => setPopupShowTitle(e.target.checked)}
+                                className="sr-only peer"
+                              />
+                              <div className="w-9 h-5 bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-400"></div>
+                            </label>
+                          </div>
+
+                          {/* 3. Descripción Completa */}
+                          <div className="flex items-center justify-between bg-white/5 p-2 rounded-lg border border-white/10">
+                            <span className="text-white/80 font-medium text-[11px]">Descripción Completa</span>
+                            <label className="relative inline-flex items-center cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={popupShowDescription}
+                                onChange={e => setPopupShowDescription(e.target.checked)}
+                                className="sr-only peer"
+                              />
+                              <div className="w-9 h-5 bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-400"></div>
+                            </label>
+                          </div>
+
+                          {/* 4. Código y Validez de Descuento */}
+                          <div className="flex items-center justify-between bg-white/5 p-2 rounded-lg border border-white/10">
+                            <span className="text-white/80 font-medium text-[11px]">Caja de Descuento</span>
+                            <label className="relative inline-flex items-center cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={popupShowDiscount}
+                                onChange={e => setPopupShowDiscount(e.target.checked)}
+                                className="sr-only peer"
+                              />
+                              <div className="w-9 h-5 bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-400"></div>
+                            </label>
+                          </div>
+
+                          {/* 5. Botón CTA */}
+                          <div className="flex items-center justify-between bg-white/5 p-2 rounded-lg border border-white/10">
+                            <span className="text-white/80 font-medium text-[11px]">Botón de Acción (CTA)</span>
+                            <label className="relative inline-flex items-center cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={popupShowCta}
+                                onChange={e => setPopupShowCta(e.target.checked)}
+                                className="sr-only peer"
+                              />
+                              <div className="w-9 h-5 bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-400"></div>
+                            </label>
+                          </div>
+
+                          {/* 6. Botón de Reportar (TRA) */}
+                          <div className="flex items-center justify-between bg-white/5 p-2 rounded-lg border border-white/10">
+                            <span className="text-white/80 font-medium text-[11px]">Botón Reportar Anuncio (TRA)</span>
+                            <label className="relative inline-flex items-center cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={popupShowReportButton}
+                                onChange={e => setPopupShowReportButton(e.target.checked)}
+                                className="sr-only peer"
+                              />
+                              <div className="w-9 h-5 bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-400"></div>
+                            </label>
+                          </div>
+                        </div>
+                      </div>
+
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
                           <label className="block text-[10px] font-bold text-white/70 mb-1">
@@ -2095,7 +3010,7 @@ export const StaffAdminModal: React.FC<{ isFullScreenRoute?: boolean }> = ({ isF
 
                       <div>
                         <label className="block text-[10px] font-bold text-white/70 mb-1">
-                          Imagen del Anuncio Emergente *
+                          Imagen del Anuncio Emergente (Formato 9:16 Vertical) *
                         </label>
                         <div className="flex items-center gap-2">
                           <input
@@ -2120,19 +3035,22 @@ export const StaffAdminModal: React.FC<{ isFullScreenRoute?: boolean }> = ({ isF
                       </div>
 
                       {popupImageUrl && (
-                        <div className="relative w-full h-32 rounded-xl overflow-hidden border border-white/20 group">
-                          <img src={popupImageUrl} alt="Preview Popup" className="w-full h-full object-cover" />
-                          <span className="absolute bottom-2 left-2 bg-black/70 px-2 py-0.5 rounded text-[10px] text-amber-300 font-bold">
-                            Vista Previa Anuncio Emergente
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => setPopupImageUrl('')}
-                            className="absolute top-2 right-2 p-1 bg-rose-600 hover:bg-rose-500 text-white rounded-lg transition-colors"
-                            title="Quitar imagen"
-                          >
-                            <X className="w-3.5 h-3.5" />
-                          </button>
+                        <div className="space-y-1">
+                          <span className="text-[10px] text-amber-300 font-bold block">Vista Previa Formato Vertical 9:16:</span>
+                          <div className="relative w-36 aspect-[9/16] rounded-none overflow-hidden border border-amber-400/40 group bg-neutral-950 mx-auto shadow-xl">
+                            <img src={popupImageUrl} alt="Preview Popup 9:16" className="w-full h-full object-cover rounded-none" />
+                            <span className="absolute bottom-2 left-2 bg-black/80 px-2 py-0.5 rounded text-[9px] text-amber-300 font-bold">
+                              Formato 9:16
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setPopupImageUrl('')}
+                              className="absolute top-2 right-2 p-1 bg-rose-600 hover:bg-rose-500 text-white rounded-lg transition-colors cursor-pointer"
+                              title="Quitar imagen"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </div>
                       )}
 
@@ -2249,16 +3167,6 @@ export const StaffAdminModal: React.FC<{ isFullScreenRoute?: boolean }> = ({ isF
                         }`}
                       >
                         Miembros del STAFF
-                      </button>
-                      <button
-                        onClick={() => setAdminSubTab('popup_emergente')}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                          adminSubTab === 'popup_emergente'
-                            ? 'bg-amber-400 text-neutral-950 shadow'
-                            : 'bg-white/10 text-white/70 hover:text-white'
-                        }`}
-                      >
-                        Publicidad Emergente (Popup)
                       </button>
                       <button
                         onClick={() => setAdminSubTab('documentacion')}
@@ -2610,222 +3518,6 @@ export const StaffAdminModal: React.FC<{ isFullScreenRoute?: boolean }> = ({ isF
                             </div>
                           ))}
                         </div>
-                      </div>
-                    )}
-
-                    {/* Subtab: Publicidad Emergente (Popup) */}
-                    {adminSubTab === 'popup_emergente' && (
-                      <div className="space-y-4">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <h4 className="text-xs font-bold text-amber-300">
-                              Configuración de Publicidad Flotante al Iniciar
-                            </h4>
-                            <p className="text-[10px] text-white/50">
-                              Este anuncio emergente se le abre a todos los parceros la primera vez que abren la app.
-                            </p>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              simulateAppRestart();
-                            }}
-                            className="px-3 py-1.5 bg-neutral-800 hover:bg-neutral-700 text-white border border-neutral-600 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all shadow-md active:scale-95 cursor-pointer"
-                          >
-                            <span>Probar / Forzar Apertura</span>
-                          </button>
-                        </div>
-
-                        <form onSubmit={handleSavePopupConfig} className="space-y-3 bg-white/5 border border-white/10 p-4 rounded-2xl">
-                          <div className="flex items-center justify-between p-3 bg-[#002466]/40 border border-white/10 rounded-xl">
-                            <span className="text-xs font-bold text-white">¿Mostrar publicidad al iniciar la app?</span>
-                            <label className="relative inline-flex items-center cursor-pointer">
-                              <input
-                                type="checkbox"
-                                checked={popupActive}
-                                onChange={e => setPopupActive(e.target.checked)}
-                                className="sr-only peer"
-                              />
-                              <div className="w-11 h-6 bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-400"></div>
-                            </label>
-                          </div>
-
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <div>
-                              <label className="block text-[10px] font-bold text-white/70 mb-1">
-                                Título del Anuncio *
-                              </label>
-                              <input
-                                type="text"
-                                value={popupTitle}
-                                onChange={e => setPopupTitle(e.target.value)}
-                                placeholder="ej. Gran Festival Tricolor 2026"
-                                required
-                                className="w-full bg-white/10 text-white placeholder-white/40 px-3 py-2 rounded-xl border border-white/20 focus:outline-none focus:ring-1 focus:ring-amber-400 text-xs"
-                              />
-                            </div>
-
-                            <div>
-                              <label className="block text-[10px] font-bold text-white/70 mb-1">
-                                Subtítulo / Ubicaciones
-                              </label>
-                              <input
-                                type="text"
-                                value={popupSubtitle}
-                                onChange={e => setPopupSubtitle(e.target.value)}
-                                placeholder="ej. 🇨🇴 Madrid & Barcelona"
-                                className="w-full bg-white/10 text-white placeholder-white/40 px-3 py-2 rounded-xl border border-white/20 focus:outline-none focus:ring-1 focus:ring-amber-400 text-xs"
-                              />
-                            </div>
-                          </div>
-
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <div>
-                              <label className="block text-[10px] font-bold text-white/70 mb-1">
-                                Badge Superior de Esquina (Texto)
-                              </label>
-                              <input
-                                type="text"
-                                value={popupBadgeText}
-                                onChange={e => setPopupBadgeText(e.target.value)}
-                                placeholder="ej. Publicidad Oficial STAFF"
-                                className="w-full bg-white/10 text-white placeholder-white/40 px-3 py-2 rounded-xl border border-white/20 focus:outline-none focus:ring-1 focus:ring-amber-400 text-xs"
-                              />
-                            </div>
-
-                            <div>
-                              <label className="block text-[10px] font-bold text-white/70 mb-1">
-                                Badge de Descuento
-                              </label>
-                              <input
-                                type="text"
-                                value={popupDiscountBadge}
-                                onChange={e => setPopupDiscountBadge(e.target.value)}
-                                placeholder="ej. 20% Dcto Exclusivo"
-                                className="w-full bg-white/10 text-white placeholder-white/40 px-3 py-2 rounded-xl border border-white/20 focus:outline-none focus:ring-1 focus:ring-amber-400 text-xs"
-                              />
-                            </div>
-                          </div>
-
-                          <div>
-                            <label className="block text-[10px] font-bold text-white/70 mb-1">
-                              Imagen del Anuncio Emergente *
-                            </label>
-                            <div className="flex items-center gap-2">
-                              <input
-                                type="text"
-                                value={popupImageUrl}
-                                onChange={e => setPopupImageUrl(e.target.value)}
-                                placeholder="Pega la URL o elige de tu galería..."
-                                required
-                                className="flex-1 bg-white/10 text-white placeholder-white/40 px-3 py-2 rounded-xl border border-white/20 focus:outline-none focus:ring-1 focus:ring-amber-400 text-xs"
-                              />
-                              <label className="px-3 py-2 bg-amber-400 hover:bg-amber-300 text-neutral-950 font-black rounded-xl flex items-center gap-1.5 shrink-0 cursor-pointer shadow-md transition-all active:scale-95 text-xs">
-                                <Upload className="w-3.5 h-3.5" />
-                                <span>Galería</span>
-                                <input
-                                  type="file"
-                                  accept="image/*"
-                                  className="hidden"
-                                  onChange={e => handleFileSelect(e, setPopupImageUrl)}
-                                />
-                              </label>
-                            </div>
-                          </div>
-
-                          {popupImageUrl && (
-                            <div className="relative w-full h-32 rounded-xl overflow-hidden border border-white/20 group">
-                              <img src={popupImageUrl} alt="Preview Popup" className="w-full h-full object-cover" />
-                              <span className="absolute bottom-2 left-2 bg-black/70 px-2 py-0.5 rounded text-[10px] text-amber-300 font-bold">
-                                Vista Previa Anuncio Emergente
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() => setPopupImageUrl('')}
-                                className="absolute top-2 right-2 p-1 bg-rose-600 hover:bg-rose-500 text-white rounded-lg transition-colors"
-                                title="Quitar imagen"
-                              >
-                                <X className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          )}
-
-                          <div>
-                            <label className="block text-[10px] font-bold text-white/70 mb-1">
-                              Descripción Completa
-                            </label>
-                            <textarea
-                              value={popupDescription}
-                              onChange={e => setPopupDescription(e.target.value)}
-                              rows={3}
-                              placeholder="¡El mayor encuentro cultural y musical de colombianos en España!..."
-                              className="w-full bg-white/10 text-white placeholder-white/40 px-3 py-2 rounded-xl border border-white/20 focus:outline-none focus:ring-1 focus:ring-amber-400 text-xs resize-none"
-                            />
-                          </div>
-
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <div>
-                              <label className="block text-[10px] font-bold text-white/70 mb-1">
-                                Código de Descuento
-                              </label>
-                              <input
-                                type="text"
-                                value={popupDiscountCode}
-                                onChange={e => setPopupDiscountCode(e.target.value)}
-                                placeholder="ej. LATIE2026"
-                                className="w-full bg-white/10 text-white placeholder-white/40 px-3 py-2 rounded-xl border border-white/20 focus:outline-none focus:ring-1 focus:ring-amber-400 text-xs"
-                              />
-                            </div>
-
-                            <div>
-                              <label className="block text-[10px] font-bold text-white/70 mb-1">
-                                Validez / Duración
-                              </label>
-                              <input
-                                type="text"
-                                value={popupDiscountValidity}
-                                onChange={e => setPopupDiscountValidity(e.target.value)}
-                                placeholder="ej. Válido 48h"
-                                className="w-full bg-white/10 text-white placeholder-white/40 px-3 py-2 rounded-xl border border-white/20 focus:outline-none focus:ring-1 focus:ring-amber-400 text-xs"
-                              />
-                            </div>
-                          </div>
-
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <div>
-                              <label className="block text-[10px] font-bold text-white/70 mb-1">
-                                Texto del Botón (CTA)
-                              </label>
-                              <input
-                                type="text"
-                                value={popupCtaText}
-                                onChange={e => setPopupCtaText(e.target.value)}
-                                placeholder="ej. Ver Boletos y Reservar"
-                                className="w-full bg-white/10 text-white placeholder-white/40 px-3 py-2 rounded-xl border border-white/20 focus:outline-none focus:ring-1 focus:ring-amber-400 text-xs"
-                              />
-                            </div>
-
-                            <div>
-                              <label className="block text-[10px] font-bold text-white/70 mb-1">
-                                Enlace del Botón (CTA)
-                              </label>
-                              <input
-                                type="url"
-                                value={popupCtaUrl}
-                                onChange={e => setPopupCtaUrl(e.target.value)}
-                                placeholder="https://..."
-                                className="w-full bg-white/10 text-white placeholder-white/40 px-3 py-2 rounded-xl border border-white/20 focus:outline-none focus:ring-1 focus:ring-amber-400 text-xs"
-                              />
-                            </div>
-                          </div>
-
-                          <button
-                            type="submit"
-                            className="w-full mt-2 py-3 bg-amber-400 hover:bg-amber-300 text-neutral-950 font-black text-xs rounded-xl shadow-lg transition-all active:scale-95 flex items-center justify-center gap-1.5 cursor-pointer"
-                          >
-                            <span>Guardar Configuración de Publicidad de Inicio</span>
-                          </button>
-                        </form>
                       </div>
                     )}
 
@@ -3500,6 +4192,202 @@ CREATE POLICY "Permitir eliminación stories" ON public.stories FOR DELETE USING
                 Asignar al STAFF
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: EDITAR INFORMACIÓN DE LUGAR SUGERIDO (STAFF) */}
+      {editingSuggestion && (
+        <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 animate-fade-in">
+          <div className="bg-[#00172e] border border-amber-400/40 rounded-3xl w-full max-w-xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+            {/* Modal Header */}
+            <div className="p-4 bg-gradient-to-r from-[#002244] to-[#00172e] border-b border-white/10 flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-amber-400/20 text-amber-400 border border-amber-400/30 shrink-0">
+                  <Edit3 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-sm text-white">Editar Información del Lugar</h3>
+                  <p className="text-[11px] text-amber-300/80 font-mono">Código: {editingSuggestion.code}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingSuggestion(null)}
+                className="p-1.5 rounded-full hover:bg-white/10 text-white/70 hover:text-white transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Form */}
+            <form onSubmit={handleSaveEditSuggestion} className="p-4 sm:p-5 overflow-y-auto space-y-4 text-xs no-scrollbar">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* Place Name */}
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-white/80">Nombre del Lugar *</label>
+                  <input
+                    type="text"
+                    required
+                    value={editPlaceForm.placeName}
+                    onChange={e => setEditPlaceForm({ ...editPlaceForm, placeName: e.target.value })}
+                    className="w-full bg-white/10 text-white px-3 py-2 rounded-xl border border-white/15 focus:outline-none focus:border-amber-400"
+                    placeholder="Ej: El Rinconcito Paisa"
+                  />
+                </div>
+
+                {/* Category */}
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-white/80">Categoría *</label>
+                  <select
+                    value={editPlaceForm.category}
+                    onChange={e => setEditPlaceForm({ ...editPlaceForm, category: e.target.value as PlaceCategory })}
+                    className="w-full bg-[#002244] text-white px-3 py-2 rounded-xl border border-white/15 focus:outline-none focus:border-amber-400"
+                  >
+                    <option value="Restaurante/Cafe">Restaurante / Café</option>
+                    <option value="Discoteca/Bar">Discoteca / Bar</option>
+                    <option value="Supermercado/Tienda">Supermercado / Tienda</option>
+                    <option value="Servicios/Profesional">Servicios / Profesional</option>
+                    <option value="Deportes/Ocio">Deportes / Ocio</option>
+                    <option value="Otros">Otros</option>
+                  </select>
+                </div>
+
+                {/* City */}
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-white/80">Ciudad *</label>
+                  <select
+                    value={editPlaceForm.city}
+                    onChange={e => setEditPlaceForm({ ...editPlaceForm, city: e.target.value as SpanishCity })}
+                    className="w-full bg-[#002244] text-white px-3 py-2 rounded-xl border border-white/15 focus:outline-none focus:border-amber-400"
+                  >
+                    {SPANISH_CITIES.map(c => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Phone */}
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-white/80">Teléfono / Contacto</label>
+                  <input
+                    type="text"
+                    value={editPlaceForm.phone}
+                    onChange={e => setEditPlaceForm({ ...editPlaceForm, phone: e.target.value })}
+                    className="w-full bg-white/10 text-white px-3 py-2 rounded-xl border border-white/15 focus:outline-none focus:border-amber-400"
+                    placeholder="+34 600 000 000"
+                  />
+                </div>
+              </div>
+
+              {/* Address */}
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold text-white/80">Dirección Completa *</label>
+                <input
+                  type="text"
+                  required
+                  value={editPlaceForm.address}
+                  onChange={e => setEditPlaceForm({ ...editPlaceForm, address: e.target.value })}
+                  className="w-full bg-white/10 text-white px-3 py-2 rounded-xl border border-white/15 focus:outline-none focus:border-amber-400"
+                  placeholder="Calle, número, código postal..."
+                />
+              </div>
+
+              {/* In Google Maps */}
+              <div className="flex items-center gap-2.5 bg-white/5 p-3 rounded-xl border border-white/10">
+                <input
+                  type="checkbox"
+                  id="editInGoogleMaps"
+                  checked={editPlaceForm.inGoogleMaps}
+                  onChange={e => setEditPlaceForm({ ...editPlaceForm, inGoogleMaps: e.target.checked })}
+                  className="w-4 h-4 accent-amber-400 rounded cursor-pointer"
+                />
+                <label htmlFor="editInGoogleMaps" className="text-xs font-semibold text-white cursor-pointer select-none">
+                  ¿Aparece o está verificado en Google Maps?
+                </label>
+              </div>
+
+              {/* Website & Socials */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-white/80">Sitio Web / Link</label>
+                  <input
+                    type="text"
+                    value={editPlaceForm.website}
+                    onChange={e => setEditPlaceForm({ ...editPlaceForm, website: e.target.value })}
+                    className="w-full bg-white/10 text-white px-2.5 py-1.5 rounded-lg border border-white/15 focus:outline-none focus:border-amber-400 text-xs"
+                    placeholder="https://..."
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-white/80">Instagram (@usuario)</label>
+                  <input
+                    type="text"
+                    value={editPlaceForm.instagram}
+                    onChange={e => setEditPlaceForm({ ...editPlaceForm, instagram: e.target.value })}
+                    className="w-full bg-white/10 text-white px-2.5 py-1.5 rounded-lg border border-white/15 focus:outline-none focus:border-amber-400 text-xs"
+                    placeholder="@ejemplo"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-white/80">WhatsApp Contacto</label>
+                  <input
+                    type="text"
+                    value={editPlaceForm.whatsapp}
+                    onChange={e => setEditPlaceForm({ ...editPlaceForm, whatsapp: e.target.value })}
+                    className="w-full bg-white/10 text-white px-2.5 py-1.5 rounded-lg border border-white/15 focus:outline-none focus:border-amber-400 text-xs"
+                    placeholder="+34..."
+                  />
+                </div>
+              </div>
+
+              {/* Image URL */}
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold text-white/80">URL de Foto / Imagen del Lugar</label>
+                <input
+                  type="text"
+                  value={editPlaceForm.imageUrl}
+                  onChange={e => setEditPlaceForm({ ...editPlaceForm, imageUrl: e.target.value })}
+                  className="w-full bg-white/10 text-white px-3 py-2 rounded-xl border border-white/15 focus:outline-none focus:border-amber-400"
+                  placeholder="https://images.unsplash.com/..."
+                />
+                {editPlaceForm.imageUrl && (
+                  <div className="mt-2 rounded-xl overflow-hidden border border-white/10 max-h-32">
+                    <img src={editPlaceForm.imageUrl} alt="Vista previa" className="w-full h-32 object-cover" />
+                  </div>
+                )}
+              </div>
+
+              {/* Description */}
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold text-white/80">Descripción del Lugar</label>
+                <textarea
+                  rows={3}
+                  value={editPlaceForm.description}
+                  onChange={e => setEditPlaceForm({ ...editPlaceForm, description: e.target.value })}
+                  className="w-full bg-white/10 text-white px-3 py-2 rounded-xl border border-white/15 focus:outline-none focus:border-amber-400 resize-none"
+                  placeholder="Detalles del sitio, especialidad, ambiente..."
+                />
+              </div>
+
+              {/* Modal Actions */}
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-white/10">
+                <button
+                  type="button"
+                  onClick={() => setEditingSuggestion(null)}
+                  className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold transition-colors cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-neutral-950 font-black flex items-center gap-1.5 transition-colors shadow-lg cursor-pointer"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>Guardar Cambios</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

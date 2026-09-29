@@ -72,8 +72,12 @@ service cloud.firestore {
       allow read, write: if true;
     }
 
-    // Places
+    // Places & Place Suggestions
     match /places/{placeId} {
+      allow read, write: if true;
+    }
+
+    match /place_suggestions/{suggestionId} {
       allow read, write: if true;
     }
 
