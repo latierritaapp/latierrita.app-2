@@ -75,6 +75,8 @@ export const Navbar: React.FC = () => {
         : (otherUsers.find(u => u.id === selectedUserProfile.id || u.username === selectedUserProfile.username || (selectedUserProfile.email && u.email === selectedUserProfile.email)) || selectedUserProfile))
     : currentUser;
 
+  const isGuestUser = Boolean(currentUser?.isGuest || currentUser?.id?.startsWith('guest-'));
+
   const isVisitingOtherProfile = isProfileView && Boolean(selectedUserProfile) && selectedUserProfile?.id !== currentUser.id && selectedUserProfile?.username !== currentUser.username;
 
   const pendingInvitesCount = (groupInvites || []).filter(i => i.status === 'pending').length;
@@ -162,6 +164,16 @@ export const Navbar: React.FC = () => {
 
   // Navigate directly to the selected user's profile
   const handleSelectSuggestedUser = (user: UserProfile) => {
+    if (isGuestUser) {
+      triggerPlushNotification({
+        type: 'system',
+        title: 'Acceso Limitado',
+        message: 'Como invitado no puedes buscar usuarios ni visitar perfiles. Regístrate en la app para acceder a todas las funciones.'
+      });
+      setIsSearchDropdownOpen(false);
+      setExploreSearchQuery('');
+      return;
+    }
     if (user.id === currentUser.id || user.username === currentUser.username) {
       setSelectedUserProfile(null);
     } else {
@@ -244,21 +256,44 @@ export const Navbar: React.FC = () => {
               <input
                 id="input-navbar-explore-search"
                 type="text"
-                value={exploreSearchQuery}
+                value={isGuestUser ? '' : exploreSearchQuery}
+                readOnly={isGuestUser}
+                onClick={() => {
+                  if (isGuestUser) {
+                    triggerPlushNotification({
+                      type: 'system',
+                      title: 'Acceso Limitado',
+                      message: 'Como invitado no puedes buscar usuarios en la barra de búsqueda. Regístrate en la app para acceder a todas las funciones.'
+                    });
+                  }
+                }}
                 onChange={e => {
+                  if (isGuestUser) return;
                   setExploreSearchQuery(e.target.value);
                   setIsSearchDropdownOpen(true);
                   setSelectedSuggestionIndex(-1);
                 }}
                 onFocus={() => {
+                  if (isGuestUser) {
+                    triggerPlushNotification({
+                      type: 'system',
+                      title: 'Acceso Limitado',
+                      message: 'Como invitado no puedes buscar usuarios en la barra de búsqueda. Regístrate en la app para acceder a todas las funciones.'
+                    });
+                    return;
+                  }
                   if (exploreSearchQuery.trim()) {
                     setIsSearchDropdownOpen(true);
                   }
                 }}
                 onKeyDown={handleSearchKeyDown}
-                placeholder="Buscar usuarios o @parcero..."
+                placeholder={isGuestUser ? 'Búsqueda no disponible para invitados' : 'Buscar usuarios o @parcero...'}
                 autoComplete="off"
-                className="w-full pl-9 pr-8 py-2 text-xs bg-white/10 hover:bg-white/15 focus:bg-white/20 rounded-full text-white placeholder-white/50 focus:outline-none focus:ring-1 focus:ring-amber-400 border border-white/15 transition-all shadow-inner"
+                className={`w-full pl-9 pr-8 py-2 text-xs rounded-full text-white placeholder-white/50 focus:outline-none border transition-all shadow-inner ${
+                  isGuestUser
+                    ? 'bg-white/5 border-white/10 opacity-70 cursor-not-allowed'
+                    : 'bg-white/10 hover:bg-white/15 focus:bg-white/20 focus:ring-1 focus:ring-amber-400 border-white/15 cursor-text'
+                }`}
               />
               {exploreSearchQuery && (
                 <button
@@ -517,7 +552,17 @@ export const Navbar: React.FC = () => {
                 /* PERFIL: Botón + para crear historias o publicaciones */
                 <button
                   id="btn-nav-create-menu"
-                  onClick={() => setIsCreateMenuOpen(true)}
+                  onClick={() => {
+                    if (isGuestUser) {
+                      triggerPlushNotification({
+                        type: 'system',
+                        title: 'Acción Limitada',
+                        message: 'Como invitado no puedes publicar publicaciones ni historias. Regístrate en la app para acceder a todas las funciones.'
+                      });
+                      return;
+                    }
+                    setIsCreateMenuOpen(true);
+                  }}
                   className="p-2 text-white/90 hover:text-amber-400 rounded-full hover:bg-white/10 transition-all active:scale-95"
                   title="Crear historia o publicación"
                   aria-label="Crear historia o publicación"

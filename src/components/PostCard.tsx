@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useApp } from '../context/AppContext';
+import { useAuth } from '../context/AuthContext';
 import { PostItem, UserProfile } from '../types';
 import {
   Heart,
@@ -50,6 +51,8 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
     startPrivateChat
   } = useApp();
 
+  const { isGuest } = useAuth();
+
   const [commentText, setCommentText] = useState('');
   const [showOptions, setShowOptions] = useState(false);
   const [showHeartAnim, setShowHeartAnim] = useState(false);
@@ -81,6 +84,14 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
   }
 
   const handleDoubleTap = () => {
+    if (isGuest) {
+      triggerPlushNotification({
+        type: 'system',
+        title: 'Acción Limitada',
+        message: 'Regístrate en la app para dar Me gusta a las publicaciones.'
+      });
+      return;
+    }
     if (!post.hasLiked) {
       likePost(post.id);
     }
@@ -90,6 +101,14 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
 
   const handleCommentSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (isGuest) {
+      triggerPlushNotification({
+        type: 'system',
+        title: 'Acción Limitada',
+        message: 'Regístrate en la app para comentar las publicaciones.'
+      });
+      return;
+    }
     if (!commentText.trim()) return;
     const parentId = replyingToComment ? (replyingToComment.parentId || replyingToComment.id) : undefined;
     addComment(post.id, commentText.trim(), parentId);
@@ -112,6 +131,15 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
   const isAdminBadge = isStaffOrAdminPost || author?.staffRole === 'ADMIN';
 
   const handleUserClick = () => {
+    if (isGuest) {
+      triggerPlushNotification({
+        type: 'system',
+        title: 'Acción Limitada',
+        message: 'Regístrate en la app para visitar los perfiles de otros usuarios.'
+      });
+      return;
+    }
+
     if (post.userId === currentUser.id || post.username === currentUser.username) {
       setSelectedUserProfile(null);
       setActiveTab('profile');

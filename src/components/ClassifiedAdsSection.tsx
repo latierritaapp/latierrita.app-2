@@ -28,7 +28,7 @@ import {
   AlertTriangle
 } from 'lucide-react';
 import { ClassifiedAdItem, ClassifiedCategory, SpanishCity, UserProfile } from '../types';
-import { DEFAULT_SILHOUETTE_AVATAR } from '../context/AuthContext';
+import { DEFAULT_SILHOUETTE_AVATAR, useAuth } from '../context/AuthContext';
 import { SPANISH_CITIES } from '../data/mockData';
 import { db, doc, setDoc, deleteDoc, collection, onSnapshot } from '../lib/firebase';
 
@@ -43,6 +43,7 @@ const AD_CATEGORIES: { label: ClassifiedCategory | 'Todos'; icon: React.FC<{ cla
 const INITIAL_ADS: ClassifiedAdItem[] = [];
 
 export const ClassifiedAdsSection: React.FC = () => {
+  const { isGuest, logout } = useAuth();
   const {
     currentUser,
     otherUsers,
@@ -55,6 +56,37 @@ export const ClassifiedAdsSection: React.FC = () => {
     adsSearchQuery,
     setAdsSearchQuery
   } = useApp();
+
+  const isGuestUser = Boolean(isGuest || currentUser?.isGuest || currentUser?.id?.startsWith('guest-'));
+
+  if (isGuestUser) {
+    return (
+      <div id="classified-ads-guest-locked" className="w-full max-w-2xl mx-auto px-4 py-8 text-white min-h-[calc(100vh-8rem)] flex flex-col items-center justify-center">
+        <div className="w-full max-w-md bg-white/[0.04] border border-white/10 rounded-3xl p-6 sm:p-8 text-center shadow-2xl backdrop-blur-md">
+          <div className="w-20 h-20 rounded-3xl bg-amber-400/10 border border-amber-400/20 flex items-center justify-center mx-auto mb-5 text-amber-400 shadow-xl">
+            <Megaphone className="w-10 h-10" />
+          </div>
+          <span className="px-3 py-1 bg-amber-400/15 border border-amber-400/30 text-amber-300 font-black text-xs uppercase tracking-wider rounded-full inline-block mb-3">
+            Acceso no disponible para invitados
+          </span>
+          <h2 className="text-xl font-black text-white mb-2">
+            Anuncios Clasificados
+          </h2>
+          <p className="text-xs text-white/70 leading-relaxed mb-6">
+            Como usuario invitado no puedes ver anuncios ni publicar anuncios clasificados. Regístrate en la app para acceder a todas las funciones, contactar anunciantes y publicar tus propios clasificados.
+          </p>
+          <button
+            id="btn-guest-register-from-ads"
+            type="button"
+            onClick={() => logout()}
+            className="w-full py-3 px-5 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-neutral-950 font-black text-xs sm:text-sm rounded-2xl shadow-lg transition-all cursor-pointer active:scale-95"
+          >
+            Regístrate en la app
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   const [ads, setAds] = useState<ClassifiedAdItem[]>(() => {
     const saved = localStorage.getItem('latierrita_user_ads');

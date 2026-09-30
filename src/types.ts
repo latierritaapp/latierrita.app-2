@@ -60,6 +60,8 @@ export interface UserProfile {
     cover: string;
   }[];
   savedPostIds?: string[];
+  isGuest?: boolean;
+  guestExpiresAt?: string;
 }
 
 export interface StoryViewer {

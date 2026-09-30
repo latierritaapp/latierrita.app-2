@@ -269,6 +269,17 @@ const mapUserProfileToDBProfile = (profile: Partial<UserProfile>): any => {
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(() => {
+    try {
+      const expiresAtRaw = localStorage.getItem('latierrita_guest_expires_at');
+      if (expiresAtRaw && new Date(expiresAtRaw).getTime() < Date.now()) {
+        localStorage.removeItem('latierrita_guest_username');
+        localStorage.removeItem('latierrita_guest_id');
+        localStorage.removeItem('latierrita_guest_expires_at');
+        localStorage.removeItem('latierrita_user');
+        return null;
+      }
+    } catch {}
+
     const saved = localStorage.getItem('latierrita_user');
     if (saved) {
       try {
@@ -280,7 +291,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return null;
   });
   const [loading, setLoading] = useState<boolean>(true);
-  const [isGuest, setIsGuest] = useState<boolean>(false);
+  const [isGuest, setIsGuest] = useState<boolean>(() => {
+    try {
+      const savedUser = localStorage.getItem('latierrita_user');
+      if (savedUser) {
+        const parsed = JSON.parse(savedUser);
+        return Boolean(parsed?.id?.startsWith('guest-'));
+      }
+    } catch {}
+    return false;
+  });
   const [isPasswordRecovery, setIsPasswordRecovery] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
     const isSaved = sessionStorage.getItem('latierrita_is_password_recovery') === 'true';
@@ -292,9 +312,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const isRegisteringRef = useRef<boolean>(false);
 
-  // Clear any existing stale guest session and check if URL indicates password recovery
+  // Check guest expiration and check if URL indicates password recovery
   useEffect(() => {
-    sessionStorage.removeItem('latierrita_guest');
+    try {
+      const expiresAtRaw = localStorage.getItem('latierrita_guest_expires_at');
+      if (expiresAtRaw && new Date(expiresAtRaw).getTime() < Date.now()) {
+        localStorage.removeItem('latierrita_guest_username');
+        localStorage.removeItem('latierrita_guest_id');
+        localStorage.removeItem('latierrita_guest_expires_at');
+        localStorage.removeItem('latierrita_user');
+        setUserProfile(null);
+        setFirebaseUser(null);
+        setIsGuest(false);
+      }
+    } catch {}
+
     const hash = window.location.hash || '';
     const search = window.location.search || '';
     const path = window.location.pathname || '';
@@ -471,6 +503,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
 
         if (currentLocal && (currentLocal.id || currentLocal.username)) {
+          const isSavedGuest = Boolean(currentLocal.id?.startsWith('guest-') || (currentLocal as any).isGuest);
+          if (isSavedGuest) {
+            const expRaw = localStorage.getItem('latierrita_guest_expires_at');
+            if (expRaw && new Date(expRaw).getTime() < Date.now()) {
+              localStorage.removeItem('latierrita_guest_username');
+              localStorage.removeItem('latierrita_guest_id');
+              localStorage.removeItem('latierrita_guest_expires_at');
+              localStorage.removeItem('latierrita_user');
+              setUserProfile(null);
+              setFirebaseUser(null);
+              setIsGuest(false);
+              setLoading(false);
+              return;
+            }
+          }
+          setIsGuest(isSavedGuest);
           setUserProfile(currentLocal as UserProfile);
           setFirebaseUser({
             id: currentLocal.id || 'user-me',
@@ -483,6 +531,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         } else {
           setUserProfile(null);
           setFirebaseUser(null);
+          setIsGuest(false);
         }
       }
       setLoading(false);
@@ -832,10 +881,73 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const continueAsGuest = () => {
-    // Modo invitado eliminado para obligar registro obligatorio
+    try {
+      let guestUsername = localStorage.getItem('latierrita_guest_username');
+      let guestId = localStorage.getItem('latierrita_guest_id');
+      let expiresAtRaw = localStorage.getItem('latierrita_guest_expires_at');
+
+      const isExpired = expiresAtRaw ? new Date(expiresAtRaw).getTime() < Date.now() : true;
+
+      if (!guestUsername || !guestId || isExpired) {
+        // Generate new guest credentials: User-000000 (6 random digits)
+        const randomNum = Math.floor(100000 + Math.random() * 900000).toString();
+        guestUsername = `User-${randomNum}`;
+        guestId = `guest-${randomNum}`;
+        const expiresAt = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString();
+
+        localStorage.setItem('latierrita_guest_username', guestUsername);
+        localStorage.setItem('latierrita_guest_id', guestId);
+        localStorage.setItem('latierrita_guest_expires_at', expiresAt);
+      }
+
+      const finalExpiresAt = localStorage.getItem('latierrita_guest_expires_at') || new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString();
+
+      const guestProfile: UserProfile = {
+        id: guestId,
+        email: `${guestUsername.toLowerCase()}@invitado.latierrita.tech`,
+        username: guestUsername,
+        name: `Invitado (${guestUsername})`,
+        avatar: DEFAULT_SILHOUETTE_AVATAR,
+        bio: '👤 Usuario invitado de La Tierrita España.',
+        website: '',
+        city: 'Madrid',
+        originCity: 'Colombia',
+        followersCount: 0,
+        followingCount: 0,
+        postsCount: 0,
+        isVerified: false,
+        staffRole: 'Usuario',
+        isGuest: true,
+        guestExpiresAt: finalExpiresAt,
+        socialLinks: {}
+      };
+
+      // Critical: Guests do not follow any accounts (not even @latierrita_app)
+      safeSetLocalStorage('latierrita_following', []);
+      safeSetLocalStorage('latierrita_user', guestProfile);
+      setUserProfile(guestProfile);
+      
+      const synthUser = {
+        id: guestId,
+        email: `${guestUsername.toLowerCase()}@invitado.latierrita.tech`,
+        app_metadata: {},
+        user_metadata: {},
+        aud: 'authenticated',
+        created_at: new Date().toISOString()
+      } as any;
+      
+      setFirebaseUser(synthUser);
+      setIsGuest(true);
+    } catch (e) {
+      console.error('Error entering as guest:', e);
+    }
   };
 
   const updateUserProfile = async (data: Partial<UserProfile>) => {
+    if (isGuest || userProfile?.isGuest || userProfile?.id?.startsWith('guest-')) {
+      console.warn('Invitados no pueden actualizar su perfil.');
+      return;
+    }
     let updatedProfile: UserProfile | null = null;
     
     // Get actual session user if available

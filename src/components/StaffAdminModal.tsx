@@ -392,11 +392,17 @@ export const StaffAdminModal: React.FC<{ isFullScreenRoute?: boolean }> = ({ isF
 
   // User management filtered users
   const allSystemUsers = [currentUser, ...otherUsers];
-  const filteredUsers = allSystemUsers.filter(u =>
-    u.name.toLowerCase().includes(userSearchQuery.toLowerCase()) ||
-    u.username.toLowerCase().includes(userSearchQuery.toLowerCase()) ||
-    u.city.toLowerCase().includes(userSearchQuery.toLowerCase())
-  );
+  const filteredUsers = allSystemUsers.filter(u => {
+    if (!u) return false;
+    const name = u.name || '';
+    const username = u.username || '';
+    const city = u.city || '';
+    return (
+      name.toLowerCase().includes(userSearchQuery.toLowerCase()) ||
+      username.toLowerCase().includes(userSearchQuery.toLowerCase()) ||
+      city.toLowerCase().includes(userSearchQuery.toLowerCase())
+    );
+  });
 
   // Tickets filtered
   const filteredTickets = supportTickets.filter(
@@ -409,12 +415,12 @@ export const StaffAdminModal: React.FC<{ isFullScreenRoute?: boolean }> = ({ isF
     const matchesCategory = placeSuggestionCategoryFilter === 'ALL' || s.category === placeSuggestionCategoryFilter;
     const query = placeSuggestionSearchQuery.trim().toLowerCase();
     const matchesQuery = !query ||
-      s.placeName.toLowerCase().includes(query) ||
-      s.code.toLowerCase().includes(query) ||
-      s.city.toLowerCase().includes(query) ||
-      s.address.toLowerCase().includes(query) ||
-      s.userName.toLowerCase().includes(query) ||
-      s.userUsername.toLowerCase().includes(query);
+      (s.placeName || '').toLowerCase().includes(query) ||
+      (s.code || '').toLowerCase().includes(query) ||
+      (s.city || '').toLowerCase().includes(query) ||
+      (s.address || '').toLowerCase().includes(query) ||
+      (s.userName || '').toLowerCase().includes(query) ||
+      (s.userUsername || '').toLowerCase().includes(query);
     return matchesStatus && matchesCategory && matchesQuery;
   });
 
@@ -1573,7 +1579,7 @@ export const StaffAdminModal: React.FC<{ isFullScreenRoute?: boolean }> = ({ isF
                           updatePlaceSuggestionStatus(activeSug.id, 'en_proceso');
                         }
 
-                        const targetRoomId = linkedRoom ? linkedRoom.id : (activeSug.chatRoomId || `chat-placesug_${activeSug.code.toLowerCase()}_${activeSug.userId}`);
+                        const targetRoomId = linkedRoom ? linkedRoom.id : (activeSug.chatRoomId || `chat-placesug_${(activeSug.code || '').toLowerCase()}_${activeSug.userId}`);
                         if (targetRoomId) {
                           sendMessage(targetRoomId, content);
                         }

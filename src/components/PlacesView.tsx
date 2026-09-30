@@ -37,6 +37,8 @@ import { SPANISH_CITIES } from '../data/mockData';
 import { ClassifiedAdsSection } from './ClassifiedAdsSection';
 import { VerifiedBadge } from './VerifiedBadge';
 
+import { useAuth } from '../context/AuthContext';
+
 const CATEGORIES: { label: PlaceCategory | 'Todos'; icon: React.FC<{ className?: string }> }[] = [
   { label: 'Todos', icon: Compass },
   { label: 'Restaurante/Cafe', icon: Utensils },
@@ -50,6 +52,7 @@ const CATEGORIES: { label: PlaceCategory | 'Todos'; icon: React.FC<{ className?:
 ];
 
 export const PlacesView: React.FC = () => {
+  const { isGuest, logout } = useAuth();
   const {
     places,
     addPlace,
@@ -61,9 +64,11 @@ export const PlacesView: React.FC = () => {
     setPlacesSearchQuery
   } = useApp();
 
+  const isGuestUser = Boolean(isGuest || currentUser?.isGuest || currentUser?.id?.startsWith('guest-'));
+
   const searchQuery = placesSearchQuery;
   const setSearchQuery = setPlacesSearchQuery;
-  const [selectedCity, setSelectedCity] = useState<SpanishCity | 'Todas'>(currentUser.city || 'Todas');
+  const [selectedCity, setSelectedCity] = useState<SpanishCity | 'Todas'>(currentUser?.city || 'Todas');
   const [selectedCategory, setSelectedCategory] = useState<PlaceCategory | 'Todos'>('Todos');
   const [selectedPlace, setSelectedPlace] = useState<PlaceItem | null>(null);
   const [isSuggestModalOpen, setIsSuggestModalOpen] = useState(false);
@@ -73,7 +78,7 @@ export const PlacesView: React.FC = () => {
   const [newPlaceImageUrl, setNewPlaceImageUrl] = useState('');
   const [newPlaceName, setNewPlaceName] = useState('');
   const [newPlaceCategory, setNewPlaceCategory] = useState<PlaceCategory>('Restaurante/Cafe');
-  const [newPlaceCity, setNewPlaceCity] = useState<SpanishCity>(currentUser.city || 'Madrid');
+  const [newPlaceCity, setNewPlaceCity] = useState<SpanishCity>(currentUser?.city || 'Madrid');
   const [newPlaceAddress, setNewPlaceAddress] = useState('');
   const [inGoogleMaps, setInGoogleMaps] = useState<'SI' | 'NO' | null>(null);
   const [isOwner, setIsOwner] = useState<boolean | null>(null);
@@ -155,7 +160,7 @@ export const PlacesView: React.FC = () => {
     setNewPlaceImageUrl('');
     setNewPlaceName('');
     setNewPlaceCategory('Restaurante/Cafe');
-    setNewPlaceCity(currentUser.city || 'Madrid');
+    setNewPlaceCity(currentUser?.city || 'Madrid');
     setNewPlaceAddress('');
     setInGoogleMaps(null);
     setIsOwner(null);
@@ -176,6 +181,35 @@ export const PlacesView: React.FC = () => {
     return <ClassifiedAdsSection />;
   }
 
+  if (isGuestUser) {
+    return (
+      <div id="places-guest-locked" className="w-full max-w-2xl mx-auto px-4 py-8 text-white min-h-[calc(100vh-8rem)] flex flex-col items-center justify-center">
+        <div className="w-full max-w-md bg-white/[0.04] border border-white/10 rounded-3xl p-6 sm:p-8 text-center shadow-2xl backdrop-blur-md">
+          <div className="w-20 h-20 rounded-3xl bg-teal-400/10 border border-teal-400/20 flex items-center justify-center mx-auto mb-5 text-teal-400 shadow-xl">
+            <Compass className="w-10 h-10" />
+          </div>
+          <span className="px-3 py-1 bg-teal-400/15 border border-teal-400/30 text-teal-300 font-black text-xs uppercase tracking-wider rounded-full inline-block mb-3">
+            Acceso no disponible para invitados
+          </span>
+          <h2 className="text-xl font-black text-white mb-2">
+            Lugares en España
+          </h2>
+          <p className="text-xs text-white/70 leading-relaxed mb-6">
+            Como usuario invitado no puedes ver la guía de lugares ni sugerir nuevos sitios. Regístrate en la app para acceder a todas las funciones, descubrir restaurantes, panaderías, tiendas y sitios colombianos en España, y compartir tus recomendaciones.
+          </p>
+          <button
+            id="btn-guest-register-from-places"
+            type="button"
+            onClick={() => logout()}
+            className="w-full py-3 px-5 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-neutral-950 font-black text-xs sm:text-sm rounded-2xl shadow-lg transition-all cursor-pointer active:scale-95"
+          >
+            Regístrate en la app
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div id="places-container" className="w-full max-w-2xl mx-auto bg-transparent">
       {/* Filters and Actions Bar */}
@@ -192,7 +226,7 @@ export const PlacesView: React.FC = () => {
               <option value="Todas" className="bg-[#0c2454] text-white">Toda España</option>
               {SPANISH_CITIES.map(c => (
                 <option key={c} value={c} className="bg-[#0c2454] text-white">
-                  {c} {currentUser.city === c ? '(Tu ciudad)' : ''}
+                  {c} {currentUser?.city === c ? '(Tu ciudad)' : ''}
                 </option>
               ))}
             </select>

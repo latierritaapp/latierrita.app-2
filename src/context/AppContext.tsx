@@ -424,7 +424,7 @@ export const pruneRoomMessages = (room: ChatRoom): ChatRoom => {
 };
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { userProfile, updateUserProfile } = useAuth();
+  const { userProfile, updateUserProfile, isGuest } = useAuth();
 
   // Current user
   const [currentUser, setCurrentUser] = useState<UserProfile>(() => {
@@ -442,6 +442,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     return INITIAL_CURRENT_USER;
   });
+
+  const isGuestUser = Boolean(isGuest || currentUser?.isGuest || currentUser?.id?.startsWith('guest-'));
 
   const isStaffAccount = (id?: string, username?: string, email?: string) => {
     return id === 'user-staff' || username === 'latierrita_app' || username === 'latierrita_oficial' || email === 'latierritaapp@gmail.com';
@@ -805,7 +807,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         sanitized.isVerified = false;
       }
       const isStaff = isStaffAccount(sanitized.id, sanitized.username, sanitized.email);
-      if (!isStaff) {
+      const isGuestAccount = Boolean(isGuest || sanitized.isGuest || sanitized.id?.startsWith('guest-'));
+      if (isGuestAccount) {
+        sanitized.followingCount = 0;
+        sanitized.followersCount = 0;
+      } else if (!isStaff) {
         const cleanFollowCount = followingIds.filter(id => id !== 'user-staff' && id !== 'latierrita_oficial').length;
         sanitized.followingCount = Math.max(1, cleanFollowCount);
       } else {
@@ -832,10 +838,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [userProfile?.id, userProfile?.username, userProfile?.avatar, userProfile?.name, userProfile?.bio, followingIds.length, otherUsers.length]);
 
-  // Keep following list strictly clean of self-following and ensure real staff is followed
+  // Keep following list strictly clean of self-following and ensure real staff is followed (EXCEPT for guest users who follow NOBODY)
   useEffect(() => {
     const isCurrentStaff = isStaffAccount(currentUser?.id, currentUser?.username, currentUser?.email);
-    if (isCurrentStaff) {
+    const isCurrentGuest = Boolean(isGuest || currentUser?.isGuest || currentUser?.id?.startsWith('guest-'));
+    if (isCurrentStaff || isCurrentGuest) {
       setFollowingIds(prev => prev.length === 0 ? prev : []);
       return;
     }
@@ -860,12 +867,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Save following to localStorage and update followingCount without infinite loop
   useEffect(() => {
     const isStaff = isStaffAccount(currentUser?.id, currentUser?.username, currentUser?.email);
-    const cleanList = isStaff ? [] : followingIds.filter(id => id !== 'user-staff' && id !== 'latierrita_oficial');
+    const isCurrentGuest = Boolean(isGuest || currentUser?.isGuest || currentUser?.id?.startsWith('guest-'));
+    const cleanList = (isStaff || isCurrentGuest) ? [] : followingIds.filter(id => id !== 'user-staff' && id !== 'latierrita_oficial');
     localStorage.setItem('latierrita_following', JSON.stringify(cleanList));
 
     setCurrentUser(prev => {
       if (!prev) return prev;
-      const expectedCount = isStaff ? 0 : Math.max(1, cleanList.length);
+      const expectedCount = (isStaff || isCurrentGuest) ? 0 : Math.max(1, cleanList.length);
       if (prev.followingCount === expectedCount) return prev;
       const updated = { ...prev, followingCount: expectedCount };
       localStorage.setItem('latierrita_user', JSON.stringify(updated));
@@ -1184,6 +1192,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return;
     }
     if (user) {
+      if (isGuestUser && user.id !== currentUser?.id && user.username !== currentUser?.username) {
+        triggerPlushNotification({
+          type: 'system',
+          title: 'Acceso Limitado',
+          message: 'Como invitado no puedes visitar otros perfiles. Regístrate en la app para acceder a todas las funciones.'
+        });
+        return;
+      }
       // Save current view state before pushing new profile
       const currentState: NavHistoryItem = {
         tab: (activeTabRef.current || 'feed') as any,
@@ -2577,6 +2593,14 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
     socialLinks?: any;
     isAnonymous?: boolean;
   }): Promise<string> => {
+    if (isGuestUser) {
+      triggerPlushNotification({
+        type: 'system',
+        title: 'Acceso Limitado',
+        message: 'Como invitado no puedes sugerir lugares. Regístrate en la app para acceder a todas las funciones.'
+      });
+      return '';
+    }
     try {
       // Generate suggestion code (e.g. SUG-001)
       const count = placeSuggestions.length + 1;
@@ -3511,6 +3535,23 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
 
   // Follow / Unfollow
   const followUser = async (userId: string) => {
+    if (isGuestUser) {
+      triggerPlushNotification({
+        type: 'system',
+        title: 'Acceso Limitado',
+        message: 'Como invitado no puedes seguir a otros usuarios. Regístrate en la app para acceder a todas las funciones.'
+      });
+      return;
+    }
+    const targetCheck = otherUsers.find(u => u.id === userId);
+    if (targetCheck?.isGuest || userId.startsWith('guest-')) {
+      triggerPlushNotification({
+        type: 'system',
+        title: 'Acción no permitida',
+        message: 'No es posible seguir a usuarios invitados temporales.'
+      });
+      return;
+    }
     if (userId === currentUser.id) return;
     if (isStaffAccount(currentUser.id, currentUser.username) && (userId === 'user-staff' || userId === currentUser.id)) return;
     if (followingIds.includes(userId)) return;
@@ -3676,6 +3717,14 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
 
   // Stories
   const addStory = async (data: { mediaUrl: string; caption?: string }) => {
+    if (isGuestUser) {
+      triggerPlushNotification({
+        type: 'system',
+        title: 'Acción Limitada',
+        message: 'Como invitado no puedes publicar historias. Regístrate en la app para acceder a todas las funciones.'
+      });
+      return;
+    }
     const now = Date.now();
     const newStoryId = `story-${now}`;
     const newStory: StoryItem = {
@@ -3748,6 +3797,14 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
   };
 
   const reactToStory = async (storyId: string, emoji: string) => {
+    if (isGuestUser) {
+      triggerPlushNotification({
+        type: 'system',
+        title: 'Acción Limitada',
+        message: 'Como invitado no puedes reaccionar a historias. Regístrate en la app para acceder a todas las funciones.'
+      });
+      return;
+    }
     const targetStory = stories.find(s => s.id === storyId);
     if (!targetStory) return;
 
@@ -3781,6 +3838,14 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
 
   // Posts interactions
   const likePost = async (postId: string) => {
+    if (isGuestUser) {
+      triggerPlushNotification({
+        type: 'system',
+        title: 'Acción Limitada',
+        message: 'Como invitado no puedes dar me gusta a publicaciones. Regístrate en la app para acceder a todas las funciones.'
+      });
+      return;
+    }
     const targetPost = posts.find(p => p.id === postId);
     if (!targetPost) return;
 
@@ -3888,6 +3953,14 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
   };
 
   const addComment = async (postId: string, text: string, parentId?: string) => {
+    if (isGuestUser) {
+      triggerPlushNotification({
+        type: 'system',
+        title: 'Acción Limitada',
+        message: 'Como invitado no puedes comentar publicaciones. Regístrate en la app para acceder a todas las funciones.'
+      });
+      return;
+    }
     const targetPost = posts.find(p => p.id === postId);
     if (!targetPost) return;
 
@@ -3931,6 +4004,14 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
   };
 
   const likeComment = async (postId: string, commentId: string) => {
+    if (isGuestUser) {
+      triggerPlushNotification({
+        type: 'system',
+        title: 'Acción Limitada',
+        message: 'Como invitado no puedes dar me gusta a comentarios. Regístrate en la app para acceder a todas las funciones.'
+      });
+      return;
+    }
     const targetPost = posts.find(p => p.id === postId);
     if (!targetPost) return;
 
@@ -4003,6 +4084,14 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
     hideLikes?: boolean;
     taggedUsernames?: string[];
   }) => {
+    if (isGuestUser) {
+      triggerPlushNotification({
+        type: 'system',
+        title: 'Acción Limitada',
+        message: 'Como invitado no puedes crear publicaciones. Regístrate en la app para acceder a todas las funciones.'
+      });
+      return;
+    }
     if (data.isStaffAd) {
       const lastAdKey = `latierrita_last_ad_${currentUser.id}`;
       const lastAdTime = localStorage.getItem(lastAdKey);
@@ -4740,6 +4829,14 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
   };
 
   const createGroupChat = async (name: string, description: string, invitedUserIds: string[], avatar?: string) => {
+    if (isGuestUser) {
+      triggerPlushNotification({
+        type: 'system',
+        title: 'Acción Limitada',
+        message: 'Como invitado no puedes crear grupos de chat. Regístrate en la app para acceder a todas las funciones.'
+      });
+      return;
+    }
     const newGroupId = `chat-group-${Date.now()}`;
     const newRoom: ChatRoom = {
       id: newGroupId,
@@ -4812,6 +4909,14 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
   };
 
   const startPrivateChat = (targetUserId: string, targetUserName?: string, targetUserAvatar?: string): string => {
+    if (isGuestUser) {
+      triggerPlushNotification({
+        type: 'system',
+        title: 'Acción Limitada',
+        message: 'Como invitado no puedes iniciar chats privados. Regístrate en la app para acceder a todas las funciones.'
+      });
+      return '';
+    }
     const canonicalChatId = getDeterministicPrivateChatId(currentUser.id, targetUserId);
 
     // Check if private chat already exists
@@ -4925,6 +5030,14 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
   };
 
   const respondToGroupInvite = async (inviteId: string, accept: boolean) => {
+    if (isGuestUser) {
+      triggerPlushNotification({
+        type: 'system',
+        title: 'Acción Limitada',
+        message: 'Como invitado no puedes unirte a grupos de chat. Regístrate en la app para acceder a todas las funciones.'
+      });
+      return;
+    }
     const invite = groupInvites.find(i => i.id === inviteId);
     if (!invite) return;
 

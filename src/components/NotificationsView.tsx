@@ -1,7 +1,9 @@
 import React from 'react';
 import { useApp } from '../context/AppContext';
+import { useAuth } from '../context/AuthContext';
 import {
   Bell,
+  BellOff,
   Heart,
   MessageSquare,
   Users,
@@ -12,6 +14,7 @@ import {
 import { NotificationType } from '../types';
 
 export const NotificationsView: React.FC = () => {
+  const { isGuest, logout } = useAuth();
   const {
     notifications,
     markNotificationAsRead,
@@ -23,6 +26,50 @@ export const NotificationsView: React.FC = () => {
     otherUsers,
     currentUser
   } = useApp();
+
+  const isGuestUser = Boolean(isGuest || currentUser?.isGuest || currentUser?.id?.startsWith('guest-'));
+
+  if (isGuestUser) {
+    return (
+      <div
+        id="notifications-container"
+        className="w-full max-w-2xl mx-auto text-white min-h-[calc(100vh-7rem)] flex flex-col"
+        style={{
+          background: 'linear-gradient(180deg, #003087 0%, #1A2436 100%)'
+        }}
+      >
+        <div className="sticky top-14 z-20 px-4 py-3 bg-[#003087]/85 backdrop-blur-md border-b border-white/10 flex items-center justify-between">
+          <h2 className="text-lg font-black text-white flex items-center gap-2">
+            <Bell className="w-5 h-5 text-amber-400" />
+            <span>Centro de Notificaciones</span>
+          </h2>
+        </div>
+
+        <div className="flex-1 flex flex-col items-center justify-center p-6 text-center max-w-md mx-auto">
+          <div className="w-20 h-20 rounded-3xl bg-amber-400/10 border border-amber-400/20 flex items-center justify-center mb-5 text-amber-400 shadow-xl">
+            <BellOff className="w-10 h-10" />
+          </div>
+          <span className="px-3 py-1 bg-amber-400/15 border border-amber-400/30 text-amber-300 font-black text-xs uppercase tracking-wider rounded-full mb-3">
+            Acceso no disponible para invitados
+          </span>
+          <h3 className="text-lg font-black text-white mb-2">
+            No recibirás notificaciones
+          </h3>
+          <p className="text-xs text-white/70 leading-relaxed mb-6">
+            Como usuario invitado no tienes acceso a notificaciones ya que no estás registrado en el sistema. Regístrate en la app para acceder a todas las funciones, recibir avisos de mensajes, nuevos seguidores y actividad en la comunidad.
+          </p>
+          <button
+            id="btn-guest-register-from-notifs"
+            type="button"
+            onClick={() => logout()}
+            className="w-full py-3 px-5 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-neutral-950 font-black text-xs sm:text-sm rounded-2xl shadow-lg transition-all cursor-pointer active:scale-95"
+          >
+            Regístrate en la app
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   const getNotificationIcon = (type: NotificationType) => {
     switch (type) {

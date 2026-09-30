@@ -81,19 +81,25 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userToDisplay }) => {
 
   const isCurrentStaff = (currentUser.email && currentUser.email.trim().toLowerCase() === 'latierritaapp@gmail.com') || currentUser.username === 'latierrita_app' || currentUser.id === 'user-staff';
   
+  const isProfileGuest = Boolean(user.isGuest || user.id?.startsWith('guest-') || (isMe && (isGuest || currentUser.isGuest || currentUser.id?.startsWith('guest-'))));
+
   const communityFollowersCount = otherUsers.filter(u => 
     u.id !== user.id && 
     u.username !== 'latierrita_app' && 
     u.email !== 'latierritaapp@gmail.com'
   ).length + (!isMe && !isCurrentStaff ? 1 : 0);
 
-  const displayFollowersCount = isOfficialStaff 
+  const displayFollowersCount = isProfileGuest
+    ? 0
+    : isOfficialStaff 
     ? communityFollowersCount
     : (isMe ? (currentUser.followersCount || 0) : (user.followersCount || 0));
 
   const cleanFollowingLength = followingIds.filter(id => id !== 'user-staff' && id !== 'latierrita_oficial' && id !== currentUser.id).length;
 
-  const displayFollowingCount = isOfficialStaff || isCurrentStaff
+  const displayFollowingCount = isProfileGuest
+    ? 0
+    : isOfficialStaff || isCurrentStaff
     ? 0
     : (isMe ? cleanFollowingLength : (user.followingCount || 0));
 
@@ -128,8 +134,14 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userToDisplay }) => {
     if (hasStory) {
       setStoryViewerRestriction(user.id);
       setActiveStoryIndex(userStoryIndex);
-    } else if (isMe) {
+    } else if (isMe && !isProfileGuest) {
       setIsCreateStoryOpen(true);
+    } else if (isMe && isProfileGuest) {
+      triggerPlushNotification({
+        type: 'system',
+        title: 'Acción Limitada',
+        message: 'Como invitado no puedes publicar historias. Regístrate en la app para acceder a todas las funciones.'
+      });
     }
   };
 
@@ -385,7 +397,28 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userToDisplay }) => {
           {/* 7. Botones de acción */}
           <div className="pt-2 w-full max-w-sm">
             {isMe ? (
-              <>
+              isProfileGuest ? (
+                <div id="guest-profile-notice-card" className="w-full bg-[#001c38] border border-amber-400/30 rounded-3xl p-4 text-center space-y-3 shadow-xl">
+                  <div className="flex items-center justify-center gap-1.5 text-amber-400 text-xs font-black">
+                    <Clock className="w-4 h-4 text-amber-400" />
+                    <span>Perfil Temporal de Invitado</span>
+                  </div>
+                  <p className="text-xs text-white/80 leading-relaxed">
+                    Estás navegando con el usuario temporal <strong>{user.username}</strong> asignado por tres días.
+                  </p>
+                  <div className="p-2.5 bg-amber-400/10 border border-amber-400/20 rounded-xl text-[11px] text-amber-300 font-semibold leading-relaxed">
+                    Como invitado no puedes editar el perfil, ni publicar publicaciones o historias.
+                  </div>
+                  <button
+                    id="btn-guest-register-from-profile"
+                    type="button"
+                    onClick={() => logout()}
+                    className="w-full py-3 px-4 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 text-neutral-950 font-black text-xs sm:text-sm rounded-2xl shadow-lg transition-all active:scale-95 cursor-pointer"
+                  >
+                    Regístrate en la app para acceder a todas las funciones
+                  </button>
+                </div>
+              ) : (
                 <button
                   id="btn-edit-profile-trigger"
                   onClick={() => setIsEditProfileOpen(true)}
@@ -394,21 +427,11 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userToDisplay }) => {
                   <Edit3 className="w-3.5 h-3.5 text-amber-400" />
                   <span>Editar perfil</span>
                 </button>
-                {isGuest && (
-                  <div className="mt-2.5 p-3 bg-amber-400/10 border border-amber-400/25 rounded-2xl flex items-center justify-between gap-3 text-left">
-                    <div>
-                      <span className="text-xs font-black text-amber-300 block">Modo Invitado</span>
-                      <span className="text-[11px] text-white/70 block">Crea tu cuenta propia para guardar tu actividad</span>
-                    </div>
-                    <button
-                      onClick={() => logout()}
-                      className="px-3 py-1.5 bg-amber-400 hover:bg-amber-300 active:scale-95 text-neutral-950 font-black text-xs rounded-xl shadow-md shrink-0 cursor-pointer"
-                    >
-                      Registrarme
-                    </button>
-                  </div>
-                )}
-              </>
+              )
+            ) : isProfileGuest ? (
+              <div className="w-full py-2.5 px-3 bg-white/5 border border-white/10 rounded-xl text-center text-xs text-white/60 font-medium select-none">
+                Usuario invitado temporal (No se puede seguir)
+              </div>
             ) : isOfficialStaff ? (
               <div className="flex items-center gap-2">
                 <div className="flex-1 py-2 px-3 bg-amber-400/15 border border-amber-400/30 text-amber-300 text-xs font-bold rounded-xl text-center flex items-center justify-center gap-1.5 shadow-sm select-none">

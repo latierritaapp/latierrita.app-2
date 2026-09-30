@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useApp } from '../context/AppContext';
-import { DEFAULT_SILHOUETTE_AVATAR } from '../context/AuthContext';
+import { DEFAULT_SILHOUETTE_AVATAR, useAuth } from '../context/AuthContext';
 import {
   UserProfile,
   ChatRoom,
@@ -255,6 +255,9 @@ export const ChatsView: React.FC = () => {
     chatSearchQuery,
     setChatSearchQuery
   } = useApp();
+
+  const { isGuest, logout } = useAuth();
+  const isGuestUser = Boolean(isGuest || currentUser?.isGuest || currentUser?.id?.startsWith('guest-'));
 
   const isStaffMember = (currentUser?.staffRole && currentUser.staffRole !== 'Usuario') ||
     currentUser?.id === 'user-staff' ||
@@ -1084,7 +1087,17 @@ export const ChatsView: React.FC = () => {
             <div className="flex items-center gap-2">
               <button
                 id="btn-open-create-group"
-                onClick={() => setShowCreateGroupModal(true)}
+                onClick={() => {
+                  if (isGuestUser) {
+                    triggerPlushNotification({
+                      type: 'system',
+                      title: 'Acción Limitada',
+                      message: 'Como invitado no puedes crear grupos de chat. Regístrate en la app para acceder a todas las funciones.'
+                    });
+                    return;
+                  }
+                  setShowCreateGroupModal(true);
+                }}
                 className="flex-1 py-2 px-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm transition-all active:scale-95"
               >
                 <Users className="w-3.5 h-3.5" />
@@ -1093,7 +1106,17 @@ export const ChatsView: React.FC = () => {
 
               <button
                 id="btn-open-new-private"
-                onClick={() => setShowNewPrivateModal(true)}
+                onClick={() => {
+                  if (isGuestUser) {
+                    triggerPlushNotification({
+                      type: 'system',
+                      title: 'Acción Limitada',
+                      message: 'Como invitado no puedes iniciar chats privados. Regístrate en la app para acceder a todas las funciones.'
+                    });
+                    return;
+                  }
+                  setShowNewPrivateModal(true);
+                }}
                 className="flex-1 py-2 px-3 bg-neutral-900 hover:bg-neutral-800 dark:bg-white dark:hover:bg-neutral-100 text-white dark:text-neutral-900 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm transition-all active:scale-95"
               >
                 <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
@@ -1234,6 +1257,14 @@ export const ChatsView: React.FC = () => {
               <div
                 id="chat-item-pinned-city"
                 onClick={() => {
+                  if (isGuestUser) {
+                    triggerPlushNotification({
+                      type: 'system',
+                      title: 'Acceso Limitado',
+                      message: 'No tienes acceso al chat por ciudad ya que no estás registrado. Regístrate en la app para unirte al chat de tu ciudad.'
+                    });
+                    return;
+                  }
                   setChatTypeTab('city');
                   if (currentCityChat) {
                     setActiveChatId(currentCityChat.id);
@@ -2109,6 +2140,14 @@ export const ChatsView: React.FC = () => {
                             alt={msg.senderName}
                             onClick={(e) => {
                               e.stopPropagation();
+                              if (isGuestUser) {
+                                triggerPlushNotification({
+                                  type: 'system',
+                                  title: 'Acceso Limitado',
+                                  message: 'Como invitado no puedes visitar perfiles de otros usuarios. Regístrate en la app para acceder a todas las funciones.'
+                                });
+                                return;
+                              }
                               setActiveUserMenu({
                                 userId: msg.senderId,
                                 userName: msg.senderName,
@@ -2130,6 +2169,14 @@ export const ChatsView: React.FC = () => {
                               type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
+                                if (isGuestUser) {
+                                  triggerPlushNotification({
+                                    type: 'system',
+                                    title: 'Acceso Limitado',
+                                    message: 'Como invitado no puedes visitar perfiles de otros usuarios. Regístrate en la app para acceder a todas las funciones.'
+                                  });
+                                  return;
+                                }
                                 setActiveUserMenu({
                                   userId: msg.senderId,
                                   userName: msg.senderName,

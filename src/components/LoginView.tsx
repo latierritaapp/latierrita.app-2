@@ -22,7 +22,8 @@ export const LoginView: React.FC<LoginViewProps> = ({ onGoToRegister }) => {
   const {
     loginWithEmailOrUsername,
     loginWithGoogle,
-    resetPassword
+    resetPassword,
+    continueAsGuest
   } = useAuth();
 
   const [identifier, setIdentifier] = useState('');
@@ -30,6 +31,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onGoToRegister }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [showGuestTerms, setShowGuestTerms] = useState(false);
 
   // Forgot Password Dialog Modal State
   const [showForgotModal, setShowForgotModal] = useState(false);
@@ -113,6 +115,183 @@ export const LoginView: React.FC<LoginViewProps> = ({ onGoToRegister }) => {
       setForgotLoading(false);
     }
   };
+
+  if (showGuestTerms) {
+    return (
+      <div
+        id="guest-terms-page"
+        className="h-screen h-[100dvh] w-full bg-[#001428] text-white flex flex-col justify-center items-center overflow-hidden relative selection:bg-amber-400 selection:text-neutral-950 px-4 py-3"
+      >
+        <div className="absolute -top-32 -left-32 w-80 h-80 rounded-full bg-blue-600/10 blur-3xl pointer-events-none" />
+        <div className="absolute -bottom-32 -right-32 w-80 h-80 rounded-full bg-amber-500/10 blur-3xl pointer-events-none" />
+
+        <div className="w-full max-w-sm sm:max-w-md bg-[#001c38] border border-white/15 rounded-3xl p-5 sm:p-7 shadow-2xl backdrop-blur-md relative z-10 flex flex-col max-h-[90vh]">
+          <div className="text-center mb-4 shrink-0">
+            <LaTierritaLogo size="sm" className="h-10 sm:h-12 mx-auto mb-2" />
+            <h2 className="text-base sm:text-lg font-black text-amber-400 flex items-center justify-center gap-1.5">
+              <span>Ingresar como Invitado 👤</span>
+            </h2>
+            <p className="text-[11px] text-white/60 mt-1">
+              Conoce las condiciones y limitaciones de tu cuenta temporal
+            </p>
+          </div>
+
+          <div className="flex-1 overflow-y-auto pr-1 space-y-3.5 text-xs leading-relaxed text-white/80 scrollbar-thin">
+            {/* Expiration Note */}
+            <div className="p-3 bg-amber-500/15 border border-amber-500/30 rounded-2xl text-[11px] text-amber-300 font-medium">
+              <span className="font-bold block mb-1">🕒 Asignación y Caducidad:</span>
+              Al ingresar se te asignará un usuario temporal aleatorio con formato <strong>User-000000</strong> (6 dígitos). Este nombre de usuario <strong>caducará al tercer día</strong>. Si después de ese tiempo no deseas registrarte, podrás volver a ingresar como invitado y se te asignará un nuevo nombre de usuario.
+            </div>
+
+            {/* Section Breakdown of Limitations */}
+            <div className="space-y-3">
+              {/* Inicio */}
+              <div className="bg-white/[0.03] border border-white/10 rounded-2xl p-2.5">
+                <span className="font-extrabold text-amber-400 text-xs block mb-1">🏠 En Inicio:</span>
+                <ul className="space-y-1 pl-1 text-[11px]">
+                  <li className="flex items-start gap-1.5 text-emerald-400">
+                    <span className="font-bold">✓</span>
+                    <span className="text-white/80">Podrás ver todo el contenido publicado en esta sección (publicaciones e historias).</span>
+                  </li>
+                  <li className="flex items-start gap-1.5 text-rose-400">
+                    <span className="font-bold">✗</span>
+                    <span className="text-white/65">No podrás comentar o dar like a ninguna publicación o historia.</span>
+                  </li>
+                  <li className="flex items-start gap-1.5 text-rose-400">
+                    <span className="font-bold">✗</span>
+                    <span className="text-white/65">Tampoco podrás visitar ningún perfil desde esta sección.</span>
+                  </li>
+                </ul>
+              </div>
+
+              {/* Chats */}
+              <div className="bg-white/[0.03] border border-white/10 rounded-2xl p-2.5">
+                <span className="font-extrabold text-sky-400 text-xs block mb-1">💬 En Bandeja de Chats:</span>
+                <ul className="space-y-1 pl-1 text-[11px]">
+                  <li className="flex items-start gap-1.5 text-emerald-400">
+                    <span className="font-bold">✓</span>
+                    <span className="text-white/80">Tendrás acceso y podrás participar en el <strong>Chat General</strong>.</span>
+                  </li>
+                  <li className="flex items-start gap-1.5 text-rose-400">
+                    <span className="font-bold">✗</span>
+                    <span className="text-white/65">No tendrás acceso al chat por ciudad (ya que no estás registrado).</span>
+                  </li>
+                  <li className="flex items-start gap-1.5 text-rose-400">
+                    <span className="font-bold">✗</span>
+                    <span className="text-white/65">No podrás iniciar chats privados.</span>
+                  </li>
+                  <li className="flex items-start gap-1.5 text-rose-400">
+                    <span className="font-bold">✗</span>
+                    <span className="text-white/65">No podrás ingresar o crear grupos de chat.</span>
+                  </li>
+                  <li className="flex items-start gap-1.5 text-rose-400">
+                    <span className="font-bold">✗</span>
+                    <span className="text-white/65">Tampoco podrás visitar ningún perfil desde esta sección.</span>
+                  </li>
+                </ul>
+              </div>
+
+              {/* Notificaciones */}
+              <div className="bg-white/[0.03] border border-white/10 rounded-2xl p-2.5">
+                <span className="font-extrabold text-purple-400 text-xs block mb-1">🔔 En Notificaciones:</span>
+                <ul className="space-y-1 pl-1 text-[11px]">
+                  <li className="flex items-start gap-1.5 text-rose-400">
+                    <span className="font-bold">✗</span>
+                    <span className="text-white/65">No tendrás acceso (no recibirás notificaciones ya que no estás registrado).</span>
+                  </li>
+                </ul>
+              </div>
+
+              {/* Explorar */}
+              <div className="bg-white/[0.03] border border-white/10 rounded-2xl p-2.5">
+                <span className="font-extrabold text-emerald-400 text-xs block mb-1">🔍 En Explorar:</span>
+                <ul className="space-y-1 pl-1 text-[11px]">
+                  <li className="flex items-start gap-1.5 text-emerald-400">
+                    <span className="font-bold">✓</span>
+                    <span className="text-white/80">Podrás ver todo el contenido publicado en esa sección.</span>
+                  </li>
+                  <li className="flex items-start gap-1.5 text-rose-400">
+                    <span className="font-bold">✗</span>
+                    <span className="text-white/65">No podrás comentar o dar like a ninguna publicación.</span>
+                  </li>
+                  <li className="flex items-start gap-1.5 text-rose-400">
+                    <span className="font-bold">✗</span>
+                    <span className="text-white/65">No podrás buscar usuarios en la barra de búsqueda.</span>
+                  </li>
+                  <li className="flex items-start gap-1.5 text-rose-400">
+                    <span className="font-bold">✗</span>
+                    <span className="text-white/65">Tampoco podrás visitar ningún perfil desde esta sección.</span>
+                  </li>
+                </ul>
+              </div>
+
+              {/* Perfil */}
+              <div className="bg-white/[0.03] border border-white/10 rounded-2xl p-2.5">
+                <span className="font-extrabold text-indigo-400 text-xs block mb-1">👤 En Perfil:</span>
+                <ul className="space-y-1 pl-1 text-[11px]">
+                  <li className="flex items-start gap-1.5 text-emerald-400">
+                    <span className="font-bold">✓</span>
+                    <span className="text-white/80">Tendrás un perfil temporal asignado por tres días.</span>
+                  </li>
+                  <li className="flex items-start gap-1.5 text-rose-400">
+                    <span className="font-bold">✗</span>
+                    <span className="text-white/65">No podrás editar el perfil, ya que es de usuario invitado.</span>
+                  </li>
+                  <li className="flex items-start gap-1.5 text-rose-400">
+                    <span className="font-bold">✗</span>
+                    <span className="text-white/65">No podrás publicar publicaciones ni historias.</span>
+                  </li>
+                  <li className="flex items-start gap-1.5 text-rose-400">
+                    <span className="font-bold">✗</span>
+                    <span className="text-white/65">Nadie podrá seguir a este usuario ni tú seguirás a @latierrita_app.</span>
+                  </li>
+                </ul>
+              </div>
+
+              {/* Anuncios */}
+              <div className="bg-white/[0.03] border border-white/10 rounded-2xl p-2.5">
+                <span className="font-extrabold text-amber-400 text-xs block mb-1">📢 En Anuncios:</span>
+                <ul className="space-y-1 pl-1 text-[11px]">
+                  <li className="flex items-start gap-1.5 text-rose-400">
+                    <span className="font-bold">✗</span>
+                    <span className="text-white/65">No podrás ver ni publicar anuncios clasificados.</span>
+                  </li>
+                </ul>
+              </div>
+
+              {/* Lugares */}
+              <div className="bg-white/[0.03] border border-white/10 rounded-2xl p-2.5">
+                <span className="font-extrabold text-teal-400 text-xs block mb-1">📍 En Lugares:</span>
+                <ul className="space-y-1 pl-1 text-[11px]">
+                  <li className="flex items-start gap-1.5 text-rose-400">
+                    <span className="font-bold">✗</span>
+                    <span className="text-white/65">No podrás ver lugares ni sugerir sitios en la app.</span>
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 pt-3 border-t border-white/10 mt-4 shrink-0 font-sans">
+            <button
+              type="button"
+              onClick={() => setShowGuestTerms(false)}
+              className="py-2.5 px-4 bg-white/10 hover:bg-white/15 text-white font-black text-xs sm:text-sm rounded-2xl transition-all cursor-pointer text-center"
+            >
+              Regresar
+            </button>
+            <button
+              type="button"
+              onClick={() => continueAsGuest()}
+              className="py-2.5 px-4 bg-amber-400 hover:bg-amber-300 text-neutral-950 font-black text-xs sm:text-sm rounded-2xl transition-all cursor-pointer text-center shadow-lg"
+            >
+              Aceptar
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -265,6 +444,20 @@ export const LoginView: React.FC<LoginViewProps> = ({ onGoToRegister }) => {
                   />
                 </svg>
                 <span>Continuar con Google</span>
+              </button>
+            </div>
+
+            {/* Botón Invitado: Ingresar como invitado */}
+            <div className="pt-0.5">
+              <button
+                id="btn-login-guest"
+                type="button"
+                onClick={() => setShowGuestTerms(true)}
+                disabled={isSubmitting}
+                className="w-full py-2.5 px-3 bg-neutral-800 hover:bg-neutral-700 hover:text-amber-300 border border-white/10 rounded-2xl text-xs sm:text-sm font-black text-white transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
+              >
+                <User className="w-4 h-4 shrink-0 text-amber-400" />
+                <span>Ingresar como Invitado</span>
               </button>
             </div>
 
