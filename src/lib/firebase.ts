@@ -18,6 +18,26 @@ function convertKeysToSnake(obj: any): any {
   return result;
 }
 
+function snakeToCamel(str: string): string {
+  return str.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
+}
+
+function convertKeysToCamel(obj: any): any {
+  if (obj === null || obj === undefined) return obj;
+  if (Array.isArray(obj)) {
+    return obj.map(item => convertKeysToCamel(item));
+  }
+  if (typeof obj === 'object' && !(obj instanceof Date)) {
+    const result: Record<string, any> = {};
+    for (const key of Object.keys(obj)) {
+      const camelKey = snakeToCamel(key);
+      result[camelKey] = convertKeysToCamel(obj[key]);
+    }
+    return result;
+  }
+  return obj;
+}
+
 // 1. COLLECTION REF
 export function collection(database: any, name: string) {
   const colName = name === 'users' ? 'profiles' : name;
@@ -45,7 +65,7 @@ export async function getDoc(docRef: any) {
       if (data) {
         return {
           exists: () => true,
-          data: () => ({ id: docId, ...data }),
+          data: () => ({ id: docId, ...convertKeysToCamel(data) }),
           id: docId
         };
       }
@@ -134,7 +154,7 @@ export function onSnapshot(
         if (!isCancelled) {
           callback({
             exists: () => Boolean(data),
-            data: () => data ? { id: ref.id, ...data } : null,
+            data: () => data ? { id: ref.id, ...convertKeysToCamel(data) } : null,
             id: ref.id
           });
         }
@@ -146,7 +166,7 @@ export function onSnapshot(
       if (!isCancelled && Array.isArray(data)) {
         const docs = data.map((item: any) => ({
           id: item.id || `sup-${Math.random()}`,
-          data: () => ({ id: item.id, ...item }),
+          data: () => ({ id: item.id, ...convertKeysToCamel(item) }),
           exists: () => true
         }));
         callback({
@@ -210,7 +230,7 @@ export async function getDocs(queryRef: any) {
       if (Array.isArray(data)) {
         const docs = data.map((item: any) => ({
           id: item.id || `sup-${Math.random()}`,
-          data: () => ({ id: item.id, ...item }),
+          data: () => ({ id: item.id, ...convertKeysToCamel(item) }),
           exists: () => true
         }));
         return {
@@ -241,9 +261,10 @@ export async function addDoc(colRef: any, data: any) {
     }
     return {
       id: newId,
-      data: () => ({ id: newId, ...data })
+      data: () => ({ id: newId, ...convertKeysToCamel(data) })
     };
   } catch (e) {
     throw e;
   }
 }
+
