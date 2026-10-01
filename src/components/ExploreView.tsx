@@ -18,7 +18,7 @@ import {
   MoreHorizontal,
   ShieldAlert
 } from 'lucide-react';
-import { PostItem, UserProfile } from '../types';
+import { PostItem, UserProfile, isGuestUserProfile } from '../types';
 import { PostCard } from './PostCard';
 
 export const ExploreView: React.FC = () => {
@@ -134,6 +134,14 @@ export const ExploreView: React.FC = () => {
   const handleOpenAuthorProfile = (post: PostItem) => {
     const author = getAuthorProfile(post);
     if (author) {
+      if (isGuestUserProfile(author) || isGuestUserProfile(post.userId) || isGuestUserProfile(post.username)) {
+        triggerPlushNotification({
+          type: 'system',
+          title: 'Acción no permitida',
+          message: 'No está permitido visitar el perfil de un usuario invitado.'
+        });
+        return;
+      }
       setSelectedUserProfile(author.id === currentUser.id ? null : author);
       setActiveTab('profile');
       setOpenedFeedPostId(null);

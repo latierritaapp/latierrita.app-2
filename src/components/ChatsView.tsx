@@ -9,7 +9,8 @@ import {
   SpanishCity,
   StaffRole,
   ChatPoll,
-  ChatEvent
+  ChatEvent,
+  isGuestUserProfile
 } from '../types';
 import {
   MapPin,
@@ -745,10 +746,20 @@ export const ChatsView: React.FC = () => {
   };
 
   const handleOpenUserProfileFromMenu = (userId: string, userName: string, userAvatar?: string, userCity?: string) => {
+    const found = otherUsers.find(u => u.id === userId || u.username === userName);
+    if (isGuestUserProfile(userId) || isGuestUserProfile(userName) || (found && isGuestUserProfile(found))) {
+      triggerPlushNotification({
+        type: 'system',
+        title: 'Acción no permitida',
+        message: 'No está permitido visitar el perfil de un usuario invitado.'
+      });
+      setActiveUserMenu(null);
+      return;
+    }
+
     if (userId === currentUser.id) {
       setSelectedUserProfile(currentUser);
     } else {
-      const found = otherUsers.find(u => u.id === userId || u.username === userName);
       if (found) {
         setSelectedUserProfile(found);
       } else {
@@ -891,11 +902,6 @@ export const ChatsView: React.FC = () => {
 
   // Unified list of private and group chats for the "messages" session
   const unifiedChatsList = useMemo(() => {
-    // For guest users, the inbox must be completely empty (no private or group chats)
-    if (isGuestUser) {
-      return [];
-    }
-
     const myId = (currentUser?.id || '').toLowerCase();
     const myUsername = (currentUser?.username || '').toLowerCase();
     const myEmail = (currentUser?.email || '').toLowerCase();

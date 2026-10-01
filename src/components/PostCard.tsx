@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
-import { PostItem, UserProfile } from '../types';
+import { PostItem, UserProfile, isGuestUserProfile } from '../types';
 import {
   Heart,
   MessageCircle,
@@ -136,6 +136,15 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
         type: 'system',
         title: 'Acción Limitada',
         message: 'Regístrate en la app para visitar los perfiles de otros usuarios.'
+      });
+      return;
+    }
+
+    if ((author && isGuestUserProfile(author)) || isGuestUserProfile(post.userId) || isGuestUserProfile(post.username)) {
+      triggerPlushNotification({
+        type: 'system',
+        title: 'Acción no permitida',
+        message: 'No está permitido visitar el perfil de un usuario invitado.'
       });
       return;
     }

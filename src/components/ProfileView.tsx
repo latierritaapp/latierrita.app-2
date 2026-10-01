@@ -429,8 +429,39 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userToDisplay }) => {
                 </button>
               )
             ) : isProfileGuest ? (
-              <div className="w-full py-2.5 px-3 bg-white/5 border border-white/10 rounded-xl text-center text-xs text-white/60 font-medium select-none">
-                Usuario invitado temporal (No se puede seguir)
+              <div className="flex items-center gap-2 w-full">
+                <button
+                  id={`btn-message-user-${user.id}`}
+                  onClick={() => startPrivateChat(user.id, user.name, user.avatar)}
+                  className="flex-1 py-2.5 bg-white/10 hover:bg-white/15 text-white text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 border border-white/15 active:scale-95 shadow-sm"
+                >
+                  <MessageCircle className="w-3.5 h-3.5 text-sky-400" />
+                  <span>Mensaje</span>
+                </button>
+                <button
+                  id={`btn-report-user-${user.id}`}
+                  onClick={() => openReportModal({
+                    id: user.id,
+                    type: 'user',
+                    title: user.name || user.username,
+                    reportedUserId: user.id,
+                    reportedUserName: user.username
+                  })}
+                  className="py-2.5 px-3 bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1 border border-rose-500/30 active:scale-95 shadow-sm"
+                  title="Reportar usuario"
+                >
+                  <ShieldAlert className="w-3.5 h-3.5" />
+                  <span>Reportar</span>
+                </button>
+                <button
+                  id={`btn-block-user-${user.id}`}
+                  onClick={() => blockUser(user.id, user.name || user.username)}
+                  className="py-2.5 px-3 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1 border border-neutral-700 active:scale-95 shadow-sm"
+                  title="Bloquear usuario"
+                >
+                  <UserX className="w-3.5 h-3.5" />
+                  <span>Bloquear</span>
+                </button>
               </div>
             ) : isOfficialStaff ? (
               <div className="flex items-center gap-2">

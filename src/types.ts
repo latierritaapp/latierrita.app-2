@@ -554,3 +554,18 @@ export interface PlaceItem {
 }
 
 export type NavTab = 'feed' | 'chats' | 'profile' | 'places' | 'explore' | 'notifications';
+
+export const isGuestUserProfile = (userOrId: UserProfile | string | undefined): boolean => {
+  if (!userOrId) return false;
+  if (typeof userOrId === 'string') {
+    return userOrId.startsWith('guest-') || userOrId === 'user-guest' || /^user-\d+$/i.test(userOrId) || /^guest/i.test(userOrId);
+  }
+  return Boolean(
+    userOrId.isGuest ||
+    userOrId.id?.startsWith('guest-') ||
+    userOrId.id === 'user-guest' ||
+    (userOrId.username && (/^user-\d+$/i.test(userOrId.username) || /^guest/i.test(userOrId.username))) ||
+    (userOrId.name && /invitado/i.test(userOrId.name))
+  );
+};
+
