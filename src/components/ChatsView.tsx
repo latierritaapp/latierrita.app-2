@@ -215,6 +215,7 @@ const getUserColor = (userId: string, name: string) => {
 };
 
 export const ChatsView: React.FC = () => {
+  const { isGuest } = useAuth();
   const {
     currentUser,
     chatRooms,
@@ -256,8 +257,16 @@ export const ChatsView: React.FC = () => {
     setChatSearchQuery
   } = useApp();
 
-  const { isGuest, logout } = useAuth();
-  const isGuestUser = Boolean(isGuest || currentUser?.isGuest || currentUser?.id?.startsWith('guest-'));
+  const isGuestUser = Boolean(
+    isGuest ||
+    currentUser?.isGuest ||
+    currentUser?.id?.startsWith('guest-') ||
+    currentUser?.id === 'user-guest' ||
+    currentUser?.id === 'guest-temp' ||
+    (currentUser?.username && /^user-\d+$/i.test(currentUser.username)) ||
+    (currentUser?.username && /^guest/i.test(currentUser.username)) ||
+    (currentUser?.name && /invitado/i.test(currentUser.name))
+  );
 
   const isStaffMember = (currentUser?.staffRole && currentUser.staffRole !== 'Usuario') ||
     currentUser?.id === 'user-staff' ||
@@ -859,6 +868,11 @@ export const ChatsView: React.FC = () => {
 
   // Unified list of private and group chats for the "messages" session
   const unifiedChatsList = useMemo(() => {
+    // For guest users, the inbox must be completely empty (no private or group chats)
+    if (isGuestUser) {
+      return [];
+    }
+
     const myId = (currentUser?.id || '').toLowerCase();
     const myUsername = (currentUser?.username || '').toLowerCase();
     const myEmail = (currentUser?.email || '').toLowerCase();
@@ -879,25 +893,28 @@ export const ChatsView: React.FC = () => {
 
         // Private chats: display if currentUser is one of the participants
         if (r.type === 'private') {
+          // Exclude any fictitious / test rooms
+          const isFictitiousRoom = (r.name && /prueba|pureba/i.test(r.name)) || r.targetUserId === 'user-mariana' || r.targetUserId === 'user-carlos' || r.targetUserId === 'user-1' || r.targetUserId === 'user-2';
+          if (isFictitiousRoom) return false;
+
           // If a notification was sent for this chat, it definitely belongs in this user's inbox
           let isParticipant = notifiedChatIds.has(r.id);
 
           if (!isParticipant) {
             const hasMessages = Array.isArray(r.messages) && r.messages.length > 0;
-            const hasUserMessages = hasMessages && r.messages.some(m => m && m.senderId && m.senderId !== 'system');
+            const hasUserMessages = hasMessages && r.messages.some(m => m && m.senderId && myIdentifiers.some(id => (m.senderId || '').toLowerCase() === id));
 
             const isExplicitParticipant =
               (Array.isArray(r.members) && r.members.some(m => {
                 if (!m) return false;
                 const cleanM = String(m).toLowerCase();
-                return myIdentifiers.some(id => cleanM === id || cleanM.includes(id) || id.includes(cleanM));
+                return myIdentifiers.some(id => cleanM === id);
               })) ||
-              (r.id && myIdentifiers.some(id => r.id.toLowerCase().includes(id))) ||
-              (r.targetUserId && myIdentifiers.some(id => String(r.targetUserId).toLowerCase().includes(id))) ||
-              (r.createdBy && myIdentifiers.some(id => String(r.createdBy).toLowerCase().includes(id))) ||
-              (hasMessages && r.messages.some(m => m && myIdentifiers.some(id => (m.senderId || '').toLowerCase() === id)));
+              (r.targetUserId && myIdentifiers.some(id => String(r.targetUserId).toLowerCase() === id)) ||
+              (r.createdBy && myIdentifiers.some(id => String(r.createdBy).toLowerCase() === id)) ||
+              hasUserMessages;
 
-            isParticipant = isExplicitParticipant || hasUserMessages || (Array.isArray(r.members) && r.members.length >= 1);
+            isParticipant = isExplicitParticipant;
           }
 
           if (!isParticipant) return false;
@@ -954,10 +971,11 @@ export const ChatsView: React.FC = () => {
   const matchesCity = useMemo(() => {
     if (!searchQuery.trim()) return true;
     const q = searchQuery.toLowerCase().trim();
+    if (isGuestUser && ('chat bloqueado'.includes(q) || 'bloqueado'.includes(q) || 'desbloqueara'.includes(q))) return true;
     const myCity = (currentUser.city || 'Madrid').toLowerCase();
     if ('ciudad'.includes(q) || myCity.includes(q)) return true;
     return (currentCityChat?.messages || []).some(m => (m.text || '').toLowerCase().includes(q));
-  }, [searchQuery, currentCityChat, currentUser.city]);
+  }, [searchQuery, currentCityChat, currentUser.city, isGuestUser]);
 
   const lastGeneralMsg = useMemo(() => {
     return Array.isArray(generalChat?.messages) && generalChat.messages.length > 0
@@ -1022,6 +1040,15 @@ export const ChatsView: React.FC = () => {
         type: 'system',
         title: 'Sugerencia en espera',
         message: 'No podrás enviar mensajes en este chat hasta que un miembro del staff (ADMIN o Soporte) inicie la conversación.'
+      });
+      return;
+    }
+
+    if (isGuestUser && (activeChat.type === 'city' || activeChat.id.startsWith('chat-city-') || activeChat.id.startsWith('city-'))) {
+      triggerPlushNotification({
+        type: 'system',
+        title: 'Chat bloqueado',
+        message: 'Se desbloqueara una vez te registres en la app'
       });
       return;
     }
@@ -1260,8 +1287,8 @@ export const ChatsView: React.FC = () => {
                   if (isGuestUser) {
                     triggerPlushNotification({
                       type: 'system',
-                      title: 'Acceso Limitado',
-                      message: 'No tienes acceso al chat por ciudad ya que no estás registrado. Regístrate en la app para unirte al chat de tu ciudad.'
+                      title: 'Chat bloqueado',
+                      message: 'Se desbloqueara una vez te registres en la app'
                     });
                     return;
                   }
@@ -1270,30 +1297,61 @@ export const ChatsView: React.FC = () => {
                     setActiveChatId(currentCityChat.id);
                   }
                 }}
-                className="px-4 py-3 hover:bg-neutral-50 dark:hover:bg-neutral-800/50 cursor-pointer flex items-center justify-between transition-colors bg-rose-500/[0.04] border-l-2 border-l-rose-500 select-none"
+                className={`px-4 py-3 hover:bg-neutral-50 dark:hover:bg-neutral-800/50 cursor-pointer flex items-center justify-between transition-colors border-l-2 select-none ${
+                  isGuestUser
+                    ? 'bg-neutral-900/60 border-l-amber-500/60 opacity-90'
+                    : 'bg-rose-500/[0.04] border-l-rose-500'
+                }`}
               >
                 <div className="flex items-center gap-3 min-w-0">
                   <div className="relative shrink-0">
-                    <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-rose-500 via-rose-600 to-amber-500 flex items-center justify-center shadow-md border border-rose-400/40">
-                      <MapPin className="w-6 h-6 text-white stroke-[2.2]" />
+                    <div
+                      className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-md border ${
+                        isGuestUser
+                          ? 'bg-gradient-to-tr from-neutral-800 to-neutral-700 border-neutral-600/50 text-amber-400'
+                          : 'bg-gradient-to-tr from-rose-500 via-rose-600 to-amber-500 border-rose-400/40 text-white'
+                      }`}
+                    >
+                      {isGuestUser ? (
+                        <Lock className="w-6 h-6 stroke-[2.2]" />
+                      ) : (
+                        <MapPin className="w-6 h-6 stroke-[2.2]" />
+                      )}
                     </div>
-                    <div className="absolute -bottom-1 -right-1 rounded-full p-1 text-white bg-rose-500 ring-2 ring-white dark:ring-neutral-900 shadow">
-                      <Pin className="w-2.5 h-2.5 fill-white rotate-45" />
+                    <div
+                      className={`absolute -bottom-1 -right-1 rounded-full p-1 text-white ring-2 ring-white dark:ring-neutral-900 shadow ${
+                        isGuestUser ? 'bg-amber-500' : 'bg-rose-500'
+                      }`}
+                    >
+                      {isGuestUser ? (
+                        <Lock className="w-2.5 h-2.5 fill-white" />
+                      ) : (
+                        <Pin className="w-2.5 h-2.5 fill-white rotate-45" />
+                      )}
                     </div>
                   </div>
 
                   <div className="min-w-0">
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <span className="text-sm font-black text-neutral-900 dark:text-white truncate">
-                        Chat ({currentUser.city || 'Ciudad'})
+                        {isGuestUser ? 'Chat bloqueado' : `Chat (${currentUser.city || 'Ciudad'})`}
                       </span>
-                      <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-rose-500/20 text-rose-500 dark:text-rose-300 border border-rose-500/40 inline-flex items-center gap-0.5 shrink-0 shadow-xs">
-                        <Pin className="w-2.5 h-2.5 fill-current rotate-45" />
-                        <span>Anclado</span>
-                      </span>
+                      {isGuestUser ? (
+                        <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-amber-500/20 text-amber-500 dark:text-amber-300 border border-amber-500/40 inline-flex items-center gap-0.5 shrink-0 shadow-xs">
+                          <Lock className="w-2.5 h-2.5" />
+                          <span>Bloqueado</span>
+                        </span>
+                      ) : (
+                        <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-rose-500/20 text-rose-500 dark:text-rose-300 border border-rose-500/40 inline-flex items-center gap-0.5 shrink-0 shadow-xs">
+                          <Pin className="w-2.5 h-2.5 fill-current rotate-45" />
+                          <span>Anclado</span>
+                        </span>
+                      )}
                     </div>
                     <p className="text-xs text-neutral-500 dark:text-neutral-400 truncate mt-0.5">
-                      {lastCityMsg ? (
+                      {isGuestUser ? (
+                        'Se desbloqueara una vez te registres en la app'
+                      ) : lastCityMsg ? (
                         <>
                           <span className="font-semibold text-neutral-700 dark:text-neutral-300">
                             {lastCityMsg.senderId === currentUser.id ? 'Tú: ' : `${lastCityMsg.senderName || 'Parcero'}: `}
@@ -1308,9 +1366,11 @@ export const ChatsView: React.FC = () => {
                 </div>
 
                 <div className="flex items-center gap-2 shrink-0 ml-2">
-                  <span className="text-[11px] text-neutral-400">
-                    {lastCityMsg?.timestamp || ''}
-                  </span>
+                  {!isGuestUser && (
+                    <span className="text-[11px] text-neutral-400">
+                      {lastCityMsg?.timestamp || ''}
+                    </span>
+                  )}
                 </div>
               </div>
             )}
@@ -1322,14 +1382,16 @@ export const ChatsView: React.FC = () => {
               </div>
             )}
 
-            {unifiedChatsList.length === 0 && !matchesGeneral && !matchesCity ? (
+            {unifiedChatsList.length === 0 ? (
               <div className="p-8 text-center text-neutral-400">
                 <MessageCircle className="w-10 h-10 mx-auto text-neutral-300 dark:text-neutral-600 mb-2" />
                 <p className="text-sm font-bold text-neutral-700 dark:text-neutral-300">
-                  No hay conversaciones que coincidan
+                  {isGuestUser ? 'Bandeja de chats vacía' : (searchQuery ? 'No hay conversaciones que coincidan' : 'No tienes chats privados todavía')}
                 </p>
                 <p className="text-xs text-neutral-400 mt-1 max-w-xs mx-auto">
-                  Crea tu propio grupo o inicia una conversación privada con otro parcero usando los botones superiores.
+                  {isGuestUser
+                    ? 'Los chats privados y grupos se habilitan una vez te registres en la app.'
+                    : 'Crea tu propio grupo o inicia una conversación privada con otro parcero usando los botones superiores.'}
                 </p>
               </div>
             ) : (
@@ -1714,7 +1776,7 @@ export const ChatsView: React.FC = () => {
                         : activeChat.type === 'general'
                         ? 'Chat (Comunidad)'
                         : activeChat.type === 'city'
-                        ? `Chat (${activeChat.city || currentUser.city || 'Ciudad'})`
+                        ? (isGuestUser ? 'Chat bloqueado' : `Chat (${activeChat.city || currentUser.city || 'Ciudad'})`)
                         : activeChat.type === 'private'
                         ? (() => {
                             const otherUser = getOtherUserInPrivateChat(activeChat);
@@ -1794,8 +1856,8 @@ export const ChatsView: React.FC = () => {
                     ) : activeChat.type === 'city' ? (
                       <span className="text-rose-200 font-semibold truncate flex items-center gap-1">
                         <MapPin className="w-3 h-3 text-rose-300 shrink-0" />
-                        <span>Chat de residentes en {activeChat.city}</span>
-                        <FlagSpain size="xs" />
+                        <span>{isGuestUser ? 'Se desbloqueara una vez te registres en la app' : `Chat de residentes en ${activeChat.city}`}</span>
+                        {!isGuestUser && <FlagSpain size="xs" />}
                       </span>
                     ) : activeChat.type === 'private' ? (
                       <span className="text-emerald-300 font-medium flex items-center gap-1">
@@ -1985,12 +2047,14 @@ export const ChatsView: React.FC = () => {
 
             {/* Quick City Switcher if on city tab */}
             {activeChat.type === 'city' && (
-              <div className="px-4 py-1.5 bg-rose-500/10 border-b border-rose-500/20 text-[11px] flex items-center justify-between text-rose-800 dark:text-rose-300">
+              <div className={`px-4 py-1.5 border-b text-[11px] flex items-center justify-between ${
+                isGuestUser ? 'bg-amber-500/10 border-amber-500/20 text-amber-300' : 'bg-rose-500/10 border-rose-500/20 text-rose-800 dark:text-rose-300'
+              }`}>
                 <span className="font-semibold truncate">
-                  Estás chateando en el canal de {currentUser.city}
+                  {isGuestUser ? 'Chat bloqueado' : `Estás chateando en el canal de ${currentUser.city}`}
                 </span>
                 <span className="text-[10px] opacity-75 shrink-0 ml-2">
-                  (Cambia tu ciudad en Perfil)
+                  {isGuestUser ? 'Se desbloqueara una vez te registres en la app' : '(Cambia tu ciudad en Perfil)'}
                 </span>
               </div>
             )}

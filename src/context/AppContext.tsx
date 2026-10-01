@@ -443,7 +443,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return INITIAL_CURRENT_USER;
   });
 
-  const isGuestUser = Boolean(isGuest || currentUser?.isGuest || currentUser?.id?.startsWith('guest-'));
+  const isGuestUser = Boolean(
+    isGuest ||
+    currentUser?.isGuest ||
+    currentUser?.id?.startsWith('guest-') ||
+    currentUser?.id === 'user-guest' ||
+    (currentUser?.username && /^user-\d+$/i.test(currentUser.username))
+  );
 
   const isStaffAccount = (id?: string, username?: string, email?: string) => {
     return id === 'user-staff' || username === 'latierrita_app' || username === 'latierrita_oficial' || email === 'latierritaapp@gmail.com';
@@ -930,7 +936,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (localPostsRaw) {
         const parsed = JSON.parse(localPostsRaw);
         if (Array.isArray(parsed)) {
-          return parsed.filter((p: PostItem) => !p.mediaUrl?.includes('unsplash.com'));
+          return parsed.filter((p: PostItem) => p && p.id);
         }
       }
     } catch {}
@@ -1422,7 +1428,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     }).catch(() => {});
 
-    // 2. Real-time Firestore Snapshot Listener
+    // 2. Real-time Firestore Snapshot Listener & Supabase Sync
     try {
       const unsub = onSnapshot(collection(db, 'banners'), async (snapshot) => {
         const list: AdBanner[] = [];
@@ -1438,6 +1444,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         try {
           deletedIds = JSON.parse(deletedRaw);
         } catch {}
+
+        // Incorporate Supabase banners if present
+        try {
+          const { data: supaBanners } = await supabase.from('banners').select('*');
+          if (Array.isArray(supaBanners) && supaBanners.length > 0) {
+            supaBanners.forEach((sb: any) => {
+              const img = sb.image_url || sb.imageUrl;
+              if (img && !list.some(b => b.id === sb.id) && !deletedIds.includes(sb.id)) {
+                list.push({
+                  id: sb.id,
+                  title: sb.title || '',
+                  subtitle: sb.subtitle || '',
+                  imageUrl: img,
+                  sponsorName: sb.sponsor_name || sb.sponsorName || 'Staff',
+                  sponsorCity: sb.sponsor_city || sb.sponsorCity || 'España',
+                  ctaText: sb.cta_text || sb.ctaText || 'Ver detalles',
+                  ctaLink: sb.cta_link || sb.ctaLink || '',
+                  category: sb.category || 'Evento',
+                  discountBadge: sb.discount_badge || sb.discountBadge,
+                  active: sb.active ?? true,
+                  carouselType: sb.carousel_type || sb.carouselType || 'explorar'
+                });
+              }
+            });
+          }
+        } catch (e) {}
 
         // Incorporate IndexedDB stored banners
         try {
@@ -1625,10 +1657,50 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, []);
 
-  // Sync Posts in real-time from Firestore and keep local cache updated for instant 0ms loads
+  // Sync Posts in real-time from Firestore & Supabase and keep local cache updated for instant 0ms loads
   useEffect(() => {
+    let isMounted = true;
+
+    const fetchSupabasePosts = async (): Promise<PostItem[]> => {
+      try {
+        const { data: supaPosts, error } = await supabase
+          .from('posts')
+          .select('*');
+
+        if (!error && Array.isArray(supaPosts) && supaPosts.length > 0) {
+          const currentUserId = currentUserRef.current?.id;
+          return supaPosts.map((sp: any) => {
+            const media = sp.media_url || sp.mediaUrl || sp.image_url || sp.imageUrl || '';
+            const isOfficial = sp.is_staff_ad || sp.isStaffAd || sp.user_id === 'user-staff' || sp.username === 'latierrita_app' || sp.username === 'staff_latierrita';
+            const likesArr = Array.isArray(sp.likes) ? sp.likes : [];
+            const commentsArr = Array.isArray(sp.comments) ? sp.comments : [];
+            return {
+              id: sp.id,
+              userId: sp.user_id || sp.userId || 'anon',
+              username: isOfficial ? 'latierrita_app' : (sp.username || 'usuario'),
+              userAvatar: isOfficial ? '/logo.png?v=3' : (sp.user_avatar || sp.userAvatar || ''),
+              userCity: sp.user_city || sp.userCity || 'España',
+              mediaUrl: media,
+              caption: sp.caption || '',
+              likes: likesArr,
+              likesCount: typeof sp.likes_count === 'number' ? sp.likes_count : (typeof sp.likesCount === 'number' ? sp.likesCount : likesArr.length),
+              hasLiked: currentUserId ? (likesArr.includes(currentUserId) || Boolean(sp.hasLiked)) : false,
+              hideLocation: sp.hide_location ?? false,
+              location: sp.location || '',
+              comments: commentsArr,
+              timestamp: sp.created_at || sp.timestamp || 'Reciente',
+              isStaffAd: isOfficial
+            } as PostItem;
+          }).filter(p => p.mediaUrl);
+        }
+      } catch (e) {
+        console.warn('Supabase posts fetch note:', e);
+      }
+      return [];
+    };
+
     try {
-      const unsub = onSnapshot(collection(db, 'posts'), (snapshot) => {
+      const unsub = onSnapshot(collection(db, 'posts'), async (snapshot) => {
         const list: PostItem[] = [];
         const currentUserId = currentUserRef.current?.id;
 
@@ -1654,6 +1726,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           });
         }
 
+        // Incorporar publicaciones de Supabase
+        const supaPosts = await fetchSupabasePosts();
+        supaPosts.forEach(sp => {
+          if (!list.some(p => p.id === sp.id)) {
+            list.push(sp);
+          }
+        });
+
         // Incorporar publicaciones guardadas localmente SOLO si no existen aún en la nube
         try {
           const localPostsRaw = localStorage.getItem('latierrita_local_posts');
@@ -1678,26 +1758,62 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         } catch (e) {}
 
         list.sort((a, b) => b.id.localeCompare(a.id));
-        setPosts(list);
-        safeSaveLocalPosts(list);
-      }, (error) => {
-        // En caso de error o sin conexión, mantener o cargar publicaciones locales
-        const list: PostItem[] = [];
+        if (isMounted) {
+          setPosts(list);
+          safeSaveLocalPosts(list);
+        }
+      }, async (error) => {
+        // En caso de error de Firestore, cargar desde Supabase y local
+        const supaPosts = await fetchSupabasePosts();
+        const list: PostItem[] = [...supaPosts];
         try {
           const localPostsRaw = localStorage.getItem('latierrita_local_posts');
           if (localPostsRaw) {
             const localPosts = JSON.parse(localPostsRaw);
             if (Array.isArray(localPosts)) {
-              list.push(...localPosts);
+              localPosts.forEach((lp: PostItem) => {
+                if (lp && lp.id && !list.some(p => p.id === lp.id)) {
+                  list.push(lp);
+                }
+              });
             }
           }
         } catch (e) {}
-        if (list.length > 0) {
+        if (list.length > 0 && isMounted) {
           setPosts(list);
         }
         console.warn('Posts listener note:', error?.message || error);
       });
-      return () => unsub();
+
+      // Real-time Supabase postgres_changes for posts table
+      const supaPostsChannel = supabase
+        .channel('public_posts_changes')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'posts' }, async () => {
+          const supaList = await fetchSupabasePosts();
+          if (supaList.length > 0 && isMounted) {
+            setPosts(prev => {
+              const merged = [...prev];
+              supaList.forEach(sp => {
+                const idx = merged.findIndex(m => m.id === sp.id);
+                if (idx >= 0) {
+                  merged[idx] = { ...merged[idx], ...sp };
+                } else {
+                  merged.unshift(sp);
+                }
+              });
+              merged.sort((a, b) => b.id.localeCompare(a.id));
+              safeSaveLocalPosts(merged);
+              return merged;
+            });
+          }
+        })
+        .subscribe();
+
+      return () => {
+        isMounted = false;
+        unsub();
+        supabase.removeChannel(supaPostsChannel);
+      };
     } catch (e) {
       console.warn('Failed to listen to posts in DB:', e);
     }
@@ -1906,9 +2022,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               } else if (senders.length === 1 && rawRoom.targetUserId && rawRoom.targetUserId !== senders[0]) {
                 p1 = senders[0];
                 p2 = rawRoom.targetUserId;
-              } else if (senders.length === 1 && currentUserId && currentUserId !== senders[0]) {
-                p1 = senders[0];
-                p2 = currentUserId;
               } else if (rawRoom.targetUserId && rawRoom.createdBy && rawRoom.targetUserId !== rawRoom.createdBy) {
                 p1 = rawRoom.createdBy;
                 p2 = rawRoom.targetUserId;
@@ -4196,6 +4309,28 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
     try {
       await setDoc(doc(db, 'posts', newPostId), newPost);
       try {
+        await supabase.from('posts').upsert([{
+          id: newPost.id,
+          user_id: newPost.userId,
+          username: newPost.username,
+          user_avatar: newPost.userAvatar,
+          user_city: newPost.userCity,
+          media_url: newPost.mediaUrl,
+          caption: newPost.caption,
+          likes_count: 0,
+          location: newPost.location || '',
+          is_staff_ad: newPost.isStaffAd || false,
+          ad_title: newPost.adTitle || null,
+          ad_description: newPost.adDescription || null,
+          ad_cta_text: newPost.adCtaText || null,
+          ad_cta_url: newPost.adCtaUrl || null,
+          sponsor_name: newPost.sponsorName || null,
+          created_at: new Date().toISOString()
+        }], { onConflict: 'id' });
+      } catch (supErr) {
+        console.warn('Supabase post sync note:', supErr);
+      }
+      try {
         await setDoc(doc(db, 'users', currentUser.id), { postsCount: updatedUser.postsCount }, { merge: true });
       } catch (e) {}
       try {
@@ -4740,8 +4875,8 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
       let firestoreMessages: any[] = [];
       const isExists = docSnap && (typeof docSnap.exists === 'function' ? docSnap.exists() : Boolean(docSnap.exists));
       if (isExists) {
-        const roomData = docSnap.data();
-        if (Array.isArray(roomData.messages)) {
+        const roomData: any = docSnap.data();
+        if (roomData && Array.isArray(roomData.messages)) {
           firestoreMessages = roomData.messages;
         }
       }

@@ -14,13 +14,13 @@ import {
 } from '../types';
 
 export const INITIAL_CURRENT_USER: UserProfile = {
-  id: 'user-guest',
+  id: 'guest-temp',
   username: 'parcero',
-  name: 'Usuario La Tierrita',
+  name: 'Usuario Invitado',
   avatar: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' fill='%231e293b'/%3E%3Ccircle cx='50' cy='36' r='18' fill='%2394a3b8'/%3E%3Cpath d='M20 86 C20 68 34 60 50 60 C66 60 80 68 80 86 Z' fill='%2394a3b8'/%3E%3C/svg%3E",
-  bio: '🇨🇴 ¡Orgullo colombiano en España! 🇪🇸',
+  bio: 'Usuario invitado de La Tierrita App. Comunidad de Colombianos en España.',
   website: '',
-  city: 'Madrid',
+  city: 'Sin asignar',
   originCity: 'Colombia',
   notificationTone: 'Alegre Campesino (Bambuco)',
   isPrivateAccount: false,
@@ -28,7 +28,8 @@ export const INITIAL_CURRENT_USER: UserProfile = {
   followingCount: 0,
   postsCount: 0,
   isVerified: false,
-  staffRole: 'Usuario'
+  staffRole: 'Usuario',
+  isGuest: true
 };
 
 export const OTHER_USERS: UserProfile[] = [];

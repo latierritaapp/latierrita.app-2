@@ -75,7 +75,12 @@ export const Navbar: React.FC = () => {
         : (otherUsers.find(u => u.id === selectedUserProfile.id || u.username === selectedUserProfile.username || (selectedUserProfile.email && u.email === selectedUserProfile.email)) || selectedUserProfile))
     : currentUser;
 
-  const isGuestUser = Boolean(currentUser?.isGuest || currentUser?.id?.startsWith('guest-'));
+  const isGuestUser = Boolean(
+    currentUser?.isGuest ||
+    currentUser?.id?.startsWith('guest-') ||
+    currentUser?.id === 'user-guest' ||
+    (currentUser?.username && /^user-\d+$/i.test(currentUser.username))
+  );
 
   const isVisitingOtherProfile = isProfileView && Boolean(selectedUserProfile) && selectedUserProfile?.id !== currentUser.id && selectedUserProfile?.username !== currentUser.username;
 

@@ -42,38 +42,38 @@ export const ExploreView: React.FC = () => {
   const [expandedComments, setExpandedComments] = useState<Record<string, boolean>>({});
   const [heartAnimPostId, setHeartAnimPostId] = useState<string | null>(null);
 
-  // Clean local storage of unsplash example posts on mount
-  useEffect(() => {
-    try {
-      const localPostsRaw = localStorage.getItem('latierrita_local_posts');
-      if (localPostsRaw) {
-        const parsed = JSON.parse(localPostsRaw);
-        if (Array.isArray(parsed)) {
-          const cleaned = parsed.filter((p: PostItem) => !p.mediaUrl?.includes('unsplash.com'));
-          localStorage.setItem('latierrita_local_posts', JSON.stringify(cleaned));
-        }
-      }
-    } catch {}
-  }, []);
-
-  // Unified pool of user publications from posts pool (excluding demo images and sponsored ads)
+  // Unified pool of publications from posts pool
   const allUserPosts = useMemo(() => {
     const map = new Map<string, PostItem>();
 
-    posts.forEach(p => {
-      if (!p.isStaffAd && !p.mediaUrl?.includes('unsplash.com')) {
-        map.set(p.id, p);
+    (posts || []).forEach(p => {
+      const media = p.mediaUrl || (p as any).imageUrl || (p as any).image_url;
+      if (media) {
+        map.set(p.id, {
+          ...p,
+          mediaUrl: media
+        });
+      }
+    });
+
+    (myProfilePosts || []).forEach(p => {
+      const media = p.mediaUrl || (p as any).imageUrl || (p as any).image_url;
+      if (media && !map.has(p.id)) {
+        map.set(p.id, {
+          ...p,
+          mediaUrl: media
+        });
       }
     });
 
     return Array.from(map.values());
-  }, [posts]);
+  }, [posts, myProfilePosts]);
 
   // Sorted by popularity (likes + comments) and recency without erratic reshuffling
   const trendingPosts = useMemo(() => {
     const result = [...allUserPosts];
 
-    // Sort descending by popularity (likes + comments * 2), then by ID/recency
+    // Sort descending by recency / timestamp, with engagement boost
     return result.sort((a, b) => {
       const scoreA = (a.likesCount || 0) + (a.comments?.length || 0) * 2;
       const scoreB = (b.likesCount || 0) + (b.comments?.length || 0) * 2;

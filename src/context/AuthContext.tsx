@@ -283,7 +283,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const saved = localStorage.getItem('latierrita_user');
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        if (parsed?.isGuest || parsed?.id?.startsWith('guest-') || parsed?.id === 'user-guest' || (parsed?.username && /^user-\d+$/i.test(parsed.username))) {
+          parsed.bio = 'Usuario invitado de La Tierrita App. Comunidad de Colombianos en España.';
+          parsed.city = 'Sin asignar';
+          parsed.isGuest = true;
+        }
+        return parsed;
       } catch (e) {
         return null;
       }
@@ -296,7 +302,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const savedUser = localStorage.getItem('latierrita_user');
       if (savedUser) {
         const parsed = JSON.parse(savedUser);
-        return Boolean(parsed?.id?.startsWith('guest-'));
+        return Boolean(parsed?.isGuest || parsed?.id?.startsWith('guest-') || parsed?.id === 'user-guest' || (parsed?.username && /^user-\d+$/i.test(parsed.username)));
       }
     } catch {}
     return false;
@@ -908,9 +914,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         username: guestUsername,
         name: `Invitado (${guestUsername})`,
         avatar: DEFAULT_SILHOUETTE_AVATAR,
-        bio: '👤 Usuario invitado de La Tierrita España.',
+        bio: 'Usuario invitado de La Tierrita App. Comunidad de Colombianos en España.',
         website: '',
-        city: 'Madrid',
+        city: 'Sin asignar',
         originCity: 'Colombia',
         followersCount: 0,
         followingCount: 0,
@@ -922,7 +928,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         socialLinks: {}
       };
 
-      // Critical: Guests do not follow any accounts (not even @latierrita_app)
+      // Critical: Guests do not follow any accounts and have an empty chat inbox
+      localStorage.removeItem('latierrita_chat_rooms');
       safeSetLocalStorage('latierrita_following', []);
       safeSetLocalStorage('latierrita_user', guestProfile);
       setUserProfile(guestProfile);

@@ -49,13 +49,23 @@ export const AdCarousel: React.FC<AdCarouselProps> = ({ type = 'inicio' }) => {
 
   const targetTab = type === 'explorar' ? 'carrusel_02' : 'carrusel_01';
 
-  const activeBanners = (adBanners || []).filter(
-    b =>
-      b &&
-      (type === 'explorar'
-        ? b.carouselType === 'explorar' || b.carouselType === 'ambos'
-        : b.carouselType === 'inicio' || b.carouselType === 'ambos' || !b.carouselType)
-  );
+  const activeBanners = React.useMemo(() => {
+    const directMatches = (adBanners || []).filter(
+      b =>
+        b &&
+        b.active !== false &&
+        b.id !== 'banner-init-1' &&
+        (type === 'explorar'
+          ? b.carouselType === 'explorar' || b.carouselType === 'ambos' || (b.carouselType as string) === 'carrusel_02'
+          : b.carouselType === 'inicio' || b.carouselType === 'ambos' || (b.carouselType as string) === 'carrusel_01' || !b.carouselType)
+    );
+
+    if (type === 'explorar' && directMatches.length === 0) {
+      return (adBanners || []).filter(b => b && b.active !== false && b.id !== 'banner-init-1');
+    }
+
+    return directMatches;
+  }, [adBanners, type]);
 
   // Auto-play carousel every 3 seconds if not hovered
   useEffect(() => {

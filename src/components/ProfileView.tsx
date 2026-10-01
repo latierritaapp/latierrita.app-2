@@ -269,14 +269,14 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userToDisplay }) => {
           </div>
 
           {/* 2. Biografía */}
-          {user.bio && (
-            <p className="text-xs sm:text-sm text-white/90 leading-relaxed whitespace-pre-line max-w-md pt-0.5">
-              {renderTextWithFlags(user.bio)}
-            </p>
-          )}
+          <p className="text-xs sm:text-sm text-white/90 leading-relaxed whitespace-pre-line max-w-md pt-0.5">
+            {isProfileGuest
+              ? 'Usuario invitado de La Tierrita App. Comunidad de Colombianos en España.'
+              : renderTextWithFlags(user.bio || '🇨🇴 ¡Orgullo colombiano en España! 🇪🇸')}
+          </p>
 
           {/* 3. Sitio web */}
-          {user.website && (
+          {user.website && !isProfileGuest && (
             <div className="pt-0.5">
               <a
                 href={user.website.startsWith('http') ? user.website : `https://${user.website}`}
@@ -291,7 +291,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userToDisplay }) => {
           )}
 
           {/* 4. Redes sociales */}
-          {user.socialLinks && (user.socialLinks.instagram || user.socialLinks.tiktok || user.socialLinks.facebook || user.socialLinks.x) && (
+          {user.socialLinks && !isProfileGuest && (user.socialLinks.instagram || user.socialLinks.tiktok || user.socialLinks.facebook || user.socialLinks.x) && (
             <div className="flex items-center justify-center gap-2.5 pt-1">
               {user.socialLinks.instagram && (
                 <a
@@ -342,8 +342,8 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userToDisplay }) => {
 
           {/* 5. Edad, ciudad origen y ciudad actual */}
           <div className="text-xs font-semibold text-white/80 flex items-center justify-center gap-1.5 flex-wrap pt-0.5">
-            {user.age && <span>{user.age} años</span>}
-            {user.age && <span>·</span>}
+            {user.age && !isProfileGuest && <span>{user.age} años</span>}
+            {user.age && !isProfileGuest && <span>·</span>}
             <span className="inline-flex items-center gap-1">
               <span>De {user.originCity || 'Colombia'}</span>
               <FlagColombia size="xs" />
@@ -351,8 +351,8 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userToDisplay }) => {
             <span className="text-white/40">/</span>
             <span className="inline-flex items-center gap-1 text-amber-300 font-bold">
               <MapPin className="w-3.5 h-3.5 shrink-0 text-amber-400" />
-              <span>{user.city}</span>
-              <FlagSpain size="xs" />
+              <span>{isProfileGuest ? 'Sin asignar' : (user.city || 'Sin asignar')}</span>
+              {!isProfileGuest && user.city && user.city !== 'Sin asignar' && <FlagSpain size="xs" />}
             </span>
           </div>
 
