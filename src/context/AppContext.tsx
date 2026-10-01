@@ -789,9 +789,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       });
     } catch {}
 
-    // Subscribe to realtime profile updates from Supabase
+    // Subscribe to realtime profile updates from Supabase with a unique channel name
+    const channelName = `public_profiles_changes_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
     const channel = supabase
-      .channel('public_profiles_changes')
+      .channel(channelName)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => {
         fetchRealProfiles();
       })
@@ -800,7 +801,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return () => {
       isMounted = false;
       if (typeof unsubOfficial === 'function') unsubOfficial();
-      supabase.removeChannel(channel);
+      try {
+        supabase.removeChannel(channel);
+      } catch {}
     };
   }, [currentUser?.id, currentUser?.email]);
 
@@ -897,14 +900,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [storyViewerRestriction, setStoryViewerRestriction] = useState<string | null>(null);
   const [isCreateStoryOpen, setIsCreateStoryOpen] = useState(false);
 
+  const isRealUserPost = (p: PostItem): boolean => {
+    if (!p || !p.id) return false;
+    const media = p.mediaUrl || (p as any).imageUrl || (p as any).image_url || (p as any).media_url || (p as any).photoUrl || (p as any).photo_url || (p as any).url || (p as any).image || '';
+    if (!media || typeof media !== 'string' || media.trim() === '') return false;
+    if (
+      media.includes('unsplash.com') ||
+      media.includes('photo-1579546929518') ||
+      media.includes('photo-1555396273') ||
+      media.includes('photo-1534528741775') ||
+      media.includes('placeholder')
+    ) {
+      return false;
+    }
+    return true;
+  };
+
   // Safe persistence helper for instant grid loading on refresh
   const safeSaveLocalPosts = (postsToSave: PostItem[]) => {
     try {
-      const sanitized = postsToSave.slice(0, 60);
+      const sanitized = (postsToSave || []).filter(isRealUserPost).slice(0, 60);
       localStorage.setItem('latierrita_local_posts', JSON.stringify(sanitized));
     } catch (e) {
       try {
-        const trimmed = postsToSave.slice(0, 20);
+        const trimmed = (postsToSave || []).filter(isRealUserPost).slice(0, 20);
         localStorage.setItem('latierrita_local_posts', JSON.stringify(trimmed));
       } catch {}
     }
@@ -936,7 +955,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (localPostsRaw) {
         const parsed = JSON.parse(localPostsRaw);
         if (Array.isArray(parsed)) {
-          return parsed.filter((p: PostItem) => p && p.id);
+          return parsed.filter(isRealUserPost);
         }
       }
     } catch {}
@@ -980,7 +999,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       deletedIds = JSON.parse(deletedRaw);
     } catch {}
 
-    const cleanBanner = (b: AdBanner) => b && b.id !== 'banner-init-1' && !deletedIds.includes(b.id);
+    const cleanBanner = (b: AdBanner) =>
+      b &&
+      b.id !== 'banner-init-1' &&
+      !deletedIds.includes(b.id) &&
+      b.imageUrl &&
+      !b.imageUrl.includes('unsplash.com') &&
+      !b.imageUrl.includes('photo-1579546929518');
 
     if (saved) {
       try {
@@ -1498,7 +1523,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           }
         } catch (e) {}
 
-        const cleanList = list.filter(b => b && b.id !== 'banner-init-1' && !deletedIds.includes(b.id));
+        const cleanList = list.filter(
+          b =>
+            b &&
+            b.id !== 'banner-init-1' &&
+            !deletedIds.includes(b.id) &&
+            b.imageUrl &&
+            !b.imageUrl.includes('unsplash.com') &&
+            !b.imageUrl.includes('photo-1579546929518')
+        );
 
         setAdBanners(cleanList);
         cleanList.forEach(b => {
@@ -1691,7 +1724,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               timestamp: sp.created_at || sp.timestamp || 'Reciente',
               isStaffAd: isOfficial
             } as PostItem;
-          }).filter(p => p.mediaUrl);
+          }).filter(p => isRealUserPost(p));
         }
       } catch (e) {
         console.warn('Supabase posts fetch note:', e);
@@ -1701,7 +1734,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     try {
       const unsub = onSnapshot(collection(db, 'posts'), async (snapshot) => {
-        const list: PostItem[] = [];
+        let list: PostItem[] = [];
         const currentUserId = currentUserRef.current?.id;
 
         if (!snapshot.empty) {
@@ -1710,7 +1743,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             const isOfficial = data.isStaffAd || data.userId === 'user-staff' || data.username === 'staff_latierrita' || data.username === 'latierrita_app' || data.username === 'latierrita_oficial';
             const likesArr = Array.isArray(data.likes) ? data.likes : [];
             const commentsArr = Array.isArray(data.comments) ? data.comments : [];
-            list.push({
+            const item: PostItem = {
               id: docSnap.id,
               ...data,
               username: isOfficial ? 'latierrita_app' : (data.username || 'usuario'),
@@ -1722,26 +1755,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               hasLiked: currentUserId ? likesArr.includes(currentUserId) : Boolean(data.hasLiked),
               hideLocation: data.hideLocation ?? !data.location,
               comments: commentsArr
-            } as PostItem);
+            } as PostItem;
+            if (isRealUserPost(item)) {
+              list.push(item);
+            }
           });
         }
 
         // Incorporar publicaciones de Supabase
         const supaPosts = await fetchSupabasePosts();
         supaPosts.forEach(sp => {
-          if (!list.some(p => p.id === sp.id)) {
+          if (!list.some(p => p.id === sp.id) && isRealUserPost(sp)) {
             list.push(sp);
           }
         });
 
-        // Incorporar publicaciones guardadas localmente SOLO si no existen aún en la nube
+        // Incorporar publicaciones guardadas localmente SOLO si son reales y no existen aún en la nube
         try {
           const localPostsRaw = localStorage.getItem('latierrita_local_posts');
           if (localPostsRaw) {
             const localPosts = JSON.parse(localPostsRaw);
             if (Array.isArray(localPosts)) {
               localPosts.forEach((lp: PostItem) => {
-                if (lp && lp.id && !list.some(p => p.id === lp.id)) {
+                if (lp && lp.id && isRealUserPost(lp) && !list.some(p => p.id === lp.id)) {
                   const isOfficial = lp.isStaffAd || lp.userId === 'user-staff' || lp.username === 'staff_latierrita' || lp.username === 'latierrita_app' || lp.username === 'latierrita_oficial';
                   const cleanedLp: PostItem = {
                     ...lp,
@@ -1749,14 +1785,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                     userAvatar: isOfficial ? '/logo.png?v=3' : lp.userAvatar
                   };
                   list.push(cleanedLp);
-                  // Solo subir si no existía en el servidor
-                  setDoc(doc(db, 'posts', cleanedLp.id), cleanedLp, { merge: true }).catch(() => {});
                 }
               });
             }
           }
         } catch (e) {}
 
+        list = list.filter(isRealUserPost);
         list.sort((a, b) => b.id.localeCompare(a.id));
         if (isMounted) {
           setPosts(list);
@@ -1765,29 +1800,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }, async (error) => {
         // En caso de error de Firestore, cargar desde Supabase y local
         const supaPosts = await fetchSupabasePosts();
-        const list: PostItem[] = [...supaPosts];
+        let list: PostItem[] = supaPosts.filter(isRealUserPost);
         try {
           const localPostsRaw = localStorage.getItem('latierrita_local_posts');
           if (localPostsRaw) {
             const localPosts = JSON.parse(localPostsRaw);
             if (Array.isArray(localPosts)) {
               localPosts.forEach((lp: PostItem) => {
-                if (lp && lp.id && !list.some(p => p.id === lp.id)) {
+                if (lp && lp.id && isRealUserPost(lp) && !list.some(p => p.id === lp.id)) {
                   list.push(lp);
                 }
               });
             }
           }
         } catch (e) {}
-        if (list.length > 0 && isMounted) {
+        list = list.filter(isRealUserPost);
+        if (isMounted) {
           setPosts(list);
+          safeSaveLocalPosts(list);
         }
         console.warn('Posts listener note:', error?.message || error);
       });
 
-      // Real-time Supabase postgres_changes for posts table
+      // Real-time Supabase postgres_changes for posts table with unique channel name
+      const supaPostsChannelName = `public_posts_changes_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
       const supaPostsChannel = supabase
-        .channel('public_posts_changes')
+        .channel(supaPostsChannelName)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'posts' }, async () => {
           const supaList = await fetchSupabasePosts();
           if (supaList.length > 0 && isMounted) {
@@ -1812,7 +1850,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return () => {
         isMounted = false;
         unsub();
-        supabase.removeChannel(supaPostsChannel);
+        try {
+          supabase.removeChannel(supaPostsChannel);
+        } catch {}
       };
     } catch (e) {
       console.warn('Failed to listen to posts in DB:', e);
@@ -2152,8 +2192,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // Supabase Realtime channel for sub-second instant message delivery
     let chatChannel: any = null;
     if (hasSupabaseUrl && hasSupabaseKey) {
+      const chatSyncChannelName = `tierrita_community_chat_sync_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
       chatChannel = supabase
-        .channel('tierrita_community_chat_sync')
+        .channel(chatSyncChannelName)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_rooms' }, () => {
           fetchRooms();
         })

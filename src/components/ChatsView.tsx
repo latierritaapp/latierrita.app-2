@@ -54,7 +54,7 @@ import {
   XCircle,
   Download
 } from 'lucide-react';
-import { SPANISH_CITIES } from '../data/mockData';
+import { SPANISH_CITIES, INITIAL_CHAT_ROOMS } from '../data/mockData';
 import { FlagColombia, FlagSpain, CountryFlag } from './CountryFlag';
 import { VerifiedBadge } from './VerifiedBadge';
 
@@ -969,7 +969,7 @@ export const ChatsView: React.FC = () => {
     if (!searchQuery.trim()) return true;
     const q = searchQuery.toLowerCase().trim();
     if ('comunidad'.includes(q) || 'general'.includes(q) || 'colombia'.includes(q) || 'españa'.includes(q)) return true;
-    return (generalChat?.messages || []).some(m => (m.text || '').toLowerCase().includes(q));
+    return (generalChat?.messages || []).some((m: ChatMessage) => (m.text || '').toLowerCase().includes(q));
   }, [searchQuery, generalChat]);
 
   const matchesCity = useMemo(() => {
@@ -978,7 +978,7 @@ export const ChatsView: React.FC = () => {
     if (isGuestUser && ('chat bloqueado'.includes(q) || 'bloqueado'.includes(q) || 'desbloqueara'.includes(q))) return true;
     const myCity = (currentUser.city || 'Madrid').toLowerCase();
     if ('ciudad'.includes(q) || myCity.includes(q)) return true;
-    return (currentCityChat?.messages || []).some(m => (m.text || '').toLowerCase().includes(q));
+    return (currentCityChat?.messages || []).some((m: ChatMessage) => (m.text || '').toLowerCase().includes(q));
   }, [searchQuery, currentCityChat, currentUser.city, isGuestUser]);
 
   const lastGeneralMsg = useMemo(() => {
@@ -1104,14 +1104,14 @@ export const ChatsView: React.FC = () => {
     <>
       <div
         id="chats-root-container"
-        className="fixed top-14 bottom-15 left-0 right-0 max-w-2xl mx-auto flex flex-col bg-[#001428] border-x border-white/10 z-20 overflow-hidden"
+        className="fixed inset-x-0 top-14 bottom-16 sm:bottom-0 max-w-2xl mx-auto flex flex-col bg-[#001428] border-x border-white/10 z-20 overflow-hidden h-[calc(100dvh-3.5rem-4rem)] sm:h-[calc(100dvh-3.5rem)]"
       >
       {/* RENDER CONTENT BASED ON TAB */}
-      {chatTypeTab === 'messages' && !selectedPrivateOrGroupId ? (
+      {(chatTypeTab === 'messages' && !selectedPrivateOrGroupId) || !activeChat ? (
         /* ========================================================================= */
         /* SESSION: LISTA DE CHATS PRIVADOS Y GRUPALES (Unificada con creación)     */
         /* ========================================================================= */
-        <div className="flex-1 flex flex-col overflow-y-auto">
+        <div className="flex-1 flex flex-col overflow-y-auto min-h-0 bg-[#001428]">
           {/* Top actions within the private & groups session */}
           <div className="p-3 bg-neutral-50/80 dark:bg-neutral-900/60 border-b border-neutral-200 dark:border-neutral-800 space-y-2">
             {/* Direct creation action buttons in the same session */}
@@ -1693,8 +1693,7 @@ export const ChatsView: React.FC = () => {
         /* ========================================================================= */
         /* ACTIVE CONVERSATION SCREEN (General, City, or Selected Private/Group)     */
         /* ========================================================================= */
-        activeChat && (
-          <div className="flex-1 flex flex-col h-full overflow-hidden bg-transparent">
+        <div className="flex-1 flex flex-col h-full overflow-hidden bg-transparent">
             {/* Conversation Header */}
             <div className="relative z-40 px-4 py-2.5 border-b border-white/10 bg-[#003087]/70 backdrop-blur-md flex items-center justify-between shrink-0 text-white">
               <div className="flex items-center gap-2.5 min-w-0">
@@ -2915,7 +2914,7 @@ export const ChatsView: React.FC = () => {
             </div>
           </div>
         )
-      )}
+      }
 
       {/* ========================================================================= */}
       {/* MODALS                                                                    */}

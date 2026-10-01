@@ -273,8 +273,9 @@ export function onSnapshot(
   let channel: any = null;
   if (table && typeof table === 'string' && !table.includes('/')) {
     try {
+      const channelName = `public_${table}_changes_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
       channel = supabase
-        .channel(`public_${table}_changes`)
+        .channel(channelName)
         .on('postgres_changes', { event: '*', schema: 'public', table }, () => {
           fetchData();
         })

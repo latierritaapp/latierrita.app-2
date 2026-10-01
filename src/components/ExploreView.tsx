@@ -46,9 +46,23 @@ export const ExploreView: React.FC = () => {
   const allUserPosts = useMemo(() => {
     const map = new Map<string, PostItem>();
 
+    const isCleanImage = (url?: string): boolean => {
+      if (!url || typeof url !== 'string') return false;
+      if (
+        url.includes('unsplash.com') ||
+        url.includes('photo-1579546929518') ||
+        url.includes('photo-1555396273') ||
+        url.includes('photo-1534528741775') ||
+        url.includes('placeholder')
+      ) {
+        return false;
+      }
+      return true;
+    };
+
     (posts || []).forEach(p => {
       const media = p.mediaUrl || (p as any).imageUrl || (p as any).image_url || (p as any).media_url || (p as any).photoUrl || (p as any).photo_url || (p as any).url || (p as any).image;
-      if (media) {
+      if (media && isCleanImage(media)) {
         map.set(p.id, {
           ...p,
           mediaUrl: media
@@ -58,7 +72,7 @@ export const ExploreView: React.FC = () => {
 
     (myProfilePosts || []).forEach(p => {
       const media = p.mediaUrl || (p as any).imageUrl || (p as any).image_url || (p as any).media_url || (p as any).photoUrl || (p as any).photo_url || (p as any).url || (p as any).image;
-      if (media && !map.has(p.id)) {
+      if (media && isCleanImage(media) && !map.has(p.id)) {
         map.set(p.id, {
           ...p,
           mediaUrl: media

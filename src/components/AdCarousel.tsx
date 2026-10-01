@@ -51,7 +51,14 @@ export const AdCarousel: React.FC<AdCarouselProps> = ({ type = 'inicio' }) => {
 
   const activeBanners = React.useMemo(() => {
     const validBanners = (adBanners || []).filter(
-      b => b && b.active !== false && b.id !== 'banner-init-1' && b.imageUrl && b.imageUrl.trim() !== ''
+      b =>
+        b &&
+        b.active !== false &&
+        b.id !== 'banner-init-1' &&
+        b.imageUrl &&
+        b.imageUrl.trim() !== '' &&
+        !b.imageUrl.includes('unsplash.com') &&
+        !b.imageUrl.includes('photo-1579546929518')
     );
 
     const directMatches = validBanners.filter(b => {
