@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { useApp } from '../context/AppContext';
 import { DEFAULT_SILHOUETTE_AVATAR, useAuth } from '../context/AuthContext';
 import {
@@ -781,12 +782,32 @@ export const ChatsView: React.FC = () => {
   // Synchronize if external code set activeChatId (e.g., from push notifications or places)
   useEffect(() => {
     if (activeChatId) {
-      const room = chatRooms.find(r => r.id === activeChatId || (r.type === 'private' && (r.id.includes(activeChatId) || activeChatId.includes(r.id.replace(/^chat-priv_/, '')))));
+      if (activeChatId === 'chat-general-es' || activeChatId.startsWith('chat-gen') || activeChatId === 'general-spain' || activeChatId === 'general') {
+        setChatTypeTab('general');
+        setSelectedPrivateOrGroupId(null);
+        return;
+      }
+      if (activeChatId.startsWith('chat-city') || activeChatId.startsWith('city-')) {
+        setChatTypeTab('city');
+        setSelectedPrivateOrGroupId(null);
+        return;
+      }
+
+      const room =
+        chatRooms.find(r => r.id === activeChatId) ||
+        chatRooms.find(r => r.type === 'private' && (
+          r.id === `chat-priv_${currentUser?.id}_${activeChatId}` ||
+          r.id === `chat-priv_${activeChatId}_${currentUser?.id}` ||
+          (r.targetUserId && r.targetUserId === activeChatId)
+        ));
+
       if (room) {
         if (room.type === 'general') {
           setChatTypeTab('general');
+          setSelectedPrivateOrGroupId(null);
         } else if (room.type === 'city') {
           setChatTypeTab('city');
+          setSelectedPrivateOrGroupId(null);
         } else {
           setChatTypeTab('messages');
           setSelectedPrivateOrGroupId(room.id);
@@ -797,25 +818,23 @@ export const ChatsView: React.FC = () => {
         setSelectedPrivateOrGroupId(null);
       }
     }
-  }, [activeChatId, chatRooms, chatTypeTab]);
+  }, [activeChatId, chatRooms, currentUser?.id]);
 
-  // 1. General chat: public for all
+  // 1. General chat: public for all (STRICT MATCH)
   const generalChat = useMemo(() => {
-    const found = chatRooms.find(r => r.type === 'general' || r.id === 'chat-general-es' || r.id.startsWith('chat-gen') || r.id === 'general-spain');
+    const found = chatRooms.find(r => r.id === 'chat-general-es' || r.id === 'general-spain' || r.id === 'chat-general' || (r.type === 'general' && !r.targetUserId && !r.isTicketChat));
     if (found) return found;
-    return INITIAL_CHAT_ROOMS.find(r => r.type === 'general' || r.id === 'chat-general-es') || INITIAL_CHAT_ROOMS[0] || null;
+    return INITIAL_CHAT_ROOMS[0];
   }, [chatRooms]);
 
   // 2. City chat: ONLY shows the chat according to the user's current city!
   const currentCityChat = useMemo(() => {
-    return (
-      chatRooms.find(r => r.type === 'city' && r.city === currentUser.city) ||
-      chatRooms.find(r => r.type === 'city') ||
-      INITIAL_CHAT_ROOMS.find(r => r.type === 'city' && r.city === currentUser.city) ||
-      INITIAL_CHAT_ROOMS.find(r => r.type === 'city') ||
-      null
-    );
-  }, [chatRooms, currentUser.city]);
+    const userCity = currentUser?.city || 'Madrid';
+    const found = chatRooms.find(r => r.type === 'city' && r.city === userCity && !r.targetUserId) ||
+      chatRooms.find(r => r.id === `chat-city-${userCity.toLowerCase()}` || (r.type === 'city' && !r.targetUserId));
+    if (found) return found;
+    return INITIAL_CHAT_ROOMS.find(r => r.type === 'city' && r.city === userCity) || INITIAL_CHAT_ROOMS.find(r => r.type === 'city') || INITIAL_CHAT_ROOMS[1];
+  }, [chatRooms, currentUser?.city]);
 
   // Determine active conversation room depending on current tab
   const activeChat = useMemo<ChatRoom | null>(() => {
@@ -1012,7 +1031,9 @@ export const ChatsView: React.FC = () => {
         return;
       }
 
-      if (!isClearAllowed) {
+      const isExplicitPublicChat = activeChat.id === 'chat-general-es' || activeChat.id === 'general-spain' || activeChat.id === 'chat-general' || activeChat.id.startsWith('chat-city-') || activeChat.id.startsWith('city-');
+
+      if (!isClearAllowed && !isExplicitPublicChat) {
         triggerPlushNotification({
           type: 'system',
           title: 'Comando no permitido',
@@ -3184,12 +3205,12 @@ export const ChatsView: React.FC = () => {
         </div>
       )}
 
-      {/* 4.5. Floating WhatsApp Popover Options (Anchored near message) */}
-      {activeMessageMenu && !activeMessageMenu.message.deletedForEveryone && !deletedMessageIdsForMe.includes(activeMessageMenu.message.id) && (
-        <div className="fixed inset-0 z-[100]">
+      {/* 4.5. Floating WhatsApp Popover Options (Anchored near message, rendered via Portal) */}
+      {activeMessageMenu && !activeMessageMenu.message.deletedForEveryone && !deletedMessageIdsForMe.includes(activeMessageMenu.message.id) && createPortal(
+        <div className="fixed inset-0 z-[9998] flex items-center justify-center pointer-events-auto">
           {/* Backdrop */}
           <div
-            className="fixed inset-0 bg-black/30 backdrop-blur-[1px] animate-in fade-in duration-150"
+            className="fixed inset-0 bg-black/40 backdrop-blur-xs animate-in fade-in duration-150 z-[9998]"
             onClick={() => {
               setActiveMessageMenu(null);
               setShowExtendedEmojis(false);
@@ -3200,7 +3221,10 @@ export const ChatsView: React.FC = () => {
           <div
             style={(() => {
               const windowWidth = typeof window !== 'undefined' ? window.innerWidth : 360;
+              const windowHeight = typeof window !== 'undefined' ? window.innerHeight : 640;
               const menuWidth = Math.min(290, windowWidth - 24);
+              const bottomNavSpace = 72; // Reserve space for bottom navigation bar
+              const maxBottom = windowHeight - bottomNavSpace;
 
               if (!activeMessageMenu.rect) {
                 return {
@@ -3209,12 +3233,11 @@ export const ChatsView: React.FC = () => {
                   left: '50%',
                   transform: 'translate(-50%, -50%)',
                   width: `${menuWidth}px`,
+                  maxHeight: `${maxBottom - 80}px`
                 };
               }
 
               const { rect, isMe } = activeMessageMenu;
-              const openBelow = rect.top < 220; // If message is near top of screen, open below
-
               let leftPos: number;
               if (isMe) {
                 leftPos = Math.min(windowWidth - menuWidth - 12, Math.max(12, rect.right - menuWidth));
@@ -3222,26 +3245,29 @@ export const ChatsView: React.FC = () => {
                 leftPos = Math.min(windowWidth - menuWidth - 12, Math.max(12, rect.left));
               }
 
+              const openBelow = rect.top < 220;
+
               if (openBelow) {
                 return {
                   position: 'fixed',
                   top: `${Math.max(12, rect.bottom + 8)}px`,
                   left: `${leftPos}px`,
                   width: `${menuWidth}px`,
-                  maxHeight: `calc(100vh - ${rect.bottom + 20}px)`,
+                  maxHeight: `${Math.max(150, maxBottom - rect.bottom - 16)}px`,
                 };
               } else {
+                const calculatedTop = Math.min(maxBottom - 12, rect.top - 8);
                 return {
                   position: 'fixed',
-                  top: `${rect.top - 8}px`,
+                  top: `${calculatedTop}px`,
                   transform: 'translateY(-100%)',
                   left: `${leftPos}px`,
                   width: `${menuWidth}px`,
-                  maxHeight: `${rect.top - 20}px`,
+                  maxHeight: `${Math.max(150, calculatedTop - 20)}px`,
                 };
               }
             })()}
-            className="z-[101] bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-700/80 rounded-2xl shadow-2xl p-2 text-xs animate-in fade-in zoom-in-95 duration-150 overflow-x-hidden overflow-y-auto custom-scrollbar"
+            className="z-[9999] bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-700/80 rounded-2xl shadow-2xl p-2 text-xs animate-in fade-in zoom-in-95 duration-150 overflow-x-hidden overflow-y-auto custom-scrollbar"
           >
             {/* Quick Emoji Bar + Plus button */}
             <div className="p-1 bg-neutral-100 dark:bg-neutral-800/80 rounded-xl mb-1.5 flex items-center justify-between gap-0.5 border border-neutral-200/50 dark:border-neutral-700/50 overflow-x-hidden">
@@ -3389,14 +3415,15 @@ export const ChatsView: React.FC = () => {
               )}
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* 5. Floating User Menu Modal */}
-      {activeUserMenu && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs animate-in fade-in duration-150">
+      {activeUserMenu && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs animate-in fade-in duration-150 pointer-events-auto">
           <div className="fixed inset-0" onClick={() => setActiveUserMenu(null)} />
-          <div className="relative w-full max-w-xs bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-3xl shadow-2xl z-10 overflow-hidden">
+          <div className="relative w-full max-w-xs bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-3xl shadow-2xl z-[10000] overflow-hidden">
             {/* Clickable User Header to Go to Profile */}
             <button
               type="button"
@@ -3513,7 +3540,8 @@ export const ChatsView: React.FC = () => {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* 6. Full-Screen Group Info View */}

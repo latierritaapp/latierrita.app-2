@@ -48,16 +48,9 @@ export const ExploreView: React.FC = () => {
 
     const isCleanImage = (url?: string): boolean => {
       if (!url || typeof url !== 'string') return false;
-      if (
-        url.includes('unsplash.com') ||
-        url.includes('photo-1579546929518') ||
-        url.includes('photo-1555396273') ||
-        url.includes('photo-1534528741775') ||
-        url.includes('placeholder')
-      ) {
-        return false;
-      }
-      return true;
+      const clean = url.trim();
+      if (clean === '') return false;
+      return clean.startsWith('http://') || clean.startsWith('https://') || clean.startsWith('data:image') || clean.startsWith('blob:') || clean.startsWith('/');
     };
 
     (posts || []).forEach(p => {

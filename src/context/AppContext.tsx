@@ -384,16 +384,123 @@ export const extractMembersFromPrivateChatId = (chatId: string): string[] => {
 export const PRUNE_MAX_PUBLIC_MESSAGES = 99; // Cap at 99 messages max for general/city chats
 export const PRUNE_MAX_PUBLIC_AGE_MS = 48 * 60 * 60 * 1000; // 48 hours in milliseconds
 
+export const getSpanishFormattedTime = (date?: Date | number): string => {
+  try {
+    const d = date ? new Date(date) : new Date();
+    return d.toLocaleTimeString('es-ES', {
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZone: 'Europe/Madrid',
+      hour12: false
+    });
+  } catch (e) {
+    const d = date ? new Date(date) : new Date();
+    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+};
+
+export const getClearedRoomTimestamps = (): Record<string, number> => {
+  try {
+    const saved = localStorage.getItem('latierrita_cleared_chats');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (parsed && typeof parsed === 'object') {
+        return parsed;
+      }
+    }
+  } catch {}
+  return {};
+};
+
+export const saveClearedRoomTimestamp = (chatId: string, timestamp: number) => {
+  try {
+    const current = getClearedRoomTimestamps();
+    const targetIds = (chatId === 'chat-general-es' || chatId === 'general-spain' || chatId === 'chat-general')
+      ? ['chat-general-es', 'chat-general', 'general-spain']
+      : [chatId];
+    targetIds.forEach(id => {
+      current[id] = Math.max(current[id] || 0, timestamp);
+    });
+    localStorage.setItem('latierrita_cleared_chats', JSON.stringify(current));
+  } catch {}
+};
+
 export const pruneRoomMessages = (room: ChatRoom): ChatRoom => {
-  if (!room || (room.type !== 'general' && room.type !== 'city')) {
+  if (!room) {
     return room;
   }
 
   const now = Date.now();
   const rawMessages = Array.isArray(room.messages) ? room.messages : [];
 
-  // 1. Filter out messages older than 48 hours
-  const unexpiredMessages = rawMessages.filter(msg => {
+  // 0. Blacklist known stale/corrupted legacy test messages from DB
+  const cleanMessages = rawMessages.filter(msg => {
+    if (!msg) return false;
+    if (msg.id === 'msg-1790200543210') return false;
+    const txt = msg.text || '';
+    if (txt.includes('ANUNCIO PATROCINADO') && txt.includes('comida criolla') && txt.includes('La Tiendita Paisa')) {
+      return false;
+    }
+    if (txt.includes('Les comparto este post de @latierrita_app:') && (txt.includes('La Tiendita Paisa') || txt.includes('arepas congeladas') || txt.includes('chocoramos'))) {
+      return false;
+    }
+    return true;
+  });
+
+  // Get clear timestamp from local storage
+  const clearedMap = getClearedRoomTimestamps();
+  const isGeneralRoom = room.id.includes('general') || room.id.includes('comunidad') || room.id === 'general-spain';
+  const generalClearTime = Math.max(
+    clearedMap['chat-general-es'] || 0,
+    clearedMap['chat-general'] || 0,
+    clearedMap['general-spain'] || 0,
+    clearedMap['general'] || 0
+  );
+  const storedClearTime = isGeneralRoom ? Math.max(...Object.values(clearedMap), generalClearTime) : (clearedMap[room.id] || 0);
+
+  // 1. Drop any messages created at or BEFORE the latest /clear system action
+  let latestClearMsg: ChatMessage | null = null;
+  for (let i = cleanMessages.length - 1; i >= 0; i--) {
+    const msg = cleanMessages[i];
+    if (
+      msg && (
+        msg.id?.startsWith('msg-clear-') ||
+        msg.encryptedHash === 'SHA256:clear-action' ||
+        (msg.senderId === 'system' && (msg.text || '').includes('Chat vaciado'))
+      )
+    ) {
+      latestClearMsg = msg;
+      break;
+    }
+  }
+
+  let effectiveClearTime = storedClearTime;
+  if (latestClearMsg) {
+    const msgClearTime = latestClearMsg.createdAt || 0;
+    effectiveClearTime = Math.max(effectiveClearTime, msgClearTime);
+  }
+
+  let messagesAfterClear = cleanMessages;
+  if (effectiveClearTime > 0) {
+    messagesAfterClear = cleanMessages.filter(msg => {
+      if (!msg) return false;
+      if (latestClearMsg && msg.id === latestClearMsg.id) return true;
+      let msgTime = msg.createdAt || 0;
+      if (!msgTime && msg.id && msg.id.startsWith('msg-')) {
+        const parts = msg.id.split('-');
+        const parsed = parseInt(parts[1], 10);
+        if (!isNaN(parsed) && parsed > 1600000000000) msgTime = parsed;
+      }
+      return msgTime > effectiveClearTime && !msg.id?.startsWith('msg-clear-');
+    });
+
+    if (latestClearMsg && !messagesAfterClear.some(m => m.id === latestClearMsg!.id)) {
+      messagesAfterClear = [latestClearMsg, ...messagesAfterClear];
+    }
+  }
+
+  // 2. Filter out messages older than 48 hours
+  const unexpiredMessages = messagesAfterClear.filter(msg => {
     if (!msg) return false;
     let msgEpoch = now;
     if (typeof msg.createdAt === 'number' && msg.createdAt > 0) {
@@ -408,7 +515,7 @@ export const pruneRoomMessages = (room: ChatRoom): ChatRoom => {
     return (now - msgEpoch) <= PRUNE_MAX_PUBLIC_AGE_MS;
   });
 
-  // 2. Keep at most the latest 99 messages
+  // 3. Keep at most the latest 99 messages
   const prunedMessages = unexpiredMessages.length > PRUNE_MAX_PUBLIC_MESSAGES
     ? unexpiredMessages.slice(-PRUNE_MAX_PUBLIC_MESSAGES)
     : unexpiredMessages;
@@ -903,17 +1010,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const isRealUserPost = (p: PostItem): boolean => {
     if (!p || !p.id) return false;
     const media = p.mediaUrl || (p as any).imageUrl || (p as any).image_url || (p as any).media_url || (p as any).photoUrl || (p as any).photo_url || (p as any).url || (p as any).image || '';
-    if (!media || typeof media !== 'string' || media.trim() === '') return false;
-    if (
-      media.includes('unsplash.com') ||
-      media.includes('photo-1579546929518') ||
-      media.includes('photo-1555396273') ||
-      media.includes('photo-1534528741775') ||
-      media.includes('placeholder')
-    ) {
-      return false;
-    }
-    return true;
+    if (!media || typeof media !== 'string') return false;
+    const clean = media.trim();
+    if (clean === '') return false;
+    return clean.startsWith('http://') || clean.startsWith('https://') || clean.startsWith('data:image') || clean.startsWith('blob:') || clean.startsWith('/');
   };
 
   // Safe persistence helper for instant grid loading on refresh
@@ -1123,7 +1223,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       try {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
+          return parsed.map((r: ChatRoom) => {
+            if (r.id === 'chat-general-es' || r.id === 'general-spain' || r.id === 'chat-general') {
+              return {
+                ...r,
+                type: 'general',
+                name: '🇨🇴 Gran Chat General Colombia en España',
+                targetUserId: undefined,
+                targetUser: undefined,
+                isTicketChat: false
+              } as ChatRoom;
+            }
+            if (r.id.startsWith('chat-city-') || r.id.startsWith('city-')) {
+              return {
+                ...r,
+                type: 'city',
+                targetUserId: undefined,
+                targetUser: undefined,
+                isTicketChat: false
+              } as ChatRoom;
+            }
+            return r;
+          });
         }
       } catch {}
     }
@@ -1889,14 +2010,57 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const hasSupabaseKey = !!import.meta.env.VITE_SUPABASE_ANON_KEY && import.meta.env.VITE_SUPABASE_ANON_KEY !== 'tu_anon_key_aqui';
 
     const inferRoomType = (id: string, explicitType?: string): 'general' | 'city' | 'private' | 'group' => {
+      const cleanId = (id || '').toLowerCase();
+      
+      // Explicit general chat IDs or names ALWAYS return 'general'
+      if (
+        cleanId === 'chat-general-es' ||
+        cleanId === 'chat-general' ||
+        cleanId === 'general-spain' ||
+        cleanId === 'chat-gen-es' ||
+        cleanId === 'general' ||
+        cleanId === 'comunidad' ||
+        cleanId.includes('chat-general') ||
+        cleanId.includes('general-es') ||
+        cleanId.includes('general-spain') ||
+        cleanId.includes('comunidad')
+      ) {
+        return 'general';
+      }
+
+      // Explicit city chat IDs ALWAYS return 'city'
+      if (
+        cleanId.startsWith('chat-city') ||
+        cleanId.startsWith('city-') ||
+        cleanId.includes('chat-city-')
+      ) {
+        return 'city';
+      }
+
+      // Explicit group chat IDs ALWAYS return 'group'
+      if (
+        cleanId.startsWith('chat-group') ||
+        cleanId.startsWith('group-') ||
+        cleanId.includes('chat-group-')
+      ) {
+        return 'group';
+      }
+
       if (explicitType === 'private' || explicitType === 'group' || explicitType === 'city' || explicitType === 'general') {
         return explicitType;
       }
-      if (id.startsWith('chat-priv') || id.startsWith('priv-')) return 'private';
-      if (id.startsWith('chat-group') || id.startsWith('group-')) return 'group';
-      if (id.startsWith('chat-city') || id.startsWith('city-')) return 'city';
-      if (id === 'chat-general' || id.startsWith('chat-gen')) return 'general';
-      return 'general';
+
+      if (
+        cleanId.startsWith('chat-priv') ||
+        cleanId.startsWith('priv-') ||
+        cleanId.startsWith('priv_') ||
+        cleanId.includes('ticket') ||
+        cleanId.includes('soporte')
+      ) {
+        return 'private';
+      }
+
+      return 'private';
     };
 
     // Seed default rooms once on mount ONLY if they don't exist in Supabase (NEVER overwrite existing messages)
@@ -2283,12 +2447,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         })
         .on('broadcast', { event: 'update_chat_messages' }, ({ payload }) => {
           if (payload && payload.chatId && Array.isArray(payload.messages)) {
+            const clearMsg = payload.messages.find((m: any) => m && (m.id?.startsWith('msg-clear-') || m.encryptedHash === 'SHA256:clear-action'));
+            if (clearMsg && clearMsg.createdAt) {
+              saveClearedRoomTimestamp(payload.chatId, clearMsg.createdAt);
+            }
+
             setChatRooms(prevRooms => prevRooms.map(room => {
               if (room.id === payload.chatId) {
-                return {
+                return pruneRoomMessages({
                   ...room,
                   messages: payload.messages
-                };
+                });
               }
               return room;
             }));
@@ -4680,11 +4849,11 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
       return;
     }
 
-    const targetRoom = chatRooms.find(r => r.id === chatId);
-    if (!targetRoom) return;
+    const targetRoom = chatRooms.find(r => r.id === chatId) || INITIAL_CHAT_ROOMS.find(r => r.id === chatId);
+    const isExplicitPublicChat = chatId === 'chat-general-es' || chatId === 'general-spain' || chatId === 'chat-general' || chatId.startsWith('chat-city-') || chatId.startsWith('city-');
+    const isTicketRoom = !!(targetRoom && (targetRoom.isTicketChat || targetRoom.ticketCode || targetRoom.ticketId));
 
-    const isTicketRoom = !!(targetRoom.isTicketChat || targetRoom.ticketCode || targetRoom.ticketId);
-    if (targetRoom.type === 'private' || targetRoom.type === 'group' || isTicketRoom) {
+    if (!isExplicitPublicChat && targetRoom && (targetRoom.type === 'private' || targetRoom.type === 'group' || isTicketRoom)) {
       triggerPlushNotification({
         type: 'system',
         title: 'Acción no permitida',
@@ -4693,61 +4862,71 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
       return;
     }
 
+    const targetIds = (chatId === 'chat-general-es' || chatId === 'general-spain' || chatId === 'chat-general')
+      ? ['chat-general-es', 'chat-general', 'general-spain']
+      : [chatId];
+
     const systemClearMsg: ChatMessage = {
       id: `msg-clear-${Date.now()}`,
       senderId: 'system',
       senderName: 'Sistema La Tierrita',
       senderAvatar: 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=100&auto=format&fit=crop&q=80',
       text: `🧹 Chat vaciado por el equipo de STAFF (@${currentUser.username || 'staff'}).`,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      timestamp: getSpanishFormattedTime(),
       createdAt: Date.now(),
       isEncrypted: true,
       encryptedHash: 'SHA256:clear-action'
     };
 
-    const updatedRoom = {
-      ...targetRoom,
-      messages: [systemClearMsg]
-    };
+    saveClearedRoomTimestamp(chatId, systemClearMsg.createdAt || Date.now());
 
-    setChatRooms(prev => prev.map(r => r.id === chatId ? updatedRoom : r));
+    setChatRooms(prev => {
+      const updated = prev.map(r => targetIds.includes(r.id) ? { ...r, messages: [systemClearMsg] } : r);
+      try {
+        localStorage.setItem('latierrita_chat_rooms', JSON.stringify(updated.slice(0, 50)));
+      } catch {}
+      return updated;
+    });
 
     // Realtime broadcast via WebSocket
     const hasSupabaseUrl = !!(import.meta.env.VITE_SUPABASE_URL || 'https://api.latierrita.tech');
     const hasSupabaseKey = !!import.meta.env.VITE_SUPABASE_ANON_KEY && import.meta.env.VITE_SUPABASE_ANON_KEY !== 'tu_anon_key_aqui';
 
     if (hasSupabaseUrl && hasSupabaseKey && chatChannelRef.current) {
-      try {
-        chatChannelRef.current.send({
-          type: 'broadcast',
-          event: 'update_chat_messages',
-          payload: { chatId, messages: [systemClearMsg] }
-        });
-      } catch (e) {
-        console.warn('Realtime clear chat broadcast note:', e);
-      }
+      targetIds.forEach(id => {
+        try {
+          chatChannelRef.current.send({
+            type: 'broadcast',
+            event: 'update_chat_messages',
+            payload: { chatId: id, messages: [systemClearMsg] }
+          });
+        } catch (e) {
+          console.warn('Realtime clear chat broadcast note:', e);
+        }
+      });
     }
 
-    // Persist into Supabase
-    if (hasSupabaseUrl && hasSupabaseKey) {
-      try {
-        await supabase.from('chat_rooms').update({ messages: [systemClearMsg] }).eq('id', chatId);
-      } catch (err) {
-        console.warn('Supabase clearChatMessages write error:', err);
+    // Persist into Supabase & Firestore without merging old messages
+    for (const id of targetIds) {
+      if (hasSupabaseUrl && hasSupabaseKey) {
+        try {
+          await supabase.from('chat_rooms').update({ messages: [systemClearMsg] }).eq('id', id);
+        } catch (err) {
+          console.warn('Supabase clearChatMessages write error:', err);
+        }
       }
-    }
 
-    // Persist into Firestore
-    try {
-      await setDoc(doc(db, 'chat_rooms', chatId), { messages: [systemClearMsg] }, { merge: true });
-    } catch (error) {
-      console.warn('Firestore clearChatMessages write error:', error);
+      try {
+        await setDoc(doc(db, 'chat_rooms', id), { messages: [systemClearMsg] }, { merge: false });
+      } catch (error) {
+        console.warn('Firestore clearChatMessages write error:', error);
+      }
     }
 
     triggerPlushNotification({
       type: 'system',
       title: 'Chat vaciado con éxito',
-      message: `Se han borrado todos los mensajes del chat "${targetRoom.name}".`
+      message: `Se han borrado todos los mensajes del chat "${targetRoom?.name || 'Comunidad'}".`
     });
   };
 
@@ -4805,7 +4984,7 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
       senderAvatar: currentUser.avatar,
       senderCity: currentUser.city,
       text: msgText,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      timestamp: getSpanishFormattedTime(),
       createdAt: Date.now(),
       isEncrypted: true,
       encryptedHash: simulatedHash,
