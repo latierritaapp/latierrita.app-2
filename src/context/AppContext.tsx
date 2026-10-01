@@ -1019,11 +1019,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Safe persistence helper for instant grid loading on refresh
   const safeSaveLocalPosts = (postsToSave: PostItem[]) => {
     try {
-      const sanitized = (postsToSave || []).filter(isRealUserPost).slice(0, 60);
+      const sanitized = (postsToSave || []).filter(isRealUserPost).slice(0, 100);
+      localStorage.setItem('latierrita_global_community_posts', JSON.stringify(sanitized));
       localStorage.setItem('latierrita_local_posts', JSON.stringify(sanitized));
     } catch (e) {
       try {
         const trimmed = (postsToSave || []).filter(isRealUserPost).slice(0, 20);
+        localStorage.setItem('latierrita_global_community_posts', JSON.stringify(trimmed));
         localStorage.setItem('latierrita_local_posts', JSON.stringify(trimmed));
       } catch {}
     }
@@ -1051,9 +1053,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Posts & profile posts
   const [posts, setPosts] = useState<PostItem[]>(() => {
     try {
-      const localPostsRaw = localStorage.getItem('latierrita_local_posts');
-      if (localPostsRaw) {
-        const parsed = JSON.parse(localPostsRaw);
+      const globalRaw = localStorage.getItem('latierrita_global_community_posts') || localStorage.getItem('latierrita_local_posts');
+      if (globalRaw) {
+        const parsed = JSON.parse(globalRaw);
         if (Array.isArray(parsed)) {
           return parsed.filter(isRealUserPost);
         }
