@@ -1826,7 +1826,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (!error && Array.isArray(supaPosts) && supaPosts.length > 0) {
           const currentUserId = currentUserRef.current?.id;
           return supaPosts.map((sp: any) => {
-            const media = sp.media_url || sp.mediaUrl || sp.image_url || sp.imageUrl || '';
+            const media = sp.media_url || sp.mediaUrl || sp.image_url || sp.imageUrl || sp.photoUrl || sp.photo_url || sp.url || sp.image || sp.media || '';
             const isOfficial = sp.is_staff_ad || sp.isStaffAd || sp.user_id === 'user-staff' || sp.username === 'latierrita_app' || sp.username === 'staff_latierrita';
             const likesArr = Array.isArray(sp.likes) ? sp.likes : [];
             const commentsArr = Array.isArray(sp.comments) ? sp.comments : [];
@@ -1866,12 +1866,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             const isOfficial = data.isStaffAd || data.userId === 'user-staff' || data.username === 'staff_latierrita' || data.username === 'latierrita_app' || data.username === 'latierrita_oficial';
             const likesArr = Array.isArray(data.likes) ? data.likes : [];
             const commentsArr = Array.isArray(data.comments) ? data.comments : [];
+            const media = data.mediaUrl || data.imageUrl || data.media_url || data.image_url || data.photoUrl || data.photo_url || data.url || data.image || data.media || '';
             const item: PostItem = {
               id: docSnap.id,
               ...data,
               username: isOfficial ? 'latierrita_app' : (data.username || 'usuario'),
               userAvatar: isOfficial ? '/logo.png?v=3' : (data.userAvatar || data.avatarUrl || ''),
-              mediaUrl: data.mediaUrl || data.imageUrl || '',
+              mediaUrl: media,
               timestamp: data.timestamp || data.createdAt || 'Reciente',
               likes: likesArr,
               likesCount: typeof data.likesCount === 'number' ? data.likesCount : likesArr.length,
