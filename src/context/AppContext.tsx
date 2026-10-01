@@ -2356,7 +2356,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // Supabase Realtime channel for sub-second instant message delivery
     let chatChannel: any = null;
     if (hasSupabaseUrl && hasSupabaseKey) {
-      const chatSyncChannelName = `tierrita_community_chat_sync_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+      const chatSyncChannelName = 'tierrita_global_realtime_community_v2';
       chatChannel = supabase
         .channel(chatSyncChannelName)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_rooms' }, () => {
@@ -2377,7 +2377,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               payload.chatId.startsWith('chat-general') ||
               payload.chatId.startsWith('chat-city') ||
               payload.chatId.includes('general') ||
-              payload.chatId.includes('city');
+              payload.chatId.includes('city') ||
+              payload.chatId.includes('comunidad');
 
             const isPrivateChat = !isGeneralOrCity && (
               payload.roomType === 'private' ||
@@ -2412,19 +2413,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             }
 
             setChatRooms(prevRooms => {
-              const roomIndex = prevRooms.findIndex(r => r.id === payload.chatId || (r.type === 'private' && (r.id.includes(payload.chatId) || payload.chatId.includes(r.id.replace(/^chat-priv_/, '')))));
+              const targetIdClean = (payload.chatId || '').toLowerCase();
+              const isGeneralTarget = isGeneralOrCity && (targetIdClean.includes('general') || targetIdClean.includes('comunidad') || payload.roomType === 'general');
+
+              const roomIndex = prevRooms.findIndex(r => {
+                if (r.id === payload.chatId) return true;
+                if (isGeneralTarget && (r.id === 'chat-general-es' || r.id === 'chat-general' || r.id === 'general-spain' || r.id === 'general' || r.type === 'general')) return true;
+                if (r.type === 'city' && (r.id === payload.chatId || (r.city && targetIdClean.includes(r.city.toLowerCase())))) return true;
+                if (r.type === 'private' && (r.id.includes(payload.chatId) || payload.chatId.includes(r.id.replace(/^chat-priv_/, '')))) return true;
+                return false;
+              });
+
               if (roomIndex >= 0) {
                 const existingRoom = prevRooms[roomIndex];
                 const alreadyExists = existingRoom.messages.some(m => m.id === payload.message.id);
                 if (alreadyExists) return prevRooms;
-                const updated = {
+                const updated = pruneRoomMessages({
                   ...existingRoom,
                   messages: [...existingRoom.messages, payload.message]
-                };
+                });
                 const copy = [...prevRooms];
                 copy[roomIndex] = updated;
                 return copy;
-              } else {
+              } else if (isPrivateChat) {
                 // Instantly inject new private room so it appears in the recipient's inbox immediately
                 const extracted = extractMembersFromPrivateChatId(payload.chatId);
                 const participants = extracted.length === 2 ? extracted : [msg.senderId, currentId];
@@ -2440,6 +2451,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 };
                 return [newRoom, ...prevRooms];
               }
+              return prevRooms;
             });
 
             fetchRooms();
@@ -5107,7 +5119,7 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
 
       const mergedMessages = pruneRoomMessages({ ...targetRoom, messages: Array.from(msgMap.values()) }).messages;
 
-      await setDoc(roomRef, cleanForFirestore({ 
+      const roomPayload = cleanForFirestore({ 
         id: targetRoom.id,
         type: targetRoom.type,
         name: targetRoom.name,
@@ -5115,7 +5127,25 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
         messages: mergedMessages,
         members: targetRoom.members || [],
         createdAt: targetRoom.createdAt || new Date().toISOString().split('T')[0]
-      }), { merge: true });
+      });
+
+      await setDoc(roomRef, roomPayload, { merge: true });
+
+      // If general chat, write to all general chat alias documents in Firestore so all subscribers get notified instantly
+      const cleanChatId = chatId.toLowerCase();
+      if (cleanChatId.includes('general') || cleanChatId.includes('comunidad') || targetRoom.type === 'general') {
+        const generalAliasIds = ['chat-general-es', 'chat-general', 'general-spain', 'general'];
+        for (const aliasId of generalAliasIds) {
+          if (aliasId !== chatId) {
+            try {
+              await setDoc(doc(db, 'chat_rooms', aliasId), cleanForFirestore({
+                ...roomPayload,
+                id: aliasId
+              }), { merge: true });
+            } catch {}
+          }
+        }
+      }
     } catch (error) {
       console.warn('Firestore sendMessage write error:', error);
     }

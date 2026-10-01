@@ -1125,7 +1125,7 @@ export const ChatsView: React.FC = () => {
     <>
       <div
         id="chats-root-container"
-        className="fixed inset-x-0 top-14 bottom-16 sm:bottom-0 max-w-2xl mx-auto flex flex-col bg-[#001428] border-x border-white/10 z-20 overflow-hidden h-[calc(100dvh-3.5rem-4rem)] sm:h-[calc(100dvh-3.5rem)]"
+        className="fixed inset-x-0 top-14 bottom-15 max-w-2xl mx-auto flex flex-col bg-[#001428] border-x border-white/10 z-40 overflow-hidden h-[calc(100dvh-3.5rem-3.75rem)]"
       >
       {/* RENDER CONTENT BASED ON TAB */}
       {(chatTypeTab === 'messages' && !selectedPrivateOrGroupId) || !activeChat ? (
@@ -2691,7 +2691,7 @@ export const ChatsView: React.FC = () => {
             </div>
 
             {/* Message Input - Always pinned at bottom flush above the bottom navigation */}
-            <div className="shrink-0 bg-[#001428]/95 backdrop-blur-xl border-t border-white/15 px-3 py-2 sm:py-2.5 shadow-2xl relative z-30">
+            <div className="shrink-0 bg-[#001428]/98 backdrop-blur-xl border-t border-white/15 px-3 py-2 sm:py-2.5 shadow-2xl relative z-50 pb-[calc(0.5rem+env(safe-area-inset-bottom))]">
               {/* Replying To Message Banner (WhatsApp style) */}
               {replyingToMessage && (
                 <div className="max-w-2xl mx-auto mb-2 p-2 bg-[#001c38]/95 border border-amber-500/40 rounded-xl flex items-center justify-between gap-2 text-xs text-white animate-in fade-in duration-150">
