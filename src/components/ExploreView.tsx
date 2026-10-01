@@ -49,12 +49,11 @@ export const ExploreView: React.FC = () => {
     const isCleanImage = (url?: string): boolean => {
       if (!url || typeof url !== 'string') return false;
       const clean = url.trim();
-      if (clean === '') return false;
-      return clean.startsWith('http://') || clean.startsWith('https://') || clean.startsWith('data:image') || clean.startsWith('blob:') || clean.startsWith('/');
+      return clean.length > 0;
     };
 
     (posts || []).forEach(p => {
-      const media = p.mediaUrl || (p as any).imageUrl || (p as any).image_url || (p as any).media_url || (p as any).photoUrl || (p as any).photo_url || (p as any).url || (p as any).image;
+      const media = p.mediaUrl || (p as any).imageUrl || (p as any).image_url || (p as any).media_url || (p as any).photoUrl || (p as any).photo_url || (p as any).url || (p as any).image || (p as any).media;
       if (media && isCleanImage(media)) {
         map.set(p.id, {
           ...p,

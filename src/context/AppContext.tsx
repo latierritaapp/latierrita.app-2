@@ -1009,11 +1009,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const isRealUserPost = (p: PostItem): boolean => {
     if (!p || !p.id) return false;
-    const media = p.mediaUrl || (p as any).imageUrl || (p as any).image_url || (p as any).media_url || (p as any).photoUrl || (p as any).photo_url || (p as any).url || (p as any).image || '';
+    const media = p.mediaUrl || (p as any).imageUrl || (p as any).image_url || (p as any).media_url || (p as any).photoUrl || (p as any).photo_url || (p as any).url || (p as any).image || (p as any).media || '';
     if (!media || typeof media !== 'string') return false;
     const clean = media.trim();
-    if (clean === '') return false;
-    return clean.startsWith('http://') || clean.startsWith('https://') || clean.startsWith('data:image') || clean.startsWith('blob:') || clean.startsWith('/');
+    return clean.length > 0;
   };
 
   // Safe persistence helper for instant grid loading on refresh
