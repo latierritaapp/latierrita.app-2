@@ -47,7 +47,7 @@ export const ExploreView: React.FC = () => {
     const map = new Map<string, PostItem>();
 
     (posts || []).forEach(p => {
-      const media = p.mediaUrl || (p as any).imageUrl || (p as any).image_url;
+      const media = p.mediaUrl || (p as any).imageUrl || (p as any).image_url || (p as any).media_url || (p as any).photoUrl || (p as any).photo_url || (p as any).url || (p as any).image;
       if (media) {
         map.set(p.id, {
           ...p,
@@ -57,7 +57,7 @@ export const ExploreView: React.FC = () => {
     });
 
     (myProfilePosts || []).forEach(p => {
-      const media = p.mediaUrl || (p as any).imageUrl || (p as any).image_url;
+      const media = p.mediaUrl || (p as any).imageUrl || (p as any).image_url || (p as any).media_url || (p as any).photoUrl || (p as any).photo_url || (p as any).url || (p as any).image;
       if (media && !map.has(p.id)) {
         map.set(p.id, {
           ...p,

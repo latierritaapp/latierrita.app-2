@@ -50,18 +50,24 @@ export const AdCarousel: React.FC<AdCarouselProps> = ({ type = 'inicio' }) => {
   const targetTab = type === 'explorar' ? 'carrusel_02' : 'carrusel_01';
 
   const activeBanners = React.useMemo(() => {
-    const directMatches = (adBanners || []).filter(
-      b =>
-        b &&
-        b.active !== false &&
-        b.id !== 'banner-init-1' &&
-        (type === 'explorar'
-          ? b.carouselType === 'explorar' || b.carouselType === 'ambos' || (b.carouselType as string) === 'carrusel_02'
-          : b.carouselType === 'inicio' || b.carouselType === 'ambos' || (b.carouselType as string) === 'carrusel_01' || !b.carouselType)
+    const validBanners = (adBanners || []).filter(
+      b => b && b.active !== false && b.id !== 'banner-init-1' && b.imageUrl && b.imageUrl.trim() !== ''
     );
 
-    if (type === 'explorar' && directMatches.length === 0) {
-      return (adBanners || []).filter(b => b && b.active !== false && b.id !== 'banner-init-1');
+    const directMatches = validBanners.filter(b => {
+      const cType = b.carouselType || 'inicio';
+      if (type === 'explorar') {
+        return cType === 'explorar' || cType === 'ambos' || (cType as string) === 'carrusel_02';
+      }
+      return cType === 'inicio' || cType === 'ambos' || (cType as string) === 'carrusel_01';
+    });
+
+    if (directMatches.length > 0) {
+      return directMatches;
+    }
+
+    if (type === 'explorar' && validBanners.length > 0) {
+      return validBanners;
     }
 
     return directMatches;

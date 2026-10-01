@@ -4349,7 +4349,7 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
       active: true,
       title: banner.title || '',
       subtitle: banner.subtitle || '',
-      imageUrl: banner.imageUrl || 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=600&auto=format&fit=crop&q=80',
+      imageUrl: banner.imageUrl || '',
       sponsorName: banner.sponsorName || 'La Tierrita',
       sponsorCity: banner.sponsorCity || 'España',
       ctaText: banner.ctaText || 'Ver detalles',

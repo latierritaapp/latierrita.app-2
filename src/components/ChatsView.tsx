@@ -801,7 +801,9 @@ export const ChatsView: React.FC = () => {
 
   // 1. General chat: public for all
   const generalChat = useMemo(() => {
-    return chatRooms.find(r => r.type === 'general') || null;
+    const found = chatRooms.find(r => r.type === 'general' || r.id === 'chat-general-es' || r.id.startsWith('chat-gen') || r.id === 'general-spain');
+    if (found) return found;
+    return INITIAL_CHAT_ROOMS.find(r => r.type === 'general' || r.id === 'chat-general-es') || INITIAL_CHAT_ROOMS[0] || null;
   }, [chatRooms]);
 
   // 2. City chat: ONLY shows the chat according to the user's current city!
@@ -809,6 +811,8 @@ export const ChatsView: React.FC = () => {
     return (
       chatRooms.find(r => r.type === 'city' && r.city === currentUser.city) ||
       chatRooms.find(r => r.type === 'city') ||
+      INITIAL_CHAT_ROOMS.find(r => r.type === 'city' && r.city === currentUser.city) ||
+      INITIAL_CHAT_ROOMS.find(r => r.type === 'city') ||
       null
     );
   }, [chatRooms, currentUser.city]);
@@ -1230,8 +1234,9 @@ export const ChatsView: React.FC = () => {
                 id="chat-item-pinned-general"
                 onClick={() => {
                   setChatTypeTab('general');
-                  if (generalChat) {
-                    setActiveChatId(generalChat.id);
+                  const room = generalChat || INITIAL_CHAT_ROOMS[0];
+                  if (room) {
+                    setActiveChatId(room.id);
                   }
                 }}
                 className="px-4 py-3 hover:bg-neutral-50 dark:hover:bg-neutral-800/50 cursor-pointer flex items-center justify-between transition-colors bg-amber-400/[0.04] border-l-2 border-l-amber-400 select-none"

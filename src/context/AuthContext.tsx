@@ -914,7 +914,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         username: guestUsername,
         name: `Invitado (${guestUsername})`,
         avatar: DEFAULT_SILHOUETTE_AVATAR,
-        bio: 'Usuario invitado de La Tierrita App. Comunidad de Colombianos en España.',
+        bio: "Usuario invitado de La Tierrita App.\nComunidad de Colombianos en España.",
         website: '',
         city: 'Sin asignar',
         originCity: 'Colombia',

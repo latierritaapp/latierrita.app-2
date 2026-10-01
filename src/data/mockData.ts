@@ -18,7 +18,7 @@ export const INITIAL_CURRENT_USER: UserProfile = {
   username: 'parcero',
   name: 'Usuario Invitado',
   avatar: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' fill='%231e293b'/%3E%3Ccircle cx='50' cy='36' r='18' fill='%2394a3b8'/%3E%3Cpath d='M20 86 C20 68 34 60 50 60 C66 60 80 68 80 86 Z' fill='%2394a3b8'/%3E%3C/svg%3E",
-  bio: 'Usuario invitado de La Tierrita App. Comunidad de Colombianos en España.',
+  bio: "Usuario invitado de La Tierrita App.\nComunidad de Colombianos en España.",
   website: '',
   city: 'Sin asignar',
   originCity: 'Colombia',

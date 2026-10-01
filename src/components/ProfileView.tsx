@@ -271,7 +271,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userToDisplay }) => {
           {/* 2. Biografía */}
           <p className="text-xs sm:text-sm text-white/90 leading-relaxed whitespace-pre-line max-w-md pt-0.5">
             {isProfileGuest
-              ? 'Usuario invitado de La Tierrita App. Comunidad de Colombianos en España.'
+              ? "Usuario invitado de La Tierrita App.\nComunidad de Colombianos en España."
               : renderTextWithFlags(user.bio || '🇨🇴 ¡Orgullo colombiano en España! 🇪🇸')}
           </p>
 
