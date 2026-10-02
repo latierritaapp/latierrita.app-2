@@ -117,6 +117,9 @@ export const StaffAdminModal: React.FC<{ isFullScreenRoute?: boolean }> = ({ isF
       setActiveRole(role);
       if (role === 'Soporte') {
         setAdminMainTab('soporte');
+      } else if (role === 'MOD') {
+        setAdminMainTab('soporte');
+        setSoporteSubTab('comunidad');
       }
     }
   }, [currentUser?.staffRole]);
@@ -842,45 +845,34 @@ export const StaffAdminModal: React.FC<{ isFullScreenRoute?: boolean }> = ({ isF
 
           {/* Main Content Area */}
           <div className="flex-1 overflow-y-auto p-4 space-y-5 pb-20 no-scrollbar">
-            {/* ROLE = MOD DISPLAY */}
-            {activeRole === 'MOD' && (
-              <div className="p-8 text-center bg-white/5 border border-white/10 rounded-2xl space-y-3 my-8">
-                <div className="w-12 h-12 rounded-full bg-purple-500/20 text-purple-300 flex items-center justify-center mx-auto border border-purple-500/30">
-                  <Shield className="w-6 h-6" />
-                </div>
-                <h4 className="text-base font-bold text-white">Rol de Moderador (MOD)</h4>
-                <p className="text-xs text-white/70 max-w-md mx-auto leading-relaxed">
-                  Por los momentos no hay tareas o permisos administrativos asignados para este perfil. Si requieres acceso a tickets o publicidad, cambia al rol <strong>ADMIN</strong> o <strong>Soporte</strong>.
-                </p>
-              </div>
-            )}
-
-            {/* ROLE = Soporte (Or ADMIN on Soporte Tab) */}
-            {(activeRole === 'Soporte' || (activeRole === 'ADMIN' && adminMainTab === 'soporte')) && (
+            {/* ROLE = Soporte (Or MOD or ADMIN on Soporte Tab) */}
+            {(activeRole === 'Soporte' || activeRole === 'MOD' || (activeRole === 'ADMIN' && adminMainTab === 'soporte')) && (
               <div className="space-y-4">
                 {/* Soporte Header Subtabs */}
                 <div className="flex items-center gap-2 border-b border-white/10 pb-3 flex-wrap">
-                  <button
-                    onClick={() => {
-                      setSoporteSubTab('tickets');
-                      setSelectedTicketForStaffChat(null);
-                    }}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
-                      soporteSubTab === 'tickets'
-                        ? 'bg-cyan-400 text-neutral-950 shadow font-black'
-                        : 'bg-white/10 text-white/70 hover:text-white'
-                    }`}
-                  >
-                    <HelpCircle className="w-3.5 h-3.5 shrink-0" />
-                    <span>Gestión de tickets</span>
-                    {supportTickets.filter(t => t.status === 'pendientes').length > 0 && (
-                      <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
-                        soporteSubTab === 'tickets' ? 'bg-neutral-950 text-cyan-300' : 'bg-cyan-400 text-neutral-950'
-                      }`}>
-                        {supportTickets.filter(t => t.status === 'pendientes').length}
-                      </span>
-                    )}
-                  </button>
+                  {activeRole !== 'MOD' && (
+                    <button
+                      onClick={() => {
+                        setSoporteSubTab('tickets');
+                        setSelectedTicketForStaffChat(null);
+                      }}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                        soporteSubTab === 'tickets'
+                          ? 'bg-cyan-400 text-neutral-950 shadow font-black'
+                          : 'bg-white/10 text-white/70 hover:text-white'
+                      }`}
+                    >
+                      <HelpCircle className="w-3.5 h-3.5 shrink-0" />
+                      <span>Gestión de tickets</span>
+                      {supportTickets.filter(t => t.status === 'pendientes').length > 0 && (
+                        <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
+                          soporteSubTab === 'tickets' ? 'bg-neutral-950 text-cyan-300' : 'bg-cyan-400 text-neutral-950'
+                        }`}>
+                          {supportTickets.filter(t => t.status === 'pendientes').length}
+                        </span>
+                      )}
+                    </button>
+                  )}
                   <button
                     onClick={() => {
                       setSoporteSubTab('comunidad');
@@ -903,27 +895,29 @@ export const StaffAdminModal: React.FC<{ isFullScreenRoute?: boolean }> = ({ isF
                       </span>
                     )}
                   </button>
-                  <button
-                    onClick={() => {
-                      setSoporteSubTab('lugares');
-                      setSelectedSuggestionForStaffChat(null);
-                    }}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
-                      soporteSubTab === 'lugares'
-                        ? 'bg-cyan-400 text-neutral-950 shadow font-black'
-                        : 'bg-white/10 text-white/70 hover:text-white'
-                    }`}
-                  >
-                    <Compass className="w-3.5 h-3.5 shrink-0" />
-                    <span>Gestión de lugares</span>
-                    {(placeSuggestions || []).filter(s => s.status === 'pendientes').length > 0 && (
-                      <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
-                        soporteSubTab === 'lugares' ? 'bg-neutral-950 text-cyan-300' : 'bg-cyan-400 text-neutral-950'
-                      }`}>
-                        {(placeSuggestions || []).filter(s => s.status === 'pendientes').length}
-                      </span>
-                    )}
-                  </button>
+                  {activeRole !== 'MOD' && (
+                    <button
+                      onClick={() => {
+                        setSoporteSubTab('lugares');
+                        setSelectedSuggestionForStaffChat(null);
+                      }}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                        soporteSubTab === 'lugares'
+                          ? 'bg-cyan-400 text-neutral-950 shadow font-black'
+                          : 'bg-white/10 text-white/70 hover:text-white'
+                      }`}
+                    >
+                      <Compass className="w-3.5 h-3.5 shrink-0" />
+                      <span>Gestión de lugares</span>
+                      {(placeSuggestions || []).filter(s => s.status === 'pendientes').length > 0 && (
+                        <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
+                          soporteSubTab === 'lugares' ? 'bg-neutral-950 text-cyan-300' : 'bg-cyan-400 text-neutral-950'
+                        }`}>
+                          {(placeSuggestions || []).filter(s => s.status === 'pendientes').length}
+                        </span>
+                      )}
+                    </button>
+                  )}
                 </div>
 
                 {/* Subtab 1: Gestión de tickets */}

@@ -3353,6 +3353,19 @@ Podrás enviar mensajes en este chat tan pronto un miembro del equipo de STAFF (
       console.warn('Failed to update staffRole in Firestore:', e);
     }
 
+    // 4. Update Supabase profiles table
+    try {
+      await supabase
+        .from('profiles')
+        .update({
+          staff_role: newRole,
+          is_staff: newRole !== 'Usuario'
+        })
+        .eq('id', id);
+    } catch (e) {
+      console.warn('Failed to update staffRole in Supabase:', e);
+    }
+
     triggerPlushNotification({
       type: 'system',
       title: 'Rango de Staff Actualizado',
