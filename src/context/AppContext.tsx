@@ -1021,11 +1021,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const sanitized = (postsToSave || []).filter(isRealUserPost).slice(0, 100);
       localStorage.setItem('latierrita_global_community_posts', JSON.stringify(sanitized));
       localStorage.setItem('latierrita_local_posts', JSON.stringify(sanitized));
+      sessionStorage.setItem('latierrita_session_posts', JSON.stringify(sanitized));
     } catch (e) {
       try {
         const trimmed = (postsToSave || []).filter(isRealUserPost).slice(0, 20);
         localStorage.setItem('latierrita_global_community_posts', JSON.stringify(trimmed));
         localStorage.setItem('latierrita_local_posts', JSON.stringify(trimmed));
+        sessionStorage.setItem('latierrita_session_posts', JSON.stringify(trimmed));
       } catch {}
     }
   };
@@ -1052,10 +1054,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Posts & profile posts
   const [posts, setPosts] = useState<PostItem[]>(() => {
     try {
-      const globalRaw = localStorage.getItem('latierrita_global_community_posts') || localStorage.getItem('latierrita_local_posts');
+      const globalRaw = localStorage.getItem('latierrita_global_community_posts') || 
+                        localStorage.getItem('latierrita_local_posts') || 
+                        sessionStorage.getItem('latierrita_session_posts');
       if (globalRaw) {
         const parsed = JSON.parse(globalRaw);
-        if (Array.isArray(parsed)) {
+        if (Array.isArray(parsed) && parsed.length > 0) {
           return parsed.filter(isRealUserPost);
         }
       }
