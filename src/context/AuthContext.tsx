@@ -104,7 +104,16 @@ export const saveUserToCommunityCache = (user: UserProfile): void => {
 
 // Mapeador de base de datos Postgres/Firestore a React State (camelCase)
 export const mapDBProfileToUserProfile = (db: any): UserProfile => {
-  const isOfficialEmail = (db.email || '').trim().toLowerCase() === 'latierritaapp@gmail.com' || db.username === 'latierrita_app' || db.id === 'user-staff';
+  const isGuestAccount = Boolean(
+    db.isGuest ||
+    db.is_guest ||
+    (db.id || '').startsWith('guest-') ||
+    (db.username || '').startsWith('User-') ||
+    (db.username || '').startsWith('user-') ||
+    (db.username || '').toLowerCase().startsWith('invitado') ||
+    (db.email || '').includes('@invitado.latierrita.tech')
+  );
+  const isOfficialEmail = !isGuestAccount && ((db.email || '').trim().toLowerCase() === 'latierritaapp@gmail.com' || db.username === 'latierrita_app' || db.id === 'user-staff');
   let cleanUsername = isOfficialEmail 
     ? 'latierrita_app' 
     : sanitizeHandle(db.username, db.email, db.id);
@@ -127,7 +136,7 @@ export const mapDBProfileToUserProfile = (db: any): UserProfile => {
   const tiktok = db.tiktok || rawSocial.tiktok || '';
   const x = db.x || rawSocial.x || '';
 
-  const avatarUrl = db.avatar_url || db.avatar || db.avatarUrl || (isStaff ? 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=400&auto=format&fit=crop&q=80' : DEFAULT_SILHOUETTE_AVATAR);
+  const avatarUrl = isGuestAccount ? '' : (db.avatar_url || db.avatar || db.avatarUrl || (isStaff ? 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=400&auto=format&fit=crop&q=80' : DEFAULT_SILHOUETTE_AVATAR));
   const userBio = db.bio !== undefined && db.bio !== null ? db.bio : (isStaff ? '⭐ Cuenta oficial de Staff & Publicidad de La Tierrita España. Conectando a los colombianos.' : '🇨🇴 ¡Orgullo colombiano en España! 🇪🇸');
   const userWebsite = db.website !== undefined && db.website !== null ? db.website : (isStaff ? 'https://latierrita.es' : '');
   const userCity = db.city || 'Madrid';
@@ -150,8 +159,9 @@ export const mapDBProfileToUserProfile = (db: any): UserProfile => {
     followersCount: Array.isArray(db.followers) ? db.followers.length : (typeof db.followers_count === 'number' ? db.followers_count : (typeof db.followersCount === 'number' ? db.followersCount : 0)),
     followingCount: isStaff ? 0 : (Array.isArray(db.following) ? db.following.length : (typeof db.followingCount === 'number' ? db.followingCount : 1)),
     postsCount: typeof db.postsCount === 'number' ? db.postsCount : 0,
-    isVerified: isStaff ? true : (db.verified || db.isVerified || false),
-    staffRole: isStaff ? 'ADMIN' : (db.staff_role || db.staffRole || 'Usuario'),
+    isVerified: isGuestAccount ? false : (isStaff ? true : (db.verified || db.isVerified || false)),
+    staffRole: isGuestAccount ? 'Usuario' : (isStaff ? 'ADMIN' : (db.staff_role || db.staffRole || 'Usuario')),
+    isGuest: isGuestAccount,
     isDeleted: db.is_deleted || db.isDeleted || false,
     deletedAt: db.deleted_at || db.deletedAt || undefined,
     retentionExpiresAt: db.retention_expires_at || db.retentionExpiresAt || undefined,
@@ -913,7 +923,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         email: `${guestUsername.toLowerCase()}@invitado.latierrita.tech`,
         username: guestUsername,
         name: `Invitado (${guestUsername})`,
-        avatar: DEFAULT_SILHOUETTE_AVATAR,
+        avatar: '',
         bio: "Usuario invitado de La Tierrita App.\nComunidad de Colombianos en España.",
         website: '',
         city: 'Sin asignar',

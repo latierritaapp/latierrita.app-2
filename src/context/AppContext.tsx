@@ -1060,10 +1060,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (globalRaw) {
         const parsed = JSON.parse(globalRaw);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          const userPosts = parsed.filter(isRealUserPost);
-          const existingIds = new Set(userPosts.map(p => p.id));
-          const combined = [...userPosts, ...INITIAL_POSTS.filter(p => !existingIds.has(p.id))];
-          return combined;
+          return parsed.filter(isRealUserPost);
         }
       }
     } catch {}
@@ -1668,8 +1665,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             b.id !== 'banner-init-1' &&
             !deletedIds.includes(b.id) &&
             b.imageUrl &&
-            !b.imageUrl.includes('unsplash.com') &&
-            !b.imageUrl.includes('photo-1579546929518')
+            b.imageUrl.trim() !== ''
         );
 
         setAdBanners(cleanList);
