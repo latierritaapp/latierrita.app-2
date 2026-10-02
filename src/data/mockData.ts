@@ -38,7 +38,50 @@ export const INITIAL_STORIES: StoryItem[] = [];
 
 export const INITIAL_AD_BANNERS: AdBanner[] = [];
 
-export const INITIAL_POSTS: PostItem[] = [];
+export const INITIAL_POSTS: PostItem[] = [
+  {
+    id: 'post-sample-1',
+    userId: 'user-carlos',
+    username: 'carlos_valencia',
+    userAvatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80',
+    userCity: 'Madrid',
+    mediaUrl: 'https://images.unsplash.com/photo-1569718212165-3a8278d5f624?w=800&auto=format&fit=crop&q=80',
+    caption: 'Disfrutando de una deliciosa Bandeja Paisa extra grande aquí en Madrid. ¡Sabe a tierrita!',
+    likesCount: 24,
+    hasLiked: false,
+    comments: [],
+    timestamp: 'Hace 2 horas',
+    location: 'Madrid, España'
+  },
+  {
+    id: 'post-sample-2',
+    userId: 'user-maria',
+    username: 'maria_colombia',
+    userAvatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=200&auto=format&fit=crop&q=80',
+    userCity: 'Barcelona',
+    mediaUrl: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=800&auto=format&fit=crop&q=80',
+    caption: 'Reunión de parceros en Barcelona este fin de semana. ¡Imparables!',
+    likesCount: 42,
+    hasLiked: false,
+    comments: [],
+    timestamp: 'Hace 5 horas',
+    location: 'Barcelona, España'
+  },
+  {
+    id: 'post-sample-3',
+    userId: 'user-sofia',
+    username: 'sofia_medellin',
+    userAvatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200&auto=format&fit=crop&q=80',
+    userCity: 'Valencia',
+    mediaUrl: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=800&auto=format&fit=crop&q=80',
+    caption: 'Atardecer desde Valencia recordando nuestra hermosa Colombia. 🇨🇴🇪🇸',
+    likesCount: 19,
+    hasLiked: false,
+    comments: [],
+    timestamp: 'Hace 1 día',
+    location: 'Valencia, España'
+  }
+];
 
 export const CURRENT_USER_PROFILE_POSTS: PostItem[] = [];
 

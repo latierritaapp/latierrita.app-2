@@ -1064,7 +1064,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
       }
     } catch {}
-    return [];
+    return INITIAL_POSTS.filter(isRealUserPost);
   });
 
   // Dynamically and synchronously compute profile posts from unified posts pool (Zero delay, always 100% in sync)
