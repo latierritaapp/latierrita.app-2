@@ -2371,7 +2371,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_rooms' }, () => {
           fetchRooms();
         })
-        .on('broadcast', { event: 'new_chat_message' }, ({ payload }) => {
+        .on('broadcast', { event: 'new_chat_message' }, ({ payload }: { payload: any }) => {
           if (payload && payload.chatId && payload.message) {
             const currentId = currentUserRef.current?.id || '';
             const myUsername = currentUserRef.current?.username || '';
@@ -2466,7 +2466,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             fetchRooms();
           }
         })
-        .on('broadcast', { event: 'update_chat_messages' }, ({ payload }) => {
+        .on('broadcast', { event: 'update_chat_messages' }, ({ payload }: { payload: any }) => {
           if (payload && payload.chatId && Array.isArray(payload.messages)) {
             const clearMsg = payload.messages.find((m: any) => m && (m.id?.startsWith('msg-clear-') || m.encryptedHash === 'SHA256:clear-action'));
             if (clearMsg && clearMsg.createdAt) {
