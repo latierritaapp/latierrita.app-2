@@ -1060,7 +1060,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (globalRaw) {
         const parsed = JSON.parse(globalRaw);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed.filter(isRealUserPost);
+          const userPosts = parsed.filter(isRealUserPost);
+          const existingIds = new Set(userPosts.map(p => p.id));
+          const combined = [...userPosts, ...INITIAL_POSTS.filter(p => !existingIds.has(p.id))];
+          return combined;
         }
       }
     } catch {}
@@ -1109,26 +1112,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       b.id !== 'banner-init-1' &&
       !deletedIds.includes(b.id) &&
       b.imageUrl &&
-      !b.imageUrl.includes('unsplash.com') &&
-      !b.imageUrl.includes('photo-1579546929518');
+      b.imageUrl.trim() !== '';
 
+    let parsedBanners: AdBanner[] = [];
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
-          return parsed.filter(cleanBanner);
-        }
+        if (Array.isArray(parsed)) parsedBanners = parsed;
       } catch {}
     }
-    if (localSaved) {
+    if (parsedBanners.length === 0 && localSaved) {
       try {
         const parsed = JSON.parse(localSaved);
-        if (Array.isArray(parsed)) {
-          return parsed.filter(cleanBanner);
-        }
+        if (Array.isArray(parsed)) parsedBanners = parsed;
       } catch {}
     }
-    return [];
+
+    const existingIds = new Set(parsedBanners.map(b => b.id));
+    const combined = [...parsedBanners, ...INITIAL_AD_BANNERS.filter(b => !existingIds.has(b.id))];
+    const filtered = combined.filter(cleanBanner);
+    return filtered.length > 0 ? filtered : INITIAL_AD_BANNERS.filter(cleanBanner);
   });
 
   useEffect(() => {

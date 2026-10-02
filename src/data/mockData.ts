@@ -36,46 +36,96 @@ export const OTHER_USERS: UserProfile[] = [];
 
 export const INITIAL_STORIES: StoryItem[] = [];
 
-export const INITIAL_AD_BANNERS: AdBanner[] = [];
+export const INITIAL_AD_BANNERS: AdBanner[] = [
+  {
+    id: 'banner-official-1',
+    active: true,
+    title: 'Festival Gastronómico Colombiano en Madrid',
+    subtitle: 'Disfruta de la verdadera sazón de nuestra tierra con arepas, empanadas y sancocho.',
+    imageUrl: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=800&auto=format&fit=crop&q=80',
+    sponsorName: 'Restaurante El Sabor de Mi Tierra',
+    sponsorCity: 'Madrid',
+    ctaText: 'Reservar mesa',
+    ctaLink: 'https://latierrita.es',
+    category: 'Restaurante',
+    carouselType: 'inicio'
+  },
+  {
+    id: 'banner-official-2',
+    active: true,
+    title: 'Asesoría Jurídica y Trámites de Extranjería',
+    subtitle: 'Nacionalidad española, arraigo, visados y reagrupación familiar con expertos.',
+    imageUrl: 'https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?w=800&auto=format&fit=crop&q=80',
+    sponsorName: 'LegalParcero Expatriados',
+    sponsorCity: 'Barcelona',
+    ctaText: 'Consulta gratis',
+    ctaLink: 'https://latierrita.es',
+    category: 'Servicio',
+    carouselType: 'inicio'
+  },
+  {
+    id: 'banner-official-3',
+    active: true,
+    title: 'Envíos Express de Dinero y Giros a Colombia',
+    subtitle: 'La tasa más baja del mercado y entrega instantánea directo a cuentas bancarias.',
+    imageUrl: 'https://images.unsplash.com/photo-1526304640581-d334cdbbf45e?w=800&auto=format&fit=crop&q=80',
+    sponsorName: 'GirosParcero Europa',
+    sponsorCity: 'Toda España',
+    ctaText: 'Enviar ahora',
+    ctaLink: 'https://latierrita.es',
+    category: 'Otro',
+    carouselType: 'explorar'
+  }
+];
 
 export const INITIAL_POSTS: PostItem[] = [
   {
-    id: 'post-sample-1',
+    id: 'post-init-1',
     userId: 'user-carlos',
     username: 'carlos_valencia',
     userAvatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80',
     userCity: 'Madrid',
-    mediaUrl: 'https://images.unsplash.com/photo-1569718212165-3a8278d5f624?w=800&auto=format&fit=crop&q=80',
-    caption: 'Disfrutando de una deliciosa Bandeja Paisa extra grande aquí en Madrid. ¡Sabe a tierrita!',
-    likesCount: 24,
+    mediaUrl: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=800&auto=format&fit=crop&q=80',
+    caption: '¡Disfrutando de un buen sancocho y empanadas con la familia en Madrid! Se siente el calor de nuestra tierrita aquí en España. 🇨🇴🇪🇸 #ColombianosEnMadrid #SazonColombiana',
+    likesCount: 3,
     hasLiked: false,
-    comments: [],
-    timestamp: 'Hace 2 horas',
+    comments: [
+      {
+        id: 'c-1',
+        userId: 'user-maria',
+        name: 'María Rodríguez',
+        username: 'maria_rodriguez',
+        userAvatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200&auto=format&fit=crop&q=80',
+        text: '¡Qué delicia Carlos! Se ve espectacular.',
+        timestamp: 'Hace 2 horas'
+      }
+    ],
+    timestamp: 'Hace 3 horas',
     location: 'Madrid, España'
   },
   {
-    id: 'post-sample-2',
+    id: 'post-init-2',
     userId: 'user-maria',
-    username: 'maria_colombia',
-    userAvatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=200&auto=format&fit=crop&q=80',
+    username: 'maria_rodriguez',
+    userAvatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200&auto=format&fit=crop&q=80',
     userCity: 'Barcelona',
-    mediaUrl: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=800&auto=format&fit=crop&q=80',
-    caption: 'Reunión de parceros en Barcelona este fin de semana. ¡Imparables!',
-    likesCount: 42,
+    mediaUrl: 'https://images.unsplash.com/photo-1514933651103-005eec06c04b?w=800&auto=format&fit=crop&q=80',
+    caption: 'Reunión de parceros este fin de semana en Barcelona disfrutando un buen café colombiano. ¡Arriba nuestra cultura! ☕🇨🇴 #ColombianosEnBarcelona',
+    likesCount: 1,
     hasLiked: false,
     comments: [],
     timestamp: 'Hace 5 horas',
     location: 'Barcelona, España'
   },
   {
-    id: 'post-sample-3',
-    userId: 'user-sofia',
-    username: 'sofia_medellin',
-    userAvatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200&auto=format&fit=crop&q=80',
+    id: 'post-init-3',
+    userId: 'user-andres',
+    username: 'andres_gomez',
+    userAvatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&auto=format&fit=crop&q=80',
     userCity: 'Valencia',
-    mediaUrl: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=800&auto=format&fit=crop&q=80',
-    caption: 'Atardecer desde Valencia recordando nuestra hermosa Colombia. 🇨🇴🇪🇸',
-    likesCount: 19,
+    mediaUrl: 'https://images.unsplash.com/photo-1526304640581-d334cdbbf45e?w=800&auto=format&fit=crop&q=80',
+    caption: 'Túneles verdes y hermosos paisajes que nos recuerdan a nuestra tierra querida. ¡Saludos a todos desde Valencia! 🌿🇨🇴',
+    likesCount: 2,
     hasLiked: false,
     comments: [],
     timestamp: 'Hace 1 día',
