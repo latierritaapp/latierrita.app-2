@@ -136,7 +136,7 @@ export const mapDBProfileToUserProfile = (db: any): UserProfile => {
   const tiktok = db.tiktok || rawSocial.tiktok || '';
   const x = db.x || rawSocial.x || '';
 
-  const avatarUrl = isGuestAccount ? '' : (db.avatar_url || db.avatar || db.avatarUrl || (isStaff ? 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=400&auto=format&fit=crop&q=80' : DEFAULT_SILHOUETTE_AVATAR));
+  const avatarUrl = isGuestAccount ? DEFAULT_SILHOUETTE_AVATAR : (db.avatar_url || db.avatar || db.avatarUrl || (isStaff ? 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=400&auto=format&fit=crop&q=80' : DEFAULT_SILHOUETTE_AVATAR));
   const userBio = db.bio !== undefined && db.bio !== null ? db.bio : (isStaff ? '⭐ Cuenta oficial de Staff & Publicidad de La Tierrita España. Conectando a los colombianos.' : '🇨🇴 ¡Orgullo colombiano en España! 🇪🇸');
   const userWebsite = db.website !== undefined && db.website !== null ? db.website : (isStaff ? 'https://latierrita.es' : '');
   const userCity = db.city || 'Madrid';
@@ -898,6 +898,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const continueAsGuest = () => {
     try {
+      // Clear active Supabase session to prevent automatic login on page reload
+      supabase.auth.signOut().catch(() => {});
+
       let guestUsername = localStorage.getItem('latierrita_guest_username');
       let guestId = localStorage.getItem('latierrita_guest_id');
       let expiresAtRaw = localStorage.getItem('latierrita_guest_expires_at');
@@ -923,7 +926,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         email: `${guestUsername.toLowerCase()}@invitado.latierrita.tech`,
         username: guestUsername,
         name: `Invitado (${guestUsername})`,
-        avatar: '',
+        avatar: DEFAULT_SILHOUETTE_AVATAR,
         bio: "Usuario invitado de La Tierrita App.\nComunidad de Colombianos en España.",
         website: '',
         city: 'Sin asignar',
