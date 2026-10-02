@@ -62,20 +62,16 @@ export const AdCarousel: React.FC<AdCarouselProps> = ({ type = 'inicio' }) => {
     const directMatches = validBanners.filter(b => {
       const cType = b.carouselType || 'inicio';
       if (type === 'explorar') {
-        return cType === 'explorar' || cType === 'ambos' || (cType as string) === 'carrusel_02';
+        return cType === 'explorar' || cType === 'ambos' || (cType as string) === 'carrusel_02' || (cType as string) === 'carrusel_01' || cType === 'inicio';
       }
-      return cType === 'inicio' || cType === 'ambos' || (cType as string) === 'carrusel_01';
+      return cType === 'inicio' || cType === 'ambos' || (cType as string) === 'carrusel_01' || (cType as string) === 'carrusel_02' || cType === 'explorar';
     });
 
     if (directMatches.length > 0) {
       return directMatches;
     }
 
-    if (type === 'explorar' && validBanners.length > 0) {
-      return validBanners;
-    }
-
-    return directMatches;
+    return validBanners;
   }, [adBanners, type]);
 
   // Auto-play carousel every 3 seconds if not hovered

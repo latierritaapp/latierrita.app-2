@@ -1099,6 +1099,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Ads & Staff
   const [adBanners, setAdBanners] = useState<AdBanner[]>(() => {
+    const globalSaved = localStorage.getItem('latierrita_global_ad_banners');
     const saved = localStorage.getItem('latierrita_ad_banners');
     const localSaved = localStorage.getItem('latierrita_local_banners');
     const deletedRaw = localStorage.getItem('latierrita_deleted_banners') || '[]';
@@ -1115,7 +1116,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       b.imageUrl.trim() !== '';
 
     let parsedBanners: AdBanner[] = [];
-    if (saved) {
+    if (globalSaved) {
+      try {
+        const parsed = JSON.parse(globalSaved);
+        if (Array.isArray(parsed)) parsedBanners = parsed;
+      } catch {}
+    }
+    if (parsedBanners.length === 0 && saved) {
       try {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) parsedBanners = parsed;
@@ -1136,7 +1143,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   useEffect(() => {
     try {
-      localStorage.setItem('latierrita_ad_banners', JSON.stringify(adBanners));
+      const sanitized = adBanners.filter(b => b && b.imageUrl && b.imageUrl.trim() !== '');
+      localStorage.setItem('latierrita_global_ad_banners', JSON.stringify(sanitized));
+      localStorage.setItem('latierrita_ad_banners', JSON.stringify(sanitized));
+      localStorage.setItem('latierrita_local_banners', JSON.stringify(sanitized));
     } catch {}
   }, [adBanners]);
   const [isStaffMode, setIsStaffMode] = useState<boolean>(() => {
